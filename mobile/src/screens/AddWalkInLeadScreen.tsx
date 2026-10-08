@@ -12,12 +12,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, UserPlus, Layers, Check, Phone, Mail, User } from 'lucide-react-native';
 
 import { fetchCampaigns, createWalkInLead } from '../api/leadApi';
 import { RootStackParamList, Campaign } from '../types';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
-import { Card } from '../components/Card';
+import { CrmBadge } from '../components/CrmBadge';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -68,11 +69,11 @@ export const AddWalkInLeadScreen: React.FC = () => {
       }
 
       Alert.alert(
-        'Lead Processed',
-        `Walk-in lead "${name.trim()}" successfully created under campaign.`,
+        'Lead Created',
+        `Walk-in lead "${name.trim()}" successfully added to campaign queue.`,
         [
           {
-            text: 'View My Leads',
+            text: 'View Leads',
             onPress: () => navigation.goBack(),
           },
         ],
@@ -121,23 +122,31 @@ export const AddWalkInLeadScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
+    <SafeAreaView className="flex-1 bg-[#F8FAFC]" edges={['top']}>
       {/* Top Header */}
-      <View className="bg-white px-4 py-3.5 border-b border-slate-200 flex-row justify-between items-center shadow-xs">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="p-1 -ml-1">
-          <Text className="text-blue-600 text-sm font-bold">‹ Cancel</Text>
+      <View className="bg-white px-4 py-3.5 border-b border-slate-200 flex-row justify-between items-center">
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          className="flex-row items-center gap-1.5 p-1 -ml-1"
+        >
+          <ArrowLeft size={18} color="#64748B" />
+          <Text className="text-slate-600 text-xs font-bold uppercase tracking-wider">Cancel</Text>
         </TouchableOpacity>
         <Text className="text-slate-900 font-bold text-base">Add Walk-in Lead</Text>
-        <View style={{ width: 50 }} />
+        <View style={{ width: 60 }} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        <Card className="mb-4">
-          <Text className="text-slate-900 font-bold text-sm mb-3">Customer Information</Text>
+        {/* Customer Information Card */}
+        <View className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm mb-4">
+          <View className="flex-row items-center gap-2 mb-4">
+            <UserPlus size={18} color="#4F46E5" />
+            <Text className="text-slate-900 font-bold text-sm">Customer Details</Text>
+          </View>
 
           <Input
             label="Full Name *"
-            placeholder="e.g. Rahul Verma"
+            placeholder="e.g. Ramesh Sundaram"
             value={name}
             onChangeText={setName}
           />
@@ -152,28 +161,32 @@ export const AddWalkInLeadScreen: React.FC = () => {
 
           <Input
             label="Email Address (Optional)"
-            placeholder="rahul@example.com"
+            placeholder="ramesh@gmail.com"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
           />
-        </Card>
+        </View>
 
-        {/* Campaign Picker */}
-        <Card className="mb-6">
-          <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
-            Target Campaign *
+        {/* Campaign Selection Card */}
+        <View className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm mb-6">
+          <View className="flex-row items-center gap-2 mb-2">
+            <Layers size={18} color="#4F46E5" />
+            <Text className="text-slate-900 font-bold text-sm">Target Campaign *</Text>
+          </View>
+          <Text className="text-slate-500 text-xs mb-3 font-medium">
+            Select which campaign will receive and prioritize this lead
           </Text>
 
           {campaignsLoading ? (
-            <ActivityIndicator size="small" color="#2563EB" />
+            <ActivityIndicator size="small" color="#4F46E5" />
           ) : campaigns.length === 0 ? (
             <Text className="text-slate-500 text-xs py-2">
               No active campaigns available for your account.
             </Text>
           ) : (
-            <View className="gap-2">
+            <View className="gap-2.5">
               {campaigns.map((camp) => {
                 const isSelected = selectedCampaignId === camp._id;
                 return (
@@ -183,37 +196,52 @@ export const AddWalkInLeadScreen: React.FC = () => {
                     activeOpacity={0.8}
                     className={`p-3.5 rounded-xl border flex-row justify-between items-center ${
                       isSelected
-                        ? 'bg-blue-50 border-blue-500'
-                        : 'bg-slate-50 border-slate-200'
+                        ? 'bg-indigo-50 border-indigo-600 shadow-sm'
+                        : 'bg-white border-slate-200'
                     }`}
                   >
                     <View className="flex-1 mr-2">
                       <Text
-                        className={`text-sm font-semibold ${
-                          isSelected ? 'text-blue-700 font-bold' : 'text-slate-800'
+                        className={`text-sm font-bold ${
+                          isSelected ? 'text-indigo-900' : 'text-slate-900'
                         }`}
                       >
                         {camp.name}
                       </Text>
-                      <Text className="text-slate-500 text-xs mt-0.5">
-                        Priority: {camp.priority} • Mode: {camp.distributionMode}
-                      </Text>
+                      <View className="flex-row items-center gap-2 mt-1">
+                        <CrmBadge
+                          label={camp.priority}
+                          tone={
+                            camp.priority === 'HIGH'
+                              ? 'rose'
+                              : camp.priority === 'MEDIUM'
+                              ? 'amber'
+                              : 'slate'
+                          }
+                        />
+                        <Text className="text-slate-400 text-[11px] font-medium">
+                          Mode: {camp.distributionMode}
+                        </Text>
+                      </View>
                     </View>
                     {isSelected ? (
-                      <Text className="text-blue-600 font-bold text-base">✓</Text>
+                      <View className="w-6 h-6 rounded-full bg-indigo-600 items-center justify-center">
+                        <Check size={14} color="#FFFFFF" strokeWidth={3} />
+                      </View>
                     ) : null}
                   </TouchableOpacity>
                 );
               })}
             </View>
           )}
-        </Card>
+        </View>
 
         <Button
           title={createLeadMutation.isPending ? 'Saving Lead...' : 'Create Walk-in Lead'}
           onPress={handleSubmit}
           loading={createLeadMutation.isPending}
           disabled={createLeadMutation.isPending}
+          variant="primary"
         />
       </ScrollView>
     </SafeAreaView>

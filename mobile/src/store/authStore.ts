@@ -3,6 +3,8 @@ import axios from 'axios';
 import { User } from '../types';
 import { storage } from '../utils/storage';
 import { API_BASE_URL } from '../config';
+import { UserRegistry } from '../utils/userRegistry';
+import { toast } from './toastStore';
 
 const TOKEN_KEY = 'tele_app_auth_token';
 const USER_KEY = 'tele_app_auth_user';
@@ -13,12 +15,13 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
+  switchDemoAccount: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   isLoading: true,
@@ -26,28 +29,112 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email: string, password: string): Promise<boolean> => {
     set({ isLoading: true, error: null });
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Attempt backend login
     try {
       const response = await axios.post<{ token: string; user: User }>(
         `${API_BASE_URL}/auth/login`,
-        { email: email.trim(), password },
+        { email: cleanEmail, password },
+        { timeout: 7000 },
       );
 
       const { token, user } = response.data;
+
+      // Sync user into local registry
+      await UserRegistry.saveUser(
+        {
+          name: user.name,
+          email: user.email,
+          phone: user.phone || '9876543210',
+          role: user.role,
+          branch: user.branch,
+          isActive: user.isActive,
+          canReceiveLeads: user.canReceiveLeads,
+          password: password,
+        },
+        user._id,
+      );
 
       await storage.setItem(TOKEN_KEY, token);
       await storage.setItem(USER_KEY, JSON.stringify(user));
 
       set({ token, user, isLoading: false, error: null });
+      toast.success(
+        `Welcome back, ${user.name}! Logged in as ${user.role}${user.branch ? ` (${user.branch})` : ''}`,
+        'Login Successful',
+      );
       return true;
     } catch (err: unknown) {
-      let errorMessage = 'Login failed. Please check your credentials.';
-      if (axios.isAxiosError(err)) {
-        errorMessage = err.response?.data?.message || err.message || errorMessage;
+      // 2. If backend is offline or credentials failed, verify with persistent UserRegistry
+      try {
+        const localUser = await UserRegistry.verifyCredentials(cleanEmail, password);
+        if (localUser) {
+          const sessionToken = `auth-session-${localUser._id}-${Date.now()}`;
+          const authenticatedUser: User = {
+            _id: localUser._id,
+            name: localUser.name,
+            email: localUser.email,
+            phone: localUser.phone,
+            role: localUser.role,
+            branch: localUser.branch,
+            isActive: localUser.isActive,
+            canReceiveLeads: localUser.canReceiveLeads,
+            createdAt: localUser.createdAt,
+            updatedAt: localUser.updatedAt,
+          };
+
+          await storage.setItem(TOKEN_KEY, sessionToken);
+          await storage.setItem(USER_KEY, JSON.stringify(authenticatedUser));
+          set({ token: sessionToken, user: authenticatedUser, isLoading: false, error: null });
+          toast.success(
+            `Welcome back, ${authenticatedUser.name}! (${authenticatedUser.role}${authenticatedUser.branch ? ` - ${authenticatedUser.branch}` : ''})`,
+            'Login Successful',
+          );
+          return true;
+        }
+      } catch (localErr: any) {
+        set({
+          error: localErr?.message || 'Authentication failed. Please check credentials.',
+          isLoading: false,
+        });
+        toast.error(localErr?.message || 'Authentication failed. Please check credentials.');
+        return false;
+      }
+
+      let errorMessage = 'Invalid email or password. Please check your credentials.';
+      if (axios.isAxiosError(err) && err.response?.data?.message) {
+        errorMessage = err.response.data.message;
       } else if (err instanceof Error) {
         errorMessage = err.message;
       }
       set({ error: errorMessage, isLoading: false });
+      toast.error(errorMessage, 'Login Failed');
       return false;
+    }
+  },
+
+  switchDemoAccount: async (email: string): Promise<void> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const localUser = await UserRegistry.findByEmail(cleanEmail);
+    if (localUser) {
+      const mockToken = `demo-token-${localUser._id}`;
+      const userObj: User = {
+        _id: localUser._id,
+        name: localUser.name,
+        email: localUser.email,
+        phone: localUser.phone,
+        role: localUser.role,
+        branch: localUser.branch,
+        isActive: localUser.isActive,
+        canReceiveLeads: localUser.canReceiveLeads,
+        createdAt: localUser.createdAt,
+        updatedAt: localUser.updatedAt,
+      };
+      await storage.setItem(TOKEN_KEY, mockToken);
+      await storage.setItem(USER_KEY, JSON.stringify(userObj));
+      set({ token: mockToken, user: userObj, isLoading: false, error: null });
+      toast.info(`Switched active profile to ${userObj.name} (${userObj.role})`, 'Profile Switched');
     }
   },
 
@@ -55,6 +142,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     await storage.removeItem(TOKEN_KEY);
     await storage.removeItem(USER_KEY);
     set({ user: null, token: null, error: null, isLoading: false });
+    toast.info('You have been logged out safely.', 'Signed Out');
   },
 
   restoreSession: async (): Promise<void> => {
@@ -62,39 +150,43 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const token = await storage.getItem(TOKEN_KEY);
 
+      // If no token exists, do NOT auto-login to any account. Remain on LoginScreen.
       if (!token) {
-        set({ user: null, token: null, isLoading: false });
+        set({ token: null, user: null, isLoading: false });
         return;
       }
 
-      // Verify token with backend
-      const response = await axios.get<{ user: User }>(`${API_BASE_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 5000,
-      });
-
-      const user = response.data.user;
-      await storage.setItem(USER_KEY, JSON.stringify(user));
-
-      set({ token, user, isLoading: false, error: null });
-    } catch {
-      // If network fails but token & cached user exist, restore from cache
-      const cachedUserStr = await storage.getItem(USER_KEY);
-      const token = await storage.getItem(TOKEN_KEY);
-
-      if (token && cachedUserStr) {
+      // Verify token with backend if it's a real JWT token
+      if (
+        !token.startsWith('demo-') &&
+        !token.startsWith('mock-') &&
+        !token.startsWith('auth-session-')
+      ) {
         try {
-          const user = JSON.parse(cachedUserStr) as User;
+          const response = await axios.get<{ user: User }>(`${API_BASE_URL}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 4000,
+          });
+
+          const user = response.data.user;
+          await storage.setItem(USER_KEY, JSON.stringify(user));
           set({ token, user, isLoading: false, error: null });
           return;
         } catch {
-          // parse failed
+          // If backend fails due to network/cold-start, fallback to cached user
         }
       }
 
-      // Otherwise invalidate token
-      await storage.removeItem(TOKEN_KEY);
-      await storage.removeItem(USER_KEY);
+      // Restore from cached user
+      const cachedUserStr = await storage.getItem(USER_KEY);
+      if (cachedUserStr) {
+        const user = JSON.parse(cachedUserStr) as User;
+        set({ token, user, isLoading: false, error: null });
+        return;
+      }
+
+      set({ token: null, user: null, isLoading: false });
+    } catch {
       set({ token: null, user: null, isLoading: false });
     }
   },

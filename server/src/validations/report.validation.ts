@@ -8,6 +8,7 @@ export const reportQuerySchema = z.object({
     to: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
     campaignId: z.string().regex(objectIdRegex, 'Invalid campaign ID format').optional(),
     userId: z.string().regex(objectIdRegex, 'Invalid user ID format').optional(),
+    branch: z.string().trim().optional(),
   }),
 });
 
@@ -26,6 +27,7 @@ export const reportExportQuerySchema = z.object({
     to: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
     campaignId: z.string().regex(objectIdRegex, 'Invalid campaign ID format').optional(),
     userId: z.string().regex(objectIdRegex, 'Invalid user ID format').optional(),
+    branch: z.string().trim().optional(),
   }),
 });
 

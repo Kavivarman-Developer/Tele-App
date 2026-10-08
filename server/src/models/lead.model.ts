@@ -8,6 +8,7 @@ export interface ILead {
   phone: string;
   email?: string;
   source: string;
+  branch?: string | null;
   customProperties: Map<string, string>;
   assignedTo?: Types.ObjectId | null;
   stage: string;
@@ -52,6 +53,12 @@ const leadSchema = new Schema<ILeadDoc>(
       type: String,
       default: 'UPLOAD',
       trim: true,
+    },
+    branch: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
     },
     customProperties: {
       type: Map,

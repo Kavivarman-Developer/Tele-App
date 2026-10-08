@@ -5,10 +5,11 @@ const objectIdRegex = /^[0-9a-fA-F]{24}$/;
 
 export const disposeLeadSchema = z.object({
   params: z.object({
-    id: z.string().regex(objectIdRegex, 'Invalid lead ID format'),
+    id: z.string().min(1, 'Lead ID is required'),
   }),
   body: z
     .object({
+      phone: z.string().optional().nullable(),
       connected: z.boolean({ required_error: 'connected boolean is required' }),
       notConnectedReason: z.enum(NotConnectedReasons).optional(),
       stage: z.string().trim().optional(),
@@ -24,8 +25,8 @@ export const disposeLeadSchema = z.object({
           }),
         )
         .default([]),
-      reassignToUserId: z.string().regex(objectIdRegex, 'Invalid target user ID').optional(),
-      copyToCampaignId: z.string().regex(objectIdRegex, 'Invalid copy campaign ID').optional(),
+      reassignToUserId: z.string().regex(objectIdRegex, 'Invalid target user ID').optional().nullable(),
+      copyToCampaignId: z.string().regex(objectIdRegex, 'Invalid copy campaign ID').optional().nullable(),
     })
     .superRefine((data, ctx) => {
       if (data.connected) {

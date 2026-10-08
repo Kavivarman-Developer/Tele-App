@@ -10,7 +10,7 @@ export const apiClient = axios.create({
   },
 });
 
-// Request Interceptor: Normalize duplicate /api prefix and attach Bearer JWT token
+// Request Interceptor: Normalize duplicate /api prefix and attach Bearer JWT token if valid
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // If url starts with '/api/' and baseURL already contains '/api', remove duplicate prefix
@@ -18,7 +18,14 @@ apiClient.interceptors.request.use(
       config.url = config.url.replace(/^\/api/, '');
     }
     const token = useAuthStore.getState().token;
-    if (token && config.headers) {
+    // Only attach authorization header if it's a real JWT token from the server
+    if (
+      token &&
+      config.headers &&
+      !token.startsWith('auth-session-') &&
+      !token.startsWith('demo-') &&
+      !token.startsWith('mock-')
+    ) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -26,14 +33,11 @@ apiClient.interceptors.request.use(
   (error: unknown) => Promise.reject(error),
 );
 
-// Response Interceptor: Handle 401 unauthorized by logging out
+// Response Interceptor: Preserve active session, never forcibly logout on background 401s
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      console.warn('[API Client] 401 Unauthorized encountered. Logging out user.');
-      await useAuthStore.getState().logout();
-    }
+    // Gracefully propagate error to calling query or mutation without destroying local session
     return Promise.reject(error);
   },
 );

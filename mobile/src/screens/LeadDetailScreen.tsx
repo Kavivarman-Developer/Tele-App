@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,23 +9,48 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  StyleSheet,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Phone,
+  MessageCircle,
+  Clock,
+  Calendar,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  UserCheck,
+  ChevronDown,
+  ChevronUp,
+  Flame,
+  Sun,
+  Snowflake,
+} from 'lucide-react-native';
 
 import { callService } from '../services/call.service';
 import { fetchLeadHistory, reassignLead, fetchAssignableUsers } from '../api/leadApi';
 import { RootStackParamList, Activity, Lead } from '../types';
+import { colors, borderRadius, shadows } from '../theme';
+import { CrmHeader } from '../components/CrmHeader';
+import { CrmAvatar } from '../components/CrmAvatar';
 import { Badge } from '../components/Badge';
-import { Card } from '../components/Card';
 import { CallPermissionModal } from '../components/CallPermissionModal';
+import { LeadTimeline } from '../components/LeadTimeline';
+import { useLeadHistoryStore } from '../store/leadHistoryStore';
+import { useAuthStore } from '../store/authStore';
 
 type ScreenRouteProp = RouteProp<RootStackParamList, 'LeadDetail'>;
 type ScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export const LeadDetailScreen: React.FC = () => {
+  const { user } = useAuthStore();
+  const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<ScreenNavigationProp>();
   const { lead, queue, queueIndex } = route.params;
@@ -35,12 +60,13 @@ export const LeadDetailScreen: React.FC = () => {
   const [showReassignModal, setShowReassignModal] = useState<boolean>(false);
   const [callActive, setCallActive] = useState<boolean>(false);
   const [showPermissionModal, setShowPermissionModal] = useState<boolean>(false);
+
   const callStartTimeRef = useRef<number | null>(null);
   const isCallingRef = useRef<boolean>(false);
   const skipPermissionCheckRef = useRef<boolean>(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  // Fetch active assignable agents for reassignment
+  // Active assignable agents
   const { data: usersData } = useQuery({
     queryKey: ['assignableUsers'],
     queryFn: fetchAssignableUsers,
@@ -48,39 +74,30 @@ export const LeadDetailScreen: React.FC = () => {
   });
   const assignableAgents = usersData?.users || [];
 
-  // Mutation to reassign lead directly to a specific agent
+  // Reassignment Mutation
   const reassignMutation = useMutation({
     mutationFn: (targetUserId: string) => reassignLead(currentLead._id, targetUserId),
     onSuccess: (data, targetUserId) => {
       queryClient.invalidateQueries({ queryKey: ['myLeads'] });
       queryClient.invalidateQueries({ queryKey: ['leadHistory', currentLead._id] });
-      const targetAgentName = assignableAgents.find((a) => a._id === targetUserId)?.name || 'Agent';
+      const targetAgentName =
+        assignableAgents.find((a) => a._id === targetUserId)?.name || 'Agent';
       setCurrentLead(data.lead);
       setShowReassignModal(false);
-      const msg = `Lead "${currentLead.name}" has been transferred to ${targetAgentName}.`;
-      if (Platform.OS === 'web') {
-        window.alert(msg);
-      } else {
-        Alert.alert('Lead Reassigned', msg);
-      }
+      Alert.alert('Lead Reassigned', `Lead transferred to ${targetAgentName}.`);
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Failed to reassign lead';
-      if (Platform.OS === 'web') {
-        window.alert(`Reassign Failed: ${msg}`);
-      } else {
-        Alert.alert('Reassign Failed', msg);
-      }
+      Alert.alert('Reassign Failed', msg);
     },
   });
 
-  // AppState Listener: Detect returning to foreground after call
+  // AppState Listener
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       const prevAppState = appStateRef.current;
       appStateRef.current = nextAppState;
 
-      // When transitioning back to 'active' from 'background' or 'inactive' after a call started
       if (
         (prevAppState === 'background' || prevAppState === 'inactive') &&
         nextAppState === 'active' &&
@@ -92,7 +109,6 @@ export const LeadDetailScreen: React.FC = () => {
         callStartTimeRef.current = null;
         setCallActive(false);
 
-        // Fetch call log result (duration and connected status) via CallService
         callService
           .getCallResult(lead.phone, startTime)
           .then((callResult) => {
@@ -105,13 +121,11 @@ export const LeadDetailScreen: React.FC = () => {
               queueIndex,
             });
           })
-          .catch((err) => {
-            console.warn('[LeadDetailScreen] Failed to retrieve call result:', err);
-            const durationSeconds = Math.max(1, Math.round((Date.now() - startTime) / 1000));
+          .catch(() => {
             navigation.navigate('Dispose', {
               lead,
-              callDurationSeconds: durationSeconds,
-              isCallConnected: true,
+              callDurationSeconds: 0,
+              isCallConnected: false,
               detectionMethod: 'MANUAL',
               queue,
               queueIndex,
@@ -120,435 +134,309 @@ export const LeadDetailScreen: React.FC = () => {
       }
     };
 
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => {
-      subscription.remove();
-    };
-  }, [navigation, lead, queue, queueIndex]);
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, [lead, navigation, queue, queueIndex]);
 
-  // Fetch full contact history from /api/leads/:id/history
+  // Lead History Query
   const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ['leadHistory', lead._id],
-    queryFn: () => fetchLeadHistory(lead._id),
+    queryKey: ['leadHistory', currentLead._id],
+    queryFn: () => fetchLeadHistory(currentLead._id),
   });
 
-  const activities: Activity[] = historyData?.activities ?? [];
+  const { getHistoryForLead } = useLeadHistoryStore();
 
-  // Low-level dialing execution
-  const executeDialing = async () => {
-    callStartTimeRef.current = Date.now();
+  const combinedActivities: Activity[] = useMemo(() => {
+    const backend = historyData?.activities || [];
+    const local = getHistoryForLead(currentLead._id);
+    if (backend.length > 0) {
+      const existingIds = new Set(backend.map((a) => a._id));
+      const nonDup = local.filter((a) => !existingIds.has(a._id));
+      return [...backend, ...nonDup].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    }
+    return local;
+  }, [historyData, currentLead._id, getHistoryForLead]);
+
+  const initiateCall = async () => {
     isCallingRef.current = true;
+    callStartTimeRef.current = Date.now();
     setCallActive(true);
 
-    const success = await callService.startCall(lead);
-    if (!success) {
+    try {
+      await callService.startCall(currentLead);
+    } catch {
       isCallingRef.current = false;
       callStartTimeRef.current = null;
       setCallActive(false);
-      if (Platform.OS === 'web') {
-        window.alert(`Unable to dial ${lead.phone}. Please check phone capabilities.`);
-      } else {
-        Alert.alert(
-          'Call Error',
-          `Unable to dial ${lead.phone}. Please check device phone capabilities.`,
-        );
-      }
+      Alert.alert('Call Failed', 'Unable to initiate phone call.');
     }
   };
 
-  // User taps Start Call
-  const handleStartCall = async () => {
+  const handlePressCall = async () => {
     if (Platform.OS === 'android' && !skipPermissionCheckRef.current) {
-      const hasPermission = await (callService.checkPermissions?.() ?? Promise.resolve(false));
-      if (!hasPermission) {
+      const hasPerm = await callService.checkPermissions();
+      if (!hasPerm) {
         setShowPermissionModal(true);
         return;
       }
     }
-
-    await executeDialing();
+    await initiateCall();
   };
 
-  // Agent accepts rationale and grants permissions
   const handleGrantPermissions = async () => {
     setShowPermissionModal(false);
-    if (callService.requestPermissions) {
-      await callService.requestPermissions();
-    }
-    await executeDialing();
+    await callService.requestPermissions();
+    await initiateCall();
   };
 
-  // Agent skips rationale to use manual timing
   const handleSkipPermissions = async () => {
     setShowPermissionModal(false);
     skipPermissionCheckRef.current = true;
-    await executeDialing();
+    await initiateCall();
   };
 
-  const handleOpenWhatsApp = async () => {
-    const defaultGreeting = `Hi ${lead.name}, contacting you from ${
-      lead.campaign?.name || 'our sales team'
-    }.`;
-    await callService.openWhatsApp(lead.phone, defaultGreeting);
-  };
-
-  const handleManualDispose = async () => {
-    let duration = 0;
-    let connected = true;
-    let detectionMethod: 'AUTOMATIC' | 'MANUAL' = 'MANUAL';
-
-    if (callStartTimeRef.current) {
-      const startTime = callStartTimeRef.current;
-      callStartTimeRef.current = null;
-      isCallingRef.current = false;
-      setCallActive(false);
-
-      try {
-        const result = await callService.getCallResult(lead.phone, startTime);
-        duration = result.durationSeconds;
-        connected = result.connected;
-        if (result.matchedLog) {
-          detectionMethod = 'AUTOMATIC';
-        }
-      } catch {
-        duration = Math.max(0, Math.round((Date.now() - startTime) / 1000));
-      }
-    }
-
-    navigation.navigate('Dispose', {
-      lead,
-      callDurationSeconds: duration,
-      isCallConnected: connected,
-      detectionMethod,
-      queue,
-      queueIndex,
+  const handleDirectWhatsApp = () => {
+    const clean = lead.phone.replace(/\D/g, '');
+    Linking.openURL(`https://wa.me/91${clean}`).catch(() => {
+      Alert.alert('Error', 'WhatsApp is not installed.');
     });
   };
 
-  const handleNavigateQueue = (direction: 'next' | 'prev') => {
-    if (!queue || queueIndex === undefined) return;
-    const targetIndex = direction === 'next' ? queueIndex + 1 : queueIndex - 1;
-    if (targetIndex >= 0 && targetIndex < queue.length) {
-      navigation.replace('LeadDetail', {
-        lead: queue[targetIndex],
-        queue,
-        queueIndex: targetIndex,
-      });
-    }
-  };
-
-  const formatActivityDate = (dateStr: string): string => {
-    const d = new Date(dateStr);
-    return `${d.toLocaleDateString([], {
-      month: 'short',
-      day: 'numeric',
-    })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  };
-
-  const formatSeconds = (sec: number): string => {
-    if (!sec || sec <= 0) return '0s';
+  const formatSeconds = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
-    if (m === 0) return `${s}s`;
-    return `${m}m ${s}s`;
+    return `${m > 0 ? `${m}m ` : ''}${s}s`;
   };
 
-  const customPropEntries = lead.customProperties
-    ? Object.entries(lead.customProperties)
-    : [];
+  const formatActivityDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  };
+
+  const cleanNum = (lead.phone || '').replace(/\D/g, '');
+  const campaignName =
+    typeof lead.campaign === 'object' && lead.campaign?.name
+      ? lead.campaign.name
+      : 'Demo Sales Campaign';
+  const customPropEntries = Object.entries(currentLead.customProperties || {});
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      {/* Top Navigation Bar */}
-      <View className="bg-white px-4 py-3.5 border-b border-slate-200 flex-row justify-between items-center shadow-xs">
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          className="p-1 -ml-1 flex-row items-center"
-        >
-          <Text className="text-blue-600 text-base font-bold">‹ Back</Text>
-        </TouchableOpacity>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <CrmHeader
+        title="Lead Details"
+        subtitle={lead.name}
+        showBack
+      />
 
-        {queue && queueIndex !== undefined ? (
-          <View className="flex-row items-center bg-slate-100 border border-slate-200 px-3 py-1 rounded-full">
-            <Text className="text-slate-700 text-xs font-semibold mr-2">
-              Queue {queueIndex + 1} of {queue.length}
-            </Text>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Lead Hero Profile Card */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTop}>
+            <CrmAvatar name={currentLead.name} size="lg" />
+            <View style={styles.heroInfo}>
+              <Text style={styles.heroName}>{currentLead.name}</Text>
+              <Text style={styles.heroPhone}>+91 {cleanNum}</Text>
+              <View style={styles.badgeRow}>
+                <Badge label={currentLead.stage} stage={currentLead.stage} />
+                {currentLead.tag ? (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor:
+                        currentLead.tag.toUpperCase() === 'HOT'
+                          ? '#FEF2F2'
+                          : currentLead.tag.toUpperCase() === 'COLD'
+                          ? '#EFF6FF'
+                          : '#FFFBEB',
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6,
+                      gap: 4,
+                    }}
+                  >
+                    {currentLead.tag.toUpperCase() === 'HOT' ? (
+                      <Flame size={11} color="#DC2626" fill="#DC2626" />
+                    ) : currentLead.tag.toUpperCase() === 'COLD' ? (
+                      <Snowflake size={11} color="#2563EB" />
+                    ) : (
+                      <Sun size={11} color="#D97706" />
+                    )}
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: '800',
+                        color:
+                          currentLead.tag.toUpperCase() === 'HOT'
+                            ? '#DC2626'
+                            : currentLead.tag.toUpperCase() === 'COLD'
+                            ? '#2563EB'
+                            : '#D97706',
+                      }}
+                    >
+                      {currentLead.tag.toUpperCase()}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={styles.campaignBadge}>
+                  <Text style={styles.campaignBadgeText}>{campaignName}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Quick Outreach Action Buttons */}
+          <View style={styles.actionGrid}>
             <TouchableOpacity
-              onPress={() => handleNavigateQueue('prev')}
-              disabled={queueIndex === 0}
-              className={`mr-1 px-1.5 ${queueIndex === 0 ? 'opacity-30' : ''}`}
+              style={[styles.primaryActionBtn, styles.callBtn]}
+              onPress={handlePressCall}
+              activeOpacity={0.8}
             >
-              <Text className="text-slate-900 text-xs font-bold">‹</Text>
+              <Phone size={18} color={colors.surface} />
+              <Text style={styles.actionBtnText}>
+                {callActive ? 'Calling…' : 'Call Lead'}
+              </Text>
             </TouchableOpacity>
+
             <TouchableOpacity
-              onPress={() => handleNavigateQueue('next')}
-              disabled={queueIndex === queue.length - 1}
-              className={`px-1.5 ${
-                queueIndex === queue.length - 1 ? 'opacity-30' : ''
-              }`}
+              style={[styles.primaryActionBtn, styles.whatsappBtn]}
+              onPress={handleDirectWhatsApp}
+              activeOpacity={0.8}
             >
-              <Text className="text-slate-900 text-xs font-bold">›</Text>
+              <MessageCircle size={18} color={colors.surface} />
+              <Text style={styles.actionBtnText}>WhatsApp</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.primaryActionBtn, styles.disposeBtn]}
+              onPress={() =>
+                navigation.navigate('Dispose', {
+                  lead: currentLead,
+                  callDurationSeconds: 0,
+                  isCallConnected: true,
+                  detectionMethod: 'MANUAL',
+                  queue,
+                  queueIndex,
+                })
+              }
+              activeOpacity={0.8}
+            >
+              <UserCheck size={18} color={colors.surface} />
+              <Text style={styles.actionBtnText}>Log Call</Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          <Text className="text-slate-500 text-xs font-semibold">Lead Details</Text>
-        )}
-      </View>
+        </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        {/* Main Lead Header Card */}
-        <Card className="mb-4">
-          <View className="flex-row justify-between items-start mb-2">
-            <View className="flex-1 mr-3">
-              <Text className="text-2xl font-bold text-slate-900">{lead.name}</Text>
-              <Text className="text-blue-600 text-base font-semibold mt-0.5">
-                {lead.phone}
-              </Text>
-              {lead.email ? (
-                <Text className="text-slate-500 text-xs mt-0.5">{lead.email}</Text>
-              ) : null}
+        {/* Lead Details & Metadata */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Overview</Text>
+
+          <View style={styles.metaList}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Total Attempts</Text>
+              <Text style={styles.metaValue}>{currentLead.attemptCount || 0} times</Text>
             </View>
 
-            {lead.campaign?.priority ? (
-              <Badge
-                label={lead.campaign.priority}
-                variant={
-                  lead.campaign.priority === 'HIGH'
-                    ? 'danger'
-                    : lead.campaign.priority === 'MEDIUM'
-                    ? 'warning'
-                    : 'default'
-                }
-              />
-            ) : null}
-          </View>
-
-          {/* Quick Metrics */}
-          <View className="flex-row flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100">
-            <Badge label={`Stage: ${lead.stage}`} variant="info" />
-            {lead.tag ? <Badge label={`Tag: ${lead.tag}`} variant="default" /> : null}
-            <Badge
-              label={lead.status}
-              variant={lead.status === 'OPEN' ? 'success' : 'default'}
-            />
-            <Badge label={`Attempts: ${lead.attemptCount}`} variant="default" />
-          </View>
-
-          {/* Campaign details */}
-          <View className="mt-3 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-            <View className="flex-row justify-between py-0.5">
-              <Text className="text-slate-500 text-xs font-medium">Campaign</Text>
-              <Text className="text-slate-800 text-xs font-bold">
-                {lead.campaign?.name || lead.campaignId}
-              </Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Lead Status</Text>
+              <Text style={styles.metaValue}>{currentLead.status}</Text>
             </View>
-            <View className="flex-row justify-between py-0.5">
-              <Text className="text-slate-500 text-xs font-medium">Source</Text>
-              <Text className="text-slate-700 text-xs font-semibold">{lead.source}</Text>
-            </View>
-            {lead.nextFollowUpAt ? (
-              <View className="flex-row justify-between py-0.5">
-                <Text className="text-slate-500 text-xs font-medium">Next Follow-Up</Text>
-                <Text className="text-amber-700 text-xs font-bold">
-                  {formatActivityDate(lead.nextFollowUpAt)}
+
+            {currentLead.nextFollowUpAt ? (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Scheduled Follow-up</Text>
+                <Text style={[styles.metaValue, { color: colors.primary }]}>
+                  {formatActivityDate(currentLead.nextFollowUpAt)}
                 </Text>
               </View>
             ) : null}
-          </View>
-        </Card>
 
-        {/* CALL ACTION BAR */}
-        <View className="mb-5">
-          {callActive ? (
-            <View className="bg-emerald-50 border border-emerald-300 p-3 rounded-xl mb-3 items-center">
-              <Text className="text-emerald-700 text-xs font-bold">
-                📞 Call in progress... When finished, app will open Dispose screen automatically.
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Big Call Button */}
-          <TouchableOpacity
-            onPress={handleStartCall}
-            activeOpacity={0.85}
-            className="bg-emerald-600 active:bg-emerald-700 py-4 px-6 rounded-2xl flex-row justify-center items-center shadow-md mb-3"
-          >
-            <Text className="text-xl mr-2">📞</Text>
-            <Text className="text-white font-bold text-lg">Call {lead.phone}</Text>
-          </TouchableOpacity>
-
-          {/* Secondary Actions: WhatsApp & Dispose */}
-          <View className="flex-row gap-3">
-            <TouchableOpacity
-              onPress={handleOpenWhatsApp}
-              activeOpacity={0.8}
-              className="flex-1 bg-emerald-50 border border-emerald-300 py-3 rounded-xl flex-row justify-center items-center"
-            >
-              <Text className="text-base mr-1.5">💬</Text>
-              <Text className="text-emerald-700 font-bold text-sm">WhatsApp</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={handleManualDispose}
-              activeOpacity={0.8}
-              className="flex-1 bg-blue-50 border border-blue-200 py-3 rounded-xl flex-row justify-center items-center"
-            >
-              <Text className="text-base mr-1.5">📝</Text>
-              <Text className="text-blue-700 font-bold text-sm">Dispose Lead</Text>
-            </TouchableOpacity>
+            {currentLead.email ? (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Email Address</Text>
+                <Text style={styles.metaValue}>{currentLead.email}</Text>
+              </View>
+            ) : null}
           </View>
 
-          {/* Quick Direct Reassign to Particular Agent */}
-          <TouchableOpacity
-            onPress={() => setShowReassignModal(!showReassignModal)}
-            activeOpacity={0.8}
-            className="mt-3 bg-white border border-slate-200 py-2.5 px-4 rounded-xl flex-row justify-between items-center shadow-xs"
-          >
-            <View className="flex-row items-center">
-              <Text className="text-base mr-2">👤</Text>
-              <Text className="text-slate-800 font-bold text-xs">
-                {showReassignModal ? 'Hide Agent Transfer' : 'Reassign / Transfer to Particular Agent'}
-              </Text>
-            </View>
-            <Text className="text-blue-600 text-xs font-bold">
-              {showReassignModal ? '▲ Close' : '▼ Select Agent'}
-            </Text>
-          </TouchableOpacity>
-
-          {showReassignModal && (
-            <Card className="mt-2.5 bg-slate-50 border border-blue-200 p-3.5 shadow-xs">
-              <Text className="text-slate-900 font-bold text-xs mb-1">
-                Select Agent to Assign:
-              </Text>
-              <Text className="text-slate-500 text-[11px] mb-2.5">
-                Tapping an agent will immediately transfer this lead to their active calling queue.
-              </Text>
-              {assignableAgents.length === 0 ? (
-                <Text className="text-slate-400 text-xs py-2">Loading active agents...</Text>
-              ) : (
-                <View className="flex-row flex-wrap gap-2">
-                  {assignableAgents.map((agent) => (
-                    <TouchableOpacity
-                      key={agent._id}
-                      onPress={() => reassignMutation.mutate(agent._id)}
-                      disabled={reassignMutation.isPending}
-                      className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 active:bg-blue-50"
-                    >
-                      <Text className="text-blue-600 font-bold text-xs">
-                        👤 {agent.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+          {/* Quick Agent Reassign (Manager & Admin Only) */}
+          {isManagerOrAdmin && (
+            <>
+              <TouchableOpacity
+                style={styles.reassignToggleBtn}
+                onPress={() => setShowReassignModal(!showReassignModal)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.reassignLeft}>
+                  <Users size={16} color={colors.primary} />
+                  <Text style={styles.reassignToggleText}>
+                    {showReassignModal ? 'Hide Agent Transfer' : 'Transfer to Another Agent'}
+                  </Text>
                 </View>
-              )}
-            </Card>
+                {showReassignModal ? (
+                  <ChevronUp size={16} color={colors.textQuiet} />
+                ) : (
+                  <ChevronDown size={16} color={colors.textQuiet} />
+                )}
+              </TouchableOpacity>
+
+              {showReassignModal ? (
+                <View style={styles.reassignBox}>
+                  <Text style={styles.reassignTitle}>Select Agent to Reassign:</Text>
+                  <Text style={styles.reassignSub}>
+                    Tapping an agent will immediately move this lead to their queue.
+                  </Text>
+                  <View style={styles.agentsList}>
+                    {assignableAgents.map((ag) => (
+                      <TouchableOpacity
+                        key={ag._id}
+                        style={styles.agentSelectChip}
+                        onPress={() => reassignMutation.mutate(ag._id)}
+                        disabled={reassignMutation.isPending}
+                        activeOpacity={0.7}
+                      >
+                        <CrmAvatar name={ag.name} size="sm" />
+                        <Text style={styles.agentSelectName}>{ag.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </>
           )}
         </View>
 
-        {/* Custom Properties Section */}
+        {/* Custom Properties */}
         {customPropEntries.length > 0 ? (
-          <Card className="mb-4">
-            <Text className="text-slate-900 font-bold text-sm mb-3">
-              📋 Custom Properties
-            </Text>
-            <View className="gap-2">
-              {customPropEntries.map(([key, val]) => (
-                <View
-                  key={key}
-                  className="flex-row justify-between py-1.5 border-b border-slate-100"
-                >
-                  <Text className="text-slate-500 text-xs capitalize">{key}</Text>
-                  <Text className="text-slate-800 text-xs font-semibold">{String(val)}</Text>
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Custom Lead Fields</Text>
+            <View style={styles.metaList}>
+              {customPropEntries.map(([k, v]) => (
+                <View key={k} style={styles.metaRow}>
+                  <Text style={styles.metaLabel}>{k.toUpperCase()}</Text>
+                  <Text style={styles.metaValue}>{String(v)}</Text>
                 </View>
               ))}
             </View>
-          </Card>
+          </View>
         ) : null}
 
-        {/* Contact & Call History Section */}
-        <Card>
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-slate-900 font-bold text-sm">🕒 Contact History</Text>
-            <Text className="text-slate-500 text-xs font-medium">
-              {activities.length} {activities.length === 1 ? 'activity' : 'activities'}
-            </Text>
-          </View>
-
-          {historyLoading ? (
-            <View className="py-6 items-center">
-              <ActivityIndicator size="small" color="#2563EB" />
-              <Text className="text-slate-500 text-xs mt-2">Loading history...</Text>
-            </View>
-          ) : activities.length === 0 ? (
-            <View className="py-6 items-center">
-              <Text className="text-slate-400 text-xs">No previous call activities recorded.</Text>
-            </View>
-          ) : (
-            <View className="gap-2.5">
-              {activities.map((act) => {
-                const userName =
-                  typeof act.userId === 'object' && act.userId ? act.userId.name : 'Agent';
-                return (
-                  <View
-                    key={act._id}
-                    className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl"
-                  >
-                    <View className="flex-row justify-between items-center mb-1">
-                      <View className="flex-row items-center gap-1.5">
-                        <Badge
-                          label={act.connected ? 'Connected' : 'Not Connected'}
-                          variant={act.connected ? 'success' : 'danger'}
-                        />
-                        {act.notConnectedReason ? (
-                          <Badge
-                            label={act.notConnectedReason.replace(/_/g, ' ')}
-                            variant="warning"
-                          />
-                        ) : null}
-                      </View>
-                      <Text className="text-slate-600 text-xs font-semibold">
-                        ⏱️ {formatSeconds(act.durationSeconds)}
-                      </Text>
-                    </View>
-
-                    {/* Stage & Tag updated */}
-                    <View className="flex-row items-center mt-1.5">
-                      <Text className="text-slate-600 text-xs">
-                        Stage: <Text className="font-bold text-blue-600">{act.stage}</Text>
-                        {act.tag ? ` • Tag: ${act.tag}` : ''}
-                      </Text>
-                    </View>
-
-                    {/* Remark if present */}
-                    {act.remark ? (
-                      <Text className="text-slate-700 text-xs mt-1.5 italic bg-white border border-slate-200/80 p-2.5 rounded-lg">
-                        "{act.remark}"
-                      </Text>
-                    ) : null}
-
-                    {/* Follow up set */}
-                    {act.followUpAt ? (
-                      <Text className="text-amber-700 font-semibold text-xs mt-1">
-                        ⏰ Follow-up: {formatActivityDate(act.followUpAt)}
-                      </Text>
-                    ) : null}
-
-                    {/* Caller and Time */}
-                    <View className="flex-row justify-between mt-2 pt-2 border-t border-slate-200/60">
-                      <Text className="text-slate-400 text-[10px]">By {userName}</Text>
-                      <Text className="text-slate-400 text-[10px]">
-                        {formatActivityDate(act.createdAt)}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </Card>
+        {/* Contact & Call History Timeline (Multi-Agent Audit Trail) */}
+        <View style={styles.sectionCard}>
+          <LeadTimeline
+            activities={combinedActivities}
+            isLoading={historyLoading}
+          />
+        </View>
       </ScrollView>
 
-      {/* Permission Rationale Modal */}
+      {/* Permission Modal */}
       <CallPermissionModal
         visible={showPermissionModal}
         onGrant={handleGrantPermissions}
@@ -557,3 +445,261 @@ export const LeadDetailScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  container: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 40,
+    gap: 16,
+  },
+  heroCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    ...shadows.soft,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  heroInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  heroName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  heroPhone: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 6,
+  },
+  campaignBadge: {
+    backgroundColor: colors.surfaceLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+  },
+  campaignBadgeText: {
+    fontSize: 10,
+    color: colors.textQuiet,
+    fontWeight: '600',
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
+  },
+  primaryActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: borderRadius.md,
+    gap: 6,
+  },
+  callBtn: {
+    backgroundColor: colors.success,
+  },
+  whatsappBtn: {
+    backgroundColor: '#25D366',
+  },
+  disposeBtn: {
+    backgroundColor: colors.primary,
+  },
+  actionBtnText: {
+    color: colors.surface,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sectionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    ...shadows.soft,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  metaList: {
+    gap: 8,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+  },
+  metaLabel: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  metaValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  reassignToggleBtn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.sm,
+    marginTop: 12,
+  },
+  reassignLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reassignToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  reassignBox: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.sm,
+    padding: 12,
+    marginTop: 8,
+  },
+  reassignTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  reassignSub: {
+    fontSize: 10,
+    color: colors.textQuiet,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  agentsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  agentSelectChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    gap: 6,
+  },
+  agentSelectName: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyCount: {
+    fontSize: 11,
+    color: colors.textQuiet,
+  },
+  emptyHistoryText: {
+    fontSize: 12,
+    color: colors.textQuiet,
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+  timelineList: {
+    gap: 10,
+    marginTop: 10,
+  },
+  activityItem: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.sm,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  activityTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  activityBadgeRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  activityDuration: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  activityStage: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginBottom: 6,
+  },
+  remarkBox: {
+    backgroundColor: colors.surface,
+    padding: 8,
+    borderRadius: borderRadius.xs,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    marginBottom: 6,
+  },
+  remarkText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: colors.textSecondary,
+  },
+  activityFollowUp: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.warningText,
+    marginBottom: 6,
+  },
+  activityFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
+  },
+  activityMetaText: {
+    fontSize: 9,
+    color: colors.textQuiet,
+  },
+});

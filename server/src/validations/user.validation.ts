@@ -15,6 +15,7 @@ export const createUserSchema = z.object({
     role: z.enum(['ADMIN', 'MANAGER', 'AGENT'], {
       required_error: 'Role must be ADMIN, MANAGER, or AGENT',
     }),
+    branch: z.string().trim().optional().nullable(),
     managerId: z
       .string()
       .regex(/^[0-9a-fA-F]{24}$/, 'Invalid manager ID format')
@@ -34,6 +35,7 @@ export const updateUserSchema = z.object({
       name: z.string().min(1, 'Name cannot be empty').trim().optional(),
       phone: z.string().min(5, 'Invalid phone number').trim().optional(),
       role: z.enum(['ADMIN', 'MANAGER', 'AGENT']).optional(),
+      branch: z.string().trim().optional().nullable(),
       isActive: z.boolean().optional(),
       canReceiveLeads: z.boolean().optional(),
       managerId: z
@@ -78,6 +80,7 @@ export const bulkCreateUsersSchema = z.object({
         role: z.enum(['ADMIN', 'MANAGER', 'AGENT'], {
           required_error: 'Role must be ADMIN, MANAGER, or AGENT',
         }),
+        branch: z.string().trim().optional().nullable(),
         managerId: z
           .string()
           .regex(/^[0-9a-fA-F]{24}$/, 'Invalid manager ID format')
@@ -93,6 +96,7 @@ export const bulkCreateUsersSchema = z.object({
 export const listUsersQuerySchema = z.object({
   query: z.object({
     role: z.enum(['ADMIN', 'MANAGER', 'AGENT']).optional(),
+    branch: z.string().trim().optional(),
     isActive: z
       .enum(['true', 'false'])
       .optional()

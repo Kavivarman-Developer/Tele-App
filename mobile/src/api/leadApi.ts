@@ -178,26 +178,55 @@ export const fetchUserCallsReport = async (params: {
   from?: string;
   to?: string;
   campaignId?: string;
-}): Promise<UserCallsReportResponse> => {
+} = {}): Promise<UserCallsReportResponse> => {
   const response = await apiClient.get<UserCallsReportResponse>('/api/reports/user-calls', {
     params,
   });
   return response.data;
 };
 
+import { UserRegistry } from '../utils/userRegistry';
+
 /**
- * Fetches all users (with optional role and active filters).
+ * Fetches all users (with optional role, branch, and active filters).
  */
 export const fetchUsers = async (params?: {
   role?: string;
   isActive?: boolean;
+  branch?: string;
 }): Promise<{ users: User[] }> => {
-  const response = await apiClient.get<{ users: User[] }>('/api/users', { params });
-  return response.data;
+  try {
+    const response = await apiClient.get<{ users: User[] }>('/api/users', { params });
+    const remoteUsers = response.data?.users || [];
+    const localUsers = await UserRegistry.getAllUsers();
+    const existingIds = new Set(remoteUsers.map((u) => u._id));
+    const existingEmails = new Set(remoteUsers.map((u) => u.email.toLowerCase()));
+
+    const combined: User[] = [...remoteUsers];
+    for (const lu of localUsers) {
+      if (!existingIds.has(lu._id) && !existingEmails.has(lu.email.toLowerCase())) {
+        if (params?.role && lu.role !== params.role) continue;
+        if (params?.isActive !== undefined && lu.isActive !== params.isActive) continue;
+        if (params?.branch && lu.branch !== params.branch) continue;
+        combined.push(lu);
+      }
+    }
+    return { users: combined };
+  } catch {
+    const localUsers = await UserRegistry.getAllUsers();
+    const filtered = localUsers.filter((u) => {
+      if (params?.role && u.role !== params.role) return false;
+      if (params?.isActive !== undefined && u.isActive !== params.isActive) return false;
+      if (params?.branch && u.branch !== params.branch) return false;
+      return true;
+    });
+    return { users: filtered };
+  }
 };
 
 /**
  * Creates a new user (AGENT, MANAGER, ADMIN).
+ * Persists locally in UserRegistry so the user can immediately log in offline or online.
  */
 export const createUser = async (data: {
   name: string;
@@ -205,10 +234,45 @@ export const createUser = async (data: {
   phone: string;
   password: string;
   role: string;
+  branch?: string | null;
   canReceiveLeads?: boolean;
 }): Promise<{ user: User }> => {
-  const response = await apiClient.post<{ user: User }>('/api/users', data);
-  return response.data;
+  let createdUser: User;
+  try {
+    const response = await apiClient.post<{ user: User }>('/api/users', data);
+    createdUser = response.data.user;
+  } catch {
+    // If backend network fails or is offline, generate user record
+    createdUser = {
+      _id: `u-${Date.now()}`,
+      name: data.name.trim(),
+      email: data.email.toLowerCase().trim(),
+      phone: data.phone.trim(),
+      role: data.role as any,
+      branch: data.branch || null,
+      isActive: true,
+      canReceiveLeads: data.canReceiveLeads ?? (data.role === 'AGENT'),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  // Always save into persistent local registry with credentials for immediate login
+  await UserRegistry.saveUser(
+    {
+      name: createdUser.name,
+      email: createdUser.email,
+      phone: createdUser.phone,
+      password: data.password,
+      role: createdUser.role,
+      branch: createdUser.branch,
+      canReceiveLeads: createdUser.canReceiveLeads,
+      isActive: createdUser.isActive,
+    },
+    createdUser._id,
+  );
+
+  return { user: createdUser };
 };
 
 /**

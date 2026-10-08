@@ -24,6 +24,8 @@ export interface IActivity {
   leadId: Types.ObjectId;
   campaignId: Types.ObjectId;
   userId: Types.ObjectId;
+  phone?: string | null;
+  branch?: string | null;
   type: 'CALL';
   connected: boolean;
   notConnectedReason?: NotConnectedReason | null;
@@ -116,6 +118,18 @@ const activitySchema = new Schema<IActivityDoc>(
       type: [engagementAnswerSchema],
       default: [],
     },
+    phone: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
+    branch: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -123,5 +137,7 @@ const activitySchema = new Schema<IActivityDoc>(
 );
 
 activitySchema.index({ leadId: 1, createdAt: -1 });
+activitySchema.index({ phone: 1, createdAt: -1 });
+activitySchema.index({ branch: 1, createdAt: -1 });
 
 export const Activity = model<IActivityDoc>('Activity', activitySchema);

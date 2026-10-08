@@ -11,8 +11,9 @@ export interface AuthResponse {
 export class AuthService {
   public static async login(credentials: LoginInput): Promise<AuthResponse> {
     const { email, password } = credentials;
+    const cleanEmail = email.toLowerCase().trim();
 
-    const user = await User.findOne({ email }).select('+passwordHash');
+    const user = await User.findOne({ email: cleanEmail }).select('+passwordHash');
 
     if (!user) {
       throw new AppError('Invalid email or password', 401);

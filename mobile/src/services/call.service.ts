@@ -4,8 +4,8 @@ import { Lead, DetectedCallResult } from '../types';
 export interface ICallService {
   startCall(lead: Lead): Promise<boolean>;
   openWhatsApp(phone: string, text?: string): Promise<boolean>;
-  checkPermissions?(): Promise<boolean>;
-  requestPermissions?(): Promise<boolean>;
+  checkPermissions(): Promise<boolean>;
+  requestPermissions(): Promise<boolean>;
   getCallResult(phone: string, callStartTime: number): Promise<DetectedCallResult>;
 }
 

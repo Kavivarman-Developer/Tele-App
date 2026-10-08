@@ -1,35 +1,85 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { colors, borderRadius } from '../theme';
 
-export type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info';
+export type BadgeVariant =
+  | 'default'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'primary';
 
 interface BadgeProps {
   label: string;
   variant?: BadgeVariant;
+  stage?: string;
   className?: string;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ label, variant = 'default', className = '' }) => {
-  let bgClass = 'bg-slate-100 border-slate-200';
-  let textClass = 'text-slate-700';
+export const Badge: React.FC<BadgeProps> = ({
+  label,
+  variant = 'default',
+  stage,
+}) => {
+  // If a known pipeline stage is provided, use stage styling
+  if (stage && colors.stages[stage as keyof typeof colors.stages]) {
+    const stg = colors.stages[stage as keyof typeof colors.stages];
+    return (
+      <View style={[styles.badge, { backgroundColor: stg.bg }]}>
+        <View style={[styles.dot, { backgroundColor: stg.color }]} />
+        <Text style={[styles.text, { color: stg.text }]}>{label || stage}</Text>
+      </View>
+    );
+  }
+
+  let bg = colors.surfaceLight;
+  let text = colors.textMuted;
+  let dot = colors.textQuiet;
 
   if (variant === 'success') {
-    bgClass = 'bg-emerald-50 border-emerald-200';
-    textClass = 'text-emerald-700';
+    bg = colors.successLight;
+    text = colors.successText;
+    dot = colors.success;
   } else if (variant === 'warning') {
-    bgClass = 'bg-amber-50 border-amber-200';
-    textClass = 'text-amber-800';
+    bg = colors.warningLight;
+    text = colors.warningText;
+    dot = colors.warning;
   } else if (variant === 'danger') {
-    bgClass = 'bg-rose-50 border-rose-200';
-    textClass = 'text-rose-700';
-  } else if (variant === 'info') {
-    bgClass = 'bg-blue-50 border-blue-200';
-    textClass = 'text-blue-700';
+    bg = colors.dangerLight;
+    text = colors.dangerText;
+    dot = colors.danger;
+  } else if (variant === 'info' || variant === 'primary') {
+    bg = colors.primaryLight;
+    text = colors.primary;
+    dot = colors.primary;
   }
 
   return (
-    <View className={`px-2.5 py-1 rounded-full border self-start ${bgClass} ${className}`}>
-      <Text className={`text-xs font-semibold ${textClass}`}>{label}</Text>
+    <View style={[styles.badge, { backgroundColor: bg }]}>
+      <View style={[styles.dot, { backgroundColor: dot }]} />
+      <Text style={[styles.text, { color: text }]}>{label}</Text>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: borderRadius.full,
+    marginRight: 5,
+  },
+  text: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+});

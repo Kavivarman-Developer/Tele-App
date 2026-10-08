@@ -1,18 +1,34 @@
 import React from 'react';
-import { View, Text, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  User as UserIcon,
+  Mail,
+  Phone,
+  ShieldCheck,
+  CheckCircle2,
+  Calendar,
+  LogOut,
+  Sparkles,
+  Smartphone,
+  Server,
+  Zap,
+  MapPin,
+} from 'lucide-react-native';
+
 import { useAuthStore } from '../store/authStore';
-import { Card } from '../components/Card';
-import { Badge } from '../components/Badge';
+import { CrmShell } from '../components/CrmShell';
+import { CrmAvatar } from '../components/CrmAvatar';
+import { CrmBadge } from '../components/CrmBadge';
 import { Button } from '../components/Button';
 
 export const ProfileScreen: React.FC = () => {
   const { user, logout } = useAuthStore();
 
-  const getRoleVariant = (role?: string) => {
-    if (role === 'ADMIN') return 'danger';
-    if (role === 'MANAGER') return 'warning';
-    return 'success';
+  const getRoleTone = (role?: string): 'rose' | 'amber' | 'indigo' => {
+    if (role === 'ADMIN') return 'rose';
+    if (role === 'MANAGER') return 'amber';
+    return 'indigo';
   };
 
   const handleLogout = () => {
@@ -36,82 +52,138 @@ export const ProfileScreen: React.FC = () => {
         month: 'short',
         day: 'numeric',
       })
-    : 'N/A';
+    : 'Oct 2026';
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      <ScrollView className="flex-1 px-5 pt-4" contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text className="text-xl font-black text-slate-900 mb-4">My Account</Text>
+    <CrmShell
+      title="My Account"
+      breadcrumb="Workspace"
+    >
 
-        {/* User Card */}
-        <Card className="mb-4 items-center py-6">
-          <View className="w-20 h-20 bg-blue-600 rounded-full justify-center items-center mb-3 shadow-md shadow-blue-500/20">
-            <Text className="text-2xl text-white font-extrabold">
-              {user?.name ? user.name.slice(0, 2).toUpperCase() : 'U'}
-            </Text>
+      <ScrollView className="flex-1 px-5 pt-4" contentContainerStyle={{ paddingBottom: 50 }}>
+        {/* User Hero Banner */}
+        <View className="bg-white rounded-2xl p-6 border border-slate-200 mb-4 shadow-sm items-center">
+          <View className="relative mb-3">
+            <CrmAvatar name={user?.name || 'Agent'} size={72} />
+            <View className="absolute bottom-0 right-0 w-5 h-5 bg-emerald-500 rounded-full border-2 border-white items-center justify-center">
+              <View className="w-2 h-2 rounded-full bg-white" />
+            </View>
           </View>
-          <Text className="text-xl font-bold text-slate-900 mb-0.5">{user?.name}</Text>
-          <Text className="text-sm text-slate-500 mb-3">{user?.email}</Text>
-          <Badge label={user?.role || 'AGENT'} variant={getRoleVariant(user?.role)} />
-        </Card>
 
-        {/* Account Details */}
-        <Card className="mb-4">
+          <Text className="text-xl font-bold text-slate-900">{user?.name || 'Agent User'}</Text>
+          <Text className="text-xs text-slate-500 mt-0.5">{user?.email}</Text>
+
+          <View className="flex-row items-center gap-2 mt-3">
+            <CrmBadge label={`Role: ${user?.role || 'AGENT'}`} tone={getRoleTone(user?.role)} />
+            <CrmBadge
+              label={user?.isActive ? 'Active' : 'Inactive'}
+              tone={user?.isActive ? 'emerald' : 'rose'}
+            />
+          </View>
+        </View>
+
+        {/* Account Details List */}
+        <View className="bg-white rounded-2xl p-5 border border-slate-200 mb-4 shadow-sm">
           <Text className="text-slate-900 font-bold text-sm mb-3">Account Details</Text>
 
-          <View className="py-2.5 border-b border-slate-100 flex-row justify-between items-center">
-            <Text className="text-slate-500 text-sm">Phone Number</Text>
-            <Text className="text-slate-900 text-sm font-semibold">{user?.phone || 'Not set'}</Text>
+          <View className="py-3 border-b border-slate-100 flex-row items-center justify-between">
+            <View className="flex-row items-center gap-2.5">
+              <Phone size={16} color="#64748B" />
+              <Text className="text-slate-500 text-xs font-medium">Phone</Text>
+            </View>
+            <Text className="text-slate-900 text-xs font-bold">{user?.phone || 'Not provided'}</Text>
           </View>
 
-          <View className="py-2.5 border-b border-slate-100 flex-row justify-between items-center">
-            <Text className="text-slate-500 text-sm">User Role</Text>
-            <Text className="text-slate-900 text-sm font-semibold">{user?.role}</Text>
+          <View className="py-3 border-b border-slate-100 flex-row items-center justify-between">
+            <View className="flex-row items-center gap-2.5">
+              <Mail size={16} color="#64748B" />
+              <Text className="text-slate-500 text-xs font-medium">Email</Text>
+            </View>
+            <Text className="text-slate-900 text-xs font-bold">{user?.email}</Text>
           </View>
 
-          <View className="py-2.5 border-b border-slate-100 flex-row justify-between items-center">
-            <Text className="text-slate-500 text-sm">Lead Distribution</Text>
-            <Text
-              className={`text-sm font-bold ${
-                user?.canReceiveLeads ? 'text-emerald-600' : 'text-slate-400'
-              }`}
-            >
-              {user?.canReceiveLeads ? 'Active & Receiving' : 'Disabled'}
+          {user?.branch ? (
+            <View className="py-3 border-b border-slate-100 flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2.5">
+                <MapPin size={16} color="#0D9488" />
+                <Text className="text-slate-500 text-xs font-medium">Assigned Branch</Text>
+              </View>
+              <Text className="text-emerald-700 text-xs font-bold">{user.branch} Branch</Text>
+            </View>
+          ) : null}
+
+          <View className="py-3 border-b border-slate-100 flex-row items-center justify-between">
+            <View className="flex-row items-center gap-2.5">
+              <Zap size={16} color="#64748B" />
+              <Text className="text-slate-500 text-xs font-medium">Lead Distribution</Text>
+            </View>
+            <View className="flex-row items-center gap-1.5">
+              <View
+                className={`w-2 h-2 rounded-full ${
+                  user?.canReceiveLeads ? 'bg-emerald-500' : 'bg-slate-400'
+                }`}
+              />
+              <Text
+                className={`text-xs font-bold ${
+                  user?.canReceiveLeads ? 'text-emerald-700' : 'text-slate-500'
+                }`}
+              >
+                {user?.canReceiveLeads ? 'Receiving Leads' : 'Distribution Paused'}
+              </Text>
+            </View>
+          </View>
+
+          <View className="py-3 flex-row items-center justify-between">
+            <View className="flex-row items-center gap-2.5">
+              <Calendar size={16} color="#64748B" />
+              <Text className="text-slate-500 text-xs font-medium">Member Since</Text>
+            </View>
+            <Text className="text-slate-900 text-xs font-bold">{memberSince}</Text>
+          </View>
+        </View>
+
+        {/* Backend & Application Info */}
+        <View className="bg-white rounded-2xl p-5 border border-slate-200 mb-6 shadow-sm">
+          <View className="flex-row items-center gap-2 mb-3">
+            <Server size={16} color="#4F46E5" />
+            <Text className="text-slate-900 font-bold text-sm">System & Environment</Text>
+          </View>
+
+          <View className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3">
+            <View className="flex-row justify-between items-center mb-1">
+              <Text className="text-[10px] text-slate-500 font-bold uppercase">Backend API</Text>
+              <View className="flex-row items-center gap-1">
+                <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <Text className="text-[10px] text-emerald-700 font-bold">Online</Text>
+              </View>
+            </View>
+            <Text className="text-slate-900 font-semibold text-xs" numberOfLines={1}>
+              https://tele-app-n9wu.onrender.com/api
             </Text>
           </View>
 
-          <View className="py-2.5 border-b border-slate-100 flex-row justify-between items-center">
-            <Text className="text-slate-500 text-sm">Account Status</Text>
-            <Text
-              className={`text-sm font-bold ${
-                user?.isActive ? 'text-emerald-600' : 'text-red-500'
-              }`}
-            >
-              {user?.isActive ? 'Active' : 'Deactivated'}
+          <View className="flex-row items-center justify-between text-xs py-1">
+            <Text className="text-slate-500 text-xs font-medium">App Version</Text>
+            <Text className="text-slate-900 text-xs font-bold">1.0.0 (Lovable OKBOZ Edition)</Text>
+          </View>
+          <View className="flex-row items-center justify-between text-xs py-1">
+            <Text className="text-slate-500 text-xs font-medium">Platform</Text>
+            <Text className="text-slate-900 text-xs font-bold">
+              {Platform.OS === 'web' ? 'Web Browser' : 'Android Standalone APK'}
             </Text>
           </View>
-
-          <View className="py-2.5 flex-row justify-between items-center">
-            <Text className="text-slate-500 text-sm">Member Since</Text>
-            <Text className="text-slate-700 text-sm font-medium">{memberSince}</Text>
-          </View>
-        </Card>
-
-        {/* Application Info */}
-        <Card className="mb-6">
-          <View className="flex-row items-center mb-2">
-            <Text className="text-base mr-2">📞</Text>
-            <Text className="text-slate-900 font-bold text-sm">Tele App CRM</Text>
-          </View>
-          <Text className="text-slate-500 text-xs mb-1 font-medium">Version: 1.0.0 (Production Build)</Text>
-          <Text className="text-slate-500 text-xs leading-4">
-            Mobile telecalling system with automated call queueing, intelligent retry scheduler, and engagement forms.
-          </Text>
-        </Card>
+        </View>
 
         {/* Sign Out Button */}
-        <Button title="Sign Out" onPress={handleLogout} variant="danger" />
+        <TouchableOpacity
+          onPress={handleLogout}
+          activeOpacity={0.8}
+          className="bg-rose-50 border border-rose-200 py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2 active:bg-rose-100"
+        >
+          <LogOut size={16} color="#E11D48" />
+          <Text className="text-rose-700 font-bold text-sm">Sign Out of Account</Text>
+        </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </CrmShell>
   );
 };

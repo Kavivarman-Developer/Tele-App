@@ -20,7 +20,7 @@ export class UserController {
   public static async listUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       // req.query is validated and cast by validate(listUsersQuerySchema)
-      const users = await UserService.listUsers(req.query);
+      const users = await UserService.listUsers(req.user, req.query);
       res.status(200).json({
         users,
       });

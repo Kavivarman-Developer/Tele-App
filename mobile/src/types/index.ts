@@ -1,4 +1,5 @@
 export type UserRole = 'ADMIN' | 'MANAGER' | 'AGENT';
+export type BranchName = 'Trichy' | 'Pudukkottai' | 'Chennai' | 'Madurai';
 
 export interface User {
   _id: string;
@@ -6,6 +7,7 @@ export interface User {
   email: string;
   phone: string;
   role: UserRole;
+  branch?: string | null;
   managerId?: string | null;
   isActive: boolean;
   canReceiveLeads: boolean;
@@ -14,6 +16,7 @@ export interface User {
 }
 
 export type LeadStatus = 'OPEN' | 'CLOSED';
+export type CustomerTemperature = 'HOT' | 'WARM' | 'COLD';
 
 export interface Lead {
   _id: string;
@@ -23,10 +26,12 @@ export interface Lead {
   phone: string;
   email?: string;
   source: string;
+  branch?: string | null;
   customProperties: Record<string, string>;
   assignedTo?: User | string | null;
   stage: string;
   tag?: string | null;
+  temperature?: CustomerTemperature;
   status: LeadStatus;
   nextFollowUpAt?: string | null;
   followUpDue?: boolean;
@@ -149,6 +154,7 @@ export interface LeadCampaignSummary {
 export type LeadFilterType = 'ALL' | 'NEW' | 'FOLLOW_UP' | 'NOT_CONNECTED';
 
 export interface DisposeLeadPayload {
+  phone?: string | null;
   connected: boolean;
   notConnectedReason?: NotConnectedReason;
   stage?: string;
@@ -166,11 +172,14 @@ export interface Activity {
   leadId: string;
   campaignId: string;
   userId: User | string;
+  phone?: string;
+  branch?: string | null;
   type: 'CALL';
   connected: boolean;
   notConnectedReason?: NotConnectedReason | null;
   stage: string;
   tag?: string | null;
+  temperature?: CustomerTemperature;
   remark?: string | null;
   followUpAt?: string | null;
   durationSeconds: number;
@@ -189,6 +198,15 @@ export interface DetectedCallResult {
 export type RootStackParamList = {
   Login: undefined;
   Main: undefined;
+  Home: undefined;
+  MyLeads: undefined;
+  FollowUps: undefined;
+  Profile: undefined;
+  Team: undefined;
+  Campaigns: undefined;
+  UploadLeads: undefined;
+  Settings: undefined;
+  RetryRules: undefined;
   AddWalkInLead: undefined;
   LeadDetail: {
     lead: Lead;

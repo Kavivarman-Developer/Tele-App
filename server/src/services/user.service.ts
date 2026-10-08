@@ -14,12 +14,16 @@ export class UserService {
     requester: IUserDoc,
     input: CreateUserInput,
   ): Promise<IUserDoc> {
+    let assignedBranch = input.branch || null;
     if (requester.role === 'MANAGER') {
       if (input.role !== 'AGENT') {
         throw new AppError('Managers can only create AGENT users', 403);
       }
       if (!input.managerId) {
         input.managerId = requester._id.toString();
+      }
+      if (requester.branch) {
+        assignedBranch = requester.branch;
       }
     }
 
@@ -37,6 +41,7 @@ export class UserService {
       phone: input.phone,
       passwordHash,
       role: input.role,
+      branch: assignedBranch,
       managerId: input.managerId ? new Types.ObjectId(input.managerId) : null,
       isActive: input.isActive ?? true,
       canReceiveLeads: input.canReceiveLeads ?? true,
@@ -45,11 +50,22 @@ export class UserService {
     return user;
   }
 
-  public static async listUsers(query: ListUsersQueryInput): Promise<IUserDoc[]> {
-    const filter: { role?: UserRole; isActive?: boolean } = {};
+  public static async listUsers(
+    requester?: IUserDoc,
+    query: ListUsersQueryInput = {},
+  ): Promise<IUserDoc[]> {
+    const filter: { role?: UserRole; isActive?: boolean; branch?: string } = {};
 
-    if (query.role) {
-      filter.role = query.role;
+    if (requester?.role === 'MANAGER' && requester.branch) {
+      filter.branch = requester.branch;
+      filter.role = 'AGENT';
+    } else {
+      if (query.role) {
+        filter.role = query.role;
+      }
+      if (query.branch) {
+        filter.branch = query.branch;
+      }
     }
 
     if (query.isActive !== undefined) {
@@ -57,7 +73,7 @@ export class UserService {
     }
 
     const users = await User.find(filter)
-      .populate('managerId', 'name email role')
+      .populate('managerId', 'name email role branch')
       .sort({ createdAt: -1 });
 
     return users;
@@ -84,6 +100,7 @@ export class UserService {
     if (updates.name !== undefined) user.name = updates.name;
     if (updates.phone !== undefined) user.phone = updates.phone;
     if (updates.role !== undefined) user.role = updates.role;
+    if (updates.branch !== undefined) user.branch = updates.branch;
     if (updates.isActive !== undefined) user.isActive = updates.isActive;
     if (updates.canReceiveLeads !== undefined) user.canReceiveLeads = updates.canReceiveLeads;
     if (updates.managerId !== undefined) {
@@ -134,6 +151,7 @@ export class UserService {
           phone: u.phone,
           passwordHash,
           role: u.role,
+          branch: u.branch || null,
           managerId: u.managerId ? new Types.ObjectId(u.managerId) : null,
           isActive: u.isActive ?? true,
           canReceiveLeads: u.canReceiveLeads ?? true,

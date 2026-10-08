@@ -9,6 +9,7 @@ export interface IUser {
   phone: string;
   passwordHash: string;
   role: UserRole;
+  branch?: string | null;
   managerId?: Types.ObjectId | null;
   isActive: boolean;
   canReceiveLeads: boolean;
@@ -48,6 +49,11 @@ const userSchema = new Schema<IUserDoc>(
       type: String,
       enum: ['ADMIN', 'MANAGER', 'AGENT'],
       required: [true, 'Role is required'],
+    },
+    branch: {
+      type: String,
+      default: null,
+      trim: true,
     },
     managerId: {
       type: Schema.Types.ObjectId,

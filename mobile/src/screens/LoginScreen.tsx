@@ -5,13 +5,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ShieldCheck } from 'lucide-react-native';
+
 import { useAuthStore } from '../store/authStore';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
-import { Card } from '../components/Card';
 
 export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -23,20 +23,8 @@ export const LoginScreen: React.FC = () => {
     await login(email.trim(), password);
   };
 
-  const handleFillDemoAdmin = () => {
-    setEmail('admin@example.com');
-    setPassword('Admin@123');
-    clearError();
-  };
-
-  const handleFillDemoAgent = () => {
-    setEmail('john@example.com');
-    setPassword('Agent@123');
-    clearError();
-  };
-
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView className="flex-1 bg-[#F8FAFC]">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
@@ -46,15 +34,24 @@ export const LoginScreen: React.FC = () => {
           className="px-6 py-8"
           keyboardShouldPersistTaps="handled"
         >
+          {/* Brand Header */}
           <View className="items-center mb-8">
-            <View className="w-16 h-16 bg-blue-600 rounded-2xl justify-center items-center mb-4 shadow-lg shadow-blue-500/20">
-              <Text className="text-3xl">📞</Text>
+            <View className="w-16 h-16 bg-indigo-600 rounded-2xl items-center justify-center mb-3 shadow-lg shadow-indigo-500/25">
+              <Text className="text-white font-extrabold text-2xl tracking-tighter">OK</Text>
             </View>
-            <Text className="text-3xl font-extrabold text-slate-900 tracking-tight">Tele App CRM</Text>
-            <Text className="text-slate-500 text-sm mt-1.5">Sign in to start calling and managing leads</Text>
+            <Text className="text-2xl font-black text-slate-900 tracking-tight">Tele App CRM</Text>
+            <Text className="text-slate-500 text-xs mt-1 text-center font-medium">
+              Enterprise Telecalling & Multi-Branch CRM Platform
+            </Text>
           </View>
 
-          <Card className="p-6 mb-6 bg-white border border-slate-200/90 shadow-lg shadow-slate-200/60 rounded-3xl">
+          {/* Login Card */}
+          <View className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm mb-6">
+            <Text className="text-slate-900 font-bold text-lg mb-1">Welcome back</Text>
+            <Text className="text-slate-500 text-xs font-medium mb-5">
+              Enter your official email and password to access your branch dashboard
+            </Text>
+
             {error ? (
               <View className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-4">
                 <Text className="text-rose-700 text-xs font-semibold text-center">{error}</Text>
@@ -63,7 +60,7 @@ export const LoginScreen: React.FC = () => {
 
             <Input
               label="Email Address"
-              placeholder="name@company.com"
+              placeholder="e.g. manager.pudukkottai@company.com"
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
@@ -71,6 +68,7 @@ export const LoginScreen: React.FC = () => {
               }}
               keyboardType="email-address"
               autoComplete="email"
+              autoCapitalize="none"
             />
 
             <Input
@@ -84,33 +82,24 @@ export const LoginScreen: React.FC = () => {
               isPassword
             />
 
-            <Button
-              title="Sign In"
-              onPress={handleLogin}
-              loading={isLoading}
-              disabled={!email.trim() || !password}
-              className="mt-2"
-            />
-          </Card>
+            <View className="mt-2">
+              <Button
+                title={isLoading ? 'Authenticating...' : 'Sign In'}
+                onPress={handleLogin}
+                loading={isLoading}
+                disabled={!email.trim() || !password}
+                variant="primary"
+              />
+            </View>
+          </View>
 
-          {/* Quick Demo Credentials Helper */}
+          {/* Security Footer */}
           <View className="items-center">
-            <Text className="text-slate-400 text-xs mb-2.5 uppercase font-bold tracking-wider">
-              Quick Demo Fill
-            </Text>
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                onPress={handleFillDemoAdmin}
-                className="bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 shadow-sm"
-              >
-                <Text className="text-blue-700 text-xs font-semibold">Fill Admin</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleFillDemoAgent}
-                className="bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200 shadow-sm"
-              >
-                <Text className="text-emerald-700 text-xs font-semibold">Fill Agent (John)</Text>
-              </TouchableOpacity>
+            <View className="flex-row items-center gap-1.5">
+              <ShieldCheck size={14} color="#0D9488" />
+              <Text className="text-[12px] text-slate-500 font-medium">
+                Protected by End-to-End Role-Based Branch Isolation
+              </Text>
             </View>
           </View>
         </ScrollView>
