@@ -1,0 +1,277 @@
+import { Types, PipelineStage } from 'mongoose';
+import { Lead, ILeadDoc } from '../models/lead.model';
+import { Campaign } from '../models/campaign.model';
+import { User, IUserDoc } from '../models/user.model';
+import {
+  ListCampaignLeadsQuery,
+  MyLeadsQuery,
+} from '../validations/lead.validation';
+import { AppError } from '../utils/AppError';
+
+export interface PaginatedLeads<T> {
+  leads: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export class LeadService {
+  public static async listCampaignLeads(
+    requester: IUserDoc,
+    campaignId: string,
+    query: ListCampaignLeadsQuery,
+  ): Promise<PaginatedLeads<ILeadDoc>> {
+    const campaign = await Campaign.findById(campaignId);
+    if (!campaign) {
+      throw new AppError('Campaign not found', 404);
+    }
+
+    // Role-based scoping check
+    if (requester.role === 'MANAGER') {
+      if (campaign.managerId.toString() !== requester._id.toString()) {
+        throw new AppError('Forbidden: You can only view leads for your own campaigns', 403);
+      }
+    } else if (requester.role === 'AGENT') {
+      const isAssigned = campaign.agentIds.some(
+        (aid) => aid.toString() === requester._id.toString(),
+      );
+      if (!isAssigned) {
+        throw new AppError('Forbidden: You are not assigned to this campaign', 403);
+      }
+    }
+
+    const filter: Record<string, unknown> = {
+      campaignId: new Types.ObjectId(campaignId),
+    };
+
+    if (query.stage) filter.stage = query.stage;
+    if (query.tag) filter.tag = query.tag;
+    if (query.status) filter.status = query.status;
+
+    // Assignment filter
+    if (requester.role === 'AGENT') {
+      // Agents may ONLY read leads assigned to them
+      filter.assignedTo = requester._id;
+    } else if (query.assignedTo) {
+      if (query.assignedTo === 'unassigned') {
+        filter.assignedTo = null;
+      } else {
+        filter.assignedTo = new Types.ObjectId(query.assignedTo);
+      }
+    }
+
+    // Date range filter
+    if (query.startDate || query.endDate) {
+      const dateFilter: Record<string, Date> = {};
+      if (query.startDate) dateFilter.$gte = new Date(query.startDate);
+      if (query.endDate) dateFilter.$lte = new Date(query.endDate);
+      filter.createdAt = dateFilter;
+    }
+
+    // Text search on name, phone, or email
+    if (query.search) {
+      const searchRegex = new RegExp(query.search.trim(), 'i');
+      filter.$or = [
+        { name: searchRegex },
+        { phone: searchRegex },
+        { email: searchRegex },
+      ];
+    }
+
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const [leads, total] = await Promise.all([
+      Lead.find(filter)
+        .populate('assignedTo', 'name email phone')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Lead.countDocuments(filter),
+    ]);
+
+    return {
+      leads,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  }
+
+  public static async getMyLeads(
+    requester: IUserDoc,
+    query: MyLeadsQuery,
+  ): Promise<PaginatedLeads<unknown>> {
+    const matchStage: Record<string, unknown> = {};
+
+    if (requester.role === 'ADMIN') {
+      if (query.userId) {
+        matchStage.assignedTo = new Types.ObjectId(query.userId);
+      }
+    } else if (requester.role === 'MANAGER') {
+      if (query.userId) {
+        matchStage.assignedTo = new Types.ObjectId(query.userId);
+      } else {
+        const managedCampaigns = await Campaign.find({ managerId: requester._id }, '_id');
+        const managedIds = managedCampaigns.map((c) => c._id);
+        matchStage.campaignId = { $in: managedIds };
+      }
+    } else {
+      matchStage.assignedTo = requester._id;
+    }
+
+    if (query.campaignId) {
+      matchStage.campaignId = new Types.ObjectId(query.campaignId);
+    }
+
+    if (query.type === 'NEW') {
+      matchStage.status = 'OPEN';
+      matchStage.attemptCount = 0;
+    } else if (query.type === 'FOLLOW_UP') {
+      matchStage.status = 'OPEN';
+      matchStage.nextFollowUpAt = { $ne: null };
+    } else if (query.type === 'NOT_CONNECTED') {
+      matchStage.status = 'OPEN';
+      matchStage.attemptCount = { $gt: 0 };
+    }
+
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const pipeline: PipelineStage[] = [
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: 'campaigns',
+          localField: 'campaignId',
+          foreignField: '_id',
+          as: 'campaign',
+        },
+      },
+      { $unwind: '$campaign' },
+      {
+        $addFields: {
+          priorityRank: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$campaign.priority', 'HIGH'] }, then: 1 },
+                { case: { $eq: ['$campaign.priority', 'MEDIUM'] }, then: 2 },
+                { case: { $eq: ['$campaign.priority', 'LOW'] }, then: 3 },
+              ],
+              default: 4,
+            },
+          },
+          // For null nextFollowUpAt, sort them after defined follow-ups
+          followUpSortKey: {
+            $ifNull: ['$nextFollowUpAt', new Date('9999-12-31T23:59:59.999Z')],
+          },
+        },
+      },
+      // Priority ordering: campaign priority HIGH first, then follow-up due soonest
+      {
+        $sort: {
+          priorityRank: 1,
+          followUpSortKey: 1,
+          createdAt: -1,
+        },
+      },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          data: [{ $skip: skip }, { $limit: limit }],
+        },
+      },
+    ];
+
+    const [facetResult] = await Lead.aggregate<{
+      metadata: Array<{ total: number }>;
+      data: unknown[];
+    }>(pipeline);
+
+    const total = facetResult.metadata[0]?.total || 0;
+    const leads = facetResult.data || [];
+
+    return {
+      leads,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  }
+
+  public static async reassignLead(
+    requester: IUserDoc,
+    leadId: string,
+    targetUserId: string,
+  ): Promise<ILeadDoc> {
+    const lead = await Lead.findById(leadId);
+    if (!lead) {
+      throw new AppError('Lead not found', 404);
+    }
+
+    const campaign = await Campaign.findById(lead.campaignId);
+    if (!campaign) {
+      throw new AppError('Associated campaign not found', 404);
+    }
+
+    if (requester.role === 'MANAGER' && campaign.managerId.toString() !== requester._id.toString()) {
+      throw new AppError('Forbidden: You can only reassign leads within your own campaigns', 403);
+    }
+
+    const targetUser = await User.findById(targetUserId);
+    if (!targetUser || targetUser.role !== 'AGENT' || !targetUser.isActive || !targetUser.canReceiveLeads) {
+      throw new AppError('Target user must be an active AGENT with canReceiveLeads enabled', 400);
+    }
+
+    lead.assignedTo = targetUser._id;
+    await lead.save();
+
+    return lead;
+  }
+
+  public static async bulkReassign(
+    requester: IUserDoc,
+    fromUserId: string,
+    toUserId: string,
+    campaignId?: string,
+  ): Promise<{ modifiedCount: number }> {
+    const toUser = await User.findById(toUserId);
+    if (!toUser || toUser.role !== 'AGENT' || !toUser.isActive || !toUser.canReceiveLeads) {
+      throw new AppError('Target user must be an active AGENT with canReceiveLeads enabled', 400);
+    }
+
+    const filter: Record<string, unknown> = {
+      assignedTo: new Types.ObjectId(fromUserId),
+      status: 'OPEN',
+    };
+
+    if (campaignId) {
+      const campaign = await Campaign.findById(campaignId);
+      if (!campaign) {
+        throw new AppError('Campaign not found', 404);
+      }
+      if (requester.role === 'MANAGER' && campaign.managerId.toString() !== requester._id.toString()) {
+        throw new AppError('Forbidden: You do not manage this campaign', 403);
+      }
+      filter.campaignId = new Types.ObjectId(campaignId);
+    } else if (requester.role === 'MANAGER') {
+      // Limit to campaigns managed by this manager
+      const managedCampaigns = await Campaign.find({ managerId: requester._id }, '_id');
+      const managedIds = managedCampaigns.map((c) => c._id);
+      filter.campaignId = { $in: managedIds };
+    }
+
+    const result = await Lead.updateMany(filter, {
+      $set: { assignedTo: toUser._id },
+    });
+
+    return {
+      modifiedCount: result.modifiedCount,
+    };
+  }
+}

@@ -1,0 +1,333 @@
+import { apiClient } from './client';
+import {
+  Lead,
+  LeadFilterType,
+  Activity,
+  DisposeLeadPayload,
+  Campaign,
+  Pipeline,
+  PublicSettings,
+  Setting,
+  RetryRule,
+  User,
+  DashboardReportResponse,
+  UserCallsReportResponse,
+} from '../types';
+
+export interface MyLeadsResponse {
+  leads: Lead[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface MyLeadsParams {
+  type?: LeadFilterType;
+  campaignId?: string;
+  page?: number;
+  limit?: number;
+}
+
+/**
+ * Fetches leads assigned to the logged-in agent / user.
+ * Sorted by campaign priority (HIGH -> MEDIUM -> LOW), then follow-up due soonest.
+ */
+export const fetchMyLeads = async (params: MyLeadsParams): Promise<MyLeadsResponse> => {
+  const queryParams: Record<string, string | number> = {
+    type: params.type || 'ALL',
+    page: params.page || 1,
+    limit: params.limit || 20,
+  };
+
+  if (params.campaignId) {
+    queryParams.campaignId = params.campaignId;
+  }
+
+  const response = await apiClient.get<MyLeadsResponse>('/api/leads/my', {
+    params: queryParams,
+  });
+  return response.data;
+};
+
+/**
+ * Fetches call & activity history for a specific lead.
+ */
+export const fetchLeadHistory = async (
+  leadId: string,
+): Promise<{ activities: Activity[] }> => {
+  const response = await apiClient.get<{ activities: Activity[] }>(
+    `/api/leads/${leadId}/history`,
+  );
+  return response.data;
+};
+
+/**
+ * Disposes a lead with outcome, stage, tag, follow-up, call duration, and remarks.
+ */
+export const disposeLead = async (
+  leadId: string,
+  payload: DisposeLeadPayload,
+): Promise<{ activity: Activity; lead: Lead }> => {
+  const response = await apiClient.post<{ activity: Activity; lead: Lead }>(
+    `/api/leads/${leadId}/dispose`,
+    payload,
+  );
+  return response.data;
+};
+
+/**
+ * Fetches campaigns accessible by the current user.
+ */
+export const fetchCampaigns = async (): Promise<{ campaigns: Campaign[] }> => {
+  const response = await apiClient.get<{ campaigns: Campaign[] }>('/api/campaigns');
+  return response.data;
+};
+
+/**
+ * Fetches pipeline stages and tags by pipelineId.
+ */
+export const fetchPipeline = async (
+  pipelineId: string,
+): Promise<{ pipeline: Pipeline }> => {
+  const response = await apiClient.get<{ pipeline: Pipeline }>(
+    `/api/pipelines/${pipelineId}`,
+  );
+  return response.data;
+};
+
+/**
+ * Fetches public organization settings (allowDisposeWithoutFollowUp, followUpMandatoryForNotConnected).
+ */
+export const fetchPublicSettings = async (): Promise<{ settings: PublicSettings }> => {
+  const response = await apiClient.get<{ settings: PublicSettings }>('/api/settings/public');
+  return response.data;
+};
+
+/**
+ * Fetches configured retry rules for calculating retry delays.
+ */
+export const fetchRetryRules = async (): Promise<{ retryRules: RetryRule[] }> => {
+  const response = await apiClient.get<{ rules?: RetryRule[]; retryRules?: RetryRule[] }>('/api/retry-rules');
+  const rules = response.data.rules || response.data.retryRules || [];
+  return { retryRules: rules };
+};
+
+/**
+ * Fetches active agents for optional lead reassignment.
+ */
+export const fetchAssignableUsers = async (): Promise<{ users: User[] }> => {
+  const response = await apiClient.get<{ users: User[] }>('/api/users', {
+    params: { role: 'AGENT', isActive: true },
+  });
+  return response.data;
+};
+
+/**
+ * Fetches full campaign details (including engagementForm questions).
+ */
+export const fetchCampaignById = async (
+  campaignId: string,
+): Promise<{ campaign: Campaign }> => {
+  const response = await apiClient.get<{ campaign: Campaign }>(
+    `/api/campaigns/${campaignId}`,
+  );
+  return response.data;
+};
+
+/**
+ * Creates a single walk-in lead under a designated campaign.
+ */
+export interface IngestLeadResult {
+  created: number;
+  merged: number;
+  skipped: number;
+  failed: Array<{ row: unknown; reason: string }>;
+}
+
+export const createWalkInLead = async (
+  campaignId: string,
+  data: { name: string; phone: string; email?: string },
+): Promise<IngestLeadResult> => {
+  const response = await apiClient.post<IngestLeadResult>(
+    `/api/campaigns/${campaignId}/leads`,
+    data,
+  );
+  return response.data;
+};
+
+/**
+ * Fetches aggregated dashboard metrics for reporting (scoped by user role).
+ */
+export const fetchDashboardReports = async (params: {
+  from?: string;
+  to?: string;
+  campaignId?: string;
+  userId?: string;
+}): Promise<DashboardReportResponse> => {
+  const response = await apiClient.get<DashboardReportResponse>('/api/reports/dashboard', {
+    params,
+  });
+  return response.data;
+};
+
+/**
+ * Fetches per-agent call volume and duration stats.
+ */
+export const fetchUserCallsReport = async (params: {
+  from?: string;
+  to?: string;
+  campaignId?: string;
+}): Promise<UserCallsReportResponse> => {
+  const response = await apiClient.get<UserCallsReportResponse>('/api/reports/user-calls', {
+    params,
+  });
+  return response.data;
+};
+
+/**
+ * Fetches all users (with optional role and active filters).
+ */
+export const fetchUsers = async (params?: {
+  role?: string;
+  isActive?: boolean;
+}): Promise<{ users: User[] }> => {
+  const response = await apiClient.get<{ users: User[] }>('/api/users', { params });
+  return response.data;
+};
+
+/**
+ * Creates a new user (AGENT, MANAGER, ADMIN).
+ */
+export const createUser = async (data: {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  role: string;
+  canReceiveLeads?: boolean;
+}): Promise<{ user: User }> => {
+  const response = await apiClient.post<{ user: User }>('/api/users', data);
+  return response.data;
+};
+
+/**
+ * Updates an existing user (toggle active status, canReceiveLeads, name, phone).
+ */
+export const updateUser = async (
+  id: string,
+  data: Partial<User>,
+): Promise<{ user: User }> => {
+  const response = await apiClient.patch<{ user: User }>(`/api/users/${id}`, data);
+  return response.data;
+};
+
+/**
+ * Creates a new campaign with distribution rules and engagement questions.
+ */
+export const createCampaign = async (
+  data: Partial<Campaign>,
+): Promise<{ campaign: Campaign }> => {
+  const response = await apiClient.post<{ campaign: Campaign }>('/api/campaigns', data);
+  return response.data;
+};
+
+/**
+ * Updates campaign settings.
+ */
+export const updateCampaign = async (
+  id: string,
+  data: Partial<Campaign>,
+): Promise<{ campaign: Campaign; warning?: string }> => {
+  const response = await apiClient.patch<{ campaign: Campaign; warning?: string }>(
+    `/api/campaigns/${id}`,
+    data,
+  );
+  return response.data;
+};
+
+/**
+ * Fetches all available pipelines.
+ */
+export const fetchPipelines = async (): Promise<{ pipelines: Pipeline[] }> => {
+  const response = await apiClient.get<{ pipelines: Pipeline[] }>('/api/pipelines');
+  return response.data;
+};
+
+/**
+ * Updates pipeline stages and tags.
+ */
+export const updatePipeline = async (
+  id: string,
+  data: Partial<Pipeline>,
+): Promise<{ pipeline: Pipeline }> => {
+  const response = await apiClient.patch<{ pipeline: Pipeline }>(`/api/pipelines/${id}`, data);
+  return response.data;
+};
+
+/**
+ * Uploads a CSV file of leads to the specified campaign.
+ */
+export const uploadLeadsCsv = async (
+  campaignId: string,
+  formData: FormData,
+): Promise<IngestLeadResult> => {
+  const response = await apiClient.post<IngestLeadResult>(
+    `/api/campaigns/${campaignId}/leads/upload`,
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    },
+  );
+  return response.data;
+};
+
+/**
+ * Fetches full organization settings (ADMIN & MANAGER).
+ */
+export const fetchAdminSettings = async (): Promise<{ settings: Setting }> => {
+  const response = await apiClient.get<{ settings: Setting }>('/api/settings');
+  return response.data;
+};
+
+/**
+ * Updates organization settings (ADMIN & MANAGER).
+ */
+export const updateAdminSettings = async (data: {
+  allowDisposeWithoutFollowUp?: boolean;
+  followUpMandatoryForNotConnected?: boolean;
+  reassignAfterHours?: number;
+}): Promise<{ settings: Setting }> => {
+  const response = await apiClient.patch<{ settings: Setting }>('/api/settings', data);
+  return response.data;
+};
+
+/**
+ * Updates a single retry rule delay or enabled flag.
+ */
+export const updateRetryRule = async (
+  id: string,
+  data: {
+    enabled?: boolean;
+    steps?: Array<{ delayMinutes: number }>;
+  },
+): Promise<{ rule: RetryRule }> => {
+  const response = await apiClient.patch<{ rule: RetryRule }>(`/api/retry-rules/${id}`, data);
+  return response.data;
+};
+
+/**
+ * Reassigns a lead to a specific active agent.
+ */
+export const reassignLead = async (
+  leadId: string,
+  userId: string,
+): Promise<{ lead: Lead }> => {
+  const response = await apiClient.post<{ lead: Lead }>(`/api/leads/${leadId}/reassign`, {
+    userId,
+  });
+  return response.data;
+};
+

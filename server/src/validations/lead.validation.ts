@@ -1,0 +1,74 @@
+import { z } from 'zod';
+
+const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+
+export const createLeadSchema = z.object({
+  body: z.object({
+    name: z.string({ required_error: 'Name is required' }).min(1).trim(),
+    phone: z.string({ required_error: 'Phone number is required' }).min(5).trim(),
+    email: z.string().email('Invalid email address').trim().toLowerCase().optional(),
+    customProperties: z.record(z.string(), z.string()).optional(),
+  }),
+});
+
+export const listCampaignLeadsQuerySchema = z.object({
+  params: z.object({
+    id: z.string().regex(objectIdRegex, 'Invalid campaign ID format'),
+  }),
+  query: z.object({
+    stage: z.string().optional(),
+    tag: z.string().optional(),
+    status: z.enum(['OPEN', 'CLOSED']).optional(),
+    assignedTo: z.string().optional(),
+    search: z.string().optional(),
+    startDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+    endDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+    page: z
+      .string()
+      .optional()
+      .transform((val) => (val ? parseInt(val, 10) : 1)),
+    limit: z
+      .string()
+      .optional()
+      .transform((val) => (val ? parseInt(val, 10) : 20)),
+  }),
+});
+
+export const myLeadsQuerySchema = z.object({
+  query: z.object({
+    type: z.enum(['NEW', 'FOLLOW_UP', 'NOT_CONNECTED', 'ALL']).default('ALL'),
+    campaignId: z.string().regex(objectIdRegex, 'Invalid campaign ID format').optional(),
+    userId: z.string().regex(objectIdRegex, 'Invalid user ID format').optional(),
+    page: z
+      .string()
+      .optional()
+      .transform((val) => (val ? parseInt(val, 10) : 1)),
+    limit: z
+      .string()
+      .optional()
+      .transform((val) => (val ? parseInt(val, 10) : 20)),
+  }),
+});
+
+export const reassignLeadSchema = z.object({
+  params: z.object({
+    id: z.string().regex(objectIdRegex, 'Invalid lead ID format'),
+  }),
+  body: z.object({
+    userId: z.string().regex(objectIdRegex, 'Invalid target user ID format'),
+  }),
+});
+
+export const bulkReassignSchema = z.object({
+  body: z.object({
+    fromUserId: z.string().regex(objectIdRegex, 'Invalid fromUserId format'),
+    toUserId: z.string().regex(objectIdRegex, 'Invalid toUserId format'),
+    campaignId: z.string().regex(objectIdRegex, 'Invalid campaignId format').optional(),
+  }),
+});
+
+export type CreateLeadInput = z.infer<typeof createLeadSchema>['body'];
+export type ListCampaignLeadsQuery = z.infer<typeof listCampaignLeadsQuerySchema>['query'];
+export type MyLeadsQuery = z.infer<typeof myLeadsQuerySchema>['query'];
+export type ReassignLeadInput = z.infer<typeof reassignLeadSchema>['body'];
+export type BulkReassignInput = z.infer<typeof bulkReassignSchema>['body'];

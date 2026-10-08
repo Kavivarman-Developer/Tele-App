@@ -1,0 +1,102 @@
+import cron, { ScheduledTask } from 'node-cron';
+import { Lead } from '../models/lead.model';
+import { Campaign } from '../models/campaign.model';
+import { User } from '../models/user.model';
+import { SettingService } from './setting.service';
+import { LeadAssignmentService } from './lead-assignment.service';
+
+export interface ISchedulerService {
+  start(): void;
+  stop(): void;
+  checkDueFollowUps(): Promise<number>;
+  reassignOverdueDeactivatedAgentLeads(): Promise<number>;
+}
+
+export class CronSchedulerService implements ISchedulerService {
+  private tasks: ScheduledTask[] = [];
+
+  public start(): void {
+    // Check due follow-ups every minute
+    const followUpTask = cron.schedule('* * * * *', async () => {
+      try {
+        await this.checkDueFollowUps();
+      } catch (err) {
+        console.error('[Scheduler] Error checking due follow-ups:', err);
+      }
+    });
+
+    // Check overdue leads of deactivated agents hourly
+    const reassignTask = cron.schedule('0 * * * *', async () => {
+      try {
+        await this.reassignOverdueDeactivatedAgentLeads();
+      } catch (err) {
+        console.error('[Scheduler] Error reassigning overdue leads of deactivated agents:', err);
+      }
+    });
+
+    this.tasks.push(followUpTask, reassignTask);
+    console.log('[Scheduler] CronSchedulerService started.');
+  }
+
+  public stop(): void {
+    for (const task of this.tasks) {
+      task.stop();
+    }
+    this.tasks = [];
+    console.log('[Scheduler] CronSchedulerService stopped.');
+  }
+
+  public async checkDueFollowUps(): Promise<number> {
+    const now = new Date();
+    const result = await Lead.updateMany(
+      {
+        status: 'OPEN',
+        nextFollowUpAt: { $lte: now, $ne: null },
+        followUpDue: false,
+      },
+      {
+        $set: { followUpDue: true },
+      },
+    );
+    return result.modifiedCount;
+  }
+
+  public async reassignOverdueDeactivatedAgentLeads(): Promise<number> {
+    const settings = await SettingService.getSettings();
+    const hours = settings.reassignAfterHours ?? 24;
+
+    const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    // Find deactivated agents
+    const deactivatedAgents = await User.find({ role: 'AGENT', isActive: false }, '_id');
+    if (deactivatedAgents.length === 0) {
+      return 0;
+    }
+
+    const deactivatedAgentIds = deactivatedAgents.map((a) => a._id);
+
+    // Find open leads assigned to deactivated agents where follow-up is overdue past cutoff
+    const overdueLeads = await Lead.find({
+      assignedTo: { $in: deactivatedAgentIds },
+      status: 'OPEN',
+      nextFollowUpAt: { $lte: cutoff, $ne: null },
+    });
+
+    let reassignedCount = 0;
+    for (const lead of overdueLeads) {
+      const campaign = await Campaign.findById(lead.campaignId);
+      if (!campaign || !campaign.isActive) continue;
+
+      const newAgentId = await LeadAssignmentService.assignLead(campaign, lead.customProperties);
+      if (newAgentId && newAgentId.toString() !== lead.assignedTo?.toString()) {
+        lead.assignedTo = newAgentId;
+        await lead.save();
+        reassignedCount++;
+      }
+    }
+
+    return reassignedCount;
+  }
+}
+
+export const schedulerService: ISchedulerService = new CronSchedulerService();
