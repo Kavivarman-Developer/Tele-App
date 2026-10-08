@@ -38,6 +38,7 @@ import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
 import { CrmDateTimePickerModal } from './CrmDateTimePickerModal';
 import { toast } from '../store/toastStore';
+import { getDialerTelUrl, formatDisplayPhone } from '../utils/phoneUtils';
 
 interface LeadQuickModalProps {
   lead: Lead | null;
@@ -133,7 +134,15 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       : 'Demo Sales Campaign';
 
   const handleCall = () => {
-    Linking.openURL(`tel:+91${cleanPhone}`).catch(() => {
+    useLeadHistoryStore.getState().logDialedCall({
+      leadId: lead._id,
+      phone: lead.phone,
+      customerName: lead.name,
+      agentName: currentUser?.name || 'Agent',
+      agentId: currentUser?._id || currentUser?.email,
+      branch: currentUser?.branch || 'General',
+    });
+    Linking.openURL(getDialerTelUrl(lead.phone)).catch(() => {
       Alert.alert('Error', 'Unable to initiate phone call on this device');
     });
   };
@@ -263,7 +272,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
               <CrmAvatar name={lead.name} size="md" />
               <View style={styles.contactInfo}>
                 <Text style={styles.contactName}>{lead.name}</Text>
-                <Text style={styles.contactPhone}>+91 {cleanPhone}</Text>
+                <Text style={styles.contactPhone}>{formatDisplayPhone(lead.phone)}</Text>
               </View>
 
               <View style={styles.actionButtons}>

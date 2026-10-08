@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, User, PhoneCall, RefreshCw, Bell } from 'lucide-react-native';
 import { colors, borderRadius, shadows } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { useNotificationStore } from '../store/notificationStore';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 
 interface CrmHeaderProps {
@@ -25,6 +26,7 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({
 }) => {
   const navigation = useNavigation();
   const { user } = useAuthStore();
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
   const [showNotifications, setShowNotifications] = useState(false);
 
   return (
@@ -78,9 +80,11 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({
             accessibilityLabel="Follow-up Notifications"
           >
             <Bell size={16} color={colors.text} />
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>4</Text>
-            </View>
+            {unreadCount > 0 ? (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unreadCount}</Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
 
           {rightAction || null}

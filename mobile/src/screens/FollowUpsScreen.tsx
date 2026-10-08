@@ -33,6 +33,7 @@ import { useAuthStore } from '../store/authStore';
 import { CrmShell } from '../components/CrmShell';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
+import { getDialerTelUrl, formatDisplayPhone } from '../utils/phoneUtils';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type TabCategory = 'Overdue' | 'Today' | 'Upcoming';
@@ -213,8 +214,7 @@ export const FollowUpsScreen: React.FC = () => {
 
   // Direct Call Handler
   const handleDirectCall = (phone: string) => {
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    Linking.openURL(`tel:${cleanPhone}`).catch(() => {
+    Linking.openURL(getDialerTelUrl(phone)).catch(() => {
       Alert.alert('Unable to dial', `Could not open phone dialer for ${phone}`);
     });
   };
@@ -475,7 +475,7 @@ export const FollowUpsScreen: React.FC = () => {
                 <View style={styles.infoCol}>
                   <Text style={styles.personName}>{item.name}</Text>
                   <Text style={styles.personSubtitle}>
-                    {item.phone} · {item.campaignName}
+                    {formatDisplayPhone(item.phone)} · {item.campaignName}
                   </Text>
 
                     <View style={styles.metaRow}>

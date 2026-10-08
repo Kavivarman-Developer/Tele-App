@@ -23,10 +23,13 @@ import {
   PanelLeftOpen,
   ChevronRight,
   X,
+  History,
+  PhoneCall,
 } from 'lucide-react-native';
 
 import { useSidebarStore } from '../store/sidebarStore';
 import { useAuthStore } from '../store/authStore';
+import { useNotificationStore } from '../store/notificationStore';
 import { CrmAvatar } from './CrmAvatar';
 import { colors, borderRadius, shadows } from '../theme';
 
@@ -41,7 +44,8 @@ interface NavItemConfig {
 const WORKSPACE_ITEMS: NavItemConfig[] = [
   { name: 'Home', route: 'Home', label: 'Home', icon: LayoutGrid },
   { name: 'MyLeads', route: 'MyLeads', label: 'My Leads', icon: Users },
-  { name: 'FollowUps', route: 'FollowUps', label: 'Follow ups', icon: CalendarCheck2, badge: 7 },
+  { name: 'FollowUps', route: 'FollowUps', label: 'Follow ups', icon: CalendarCheck2 },
+  { name: 'CallHistory', route: 'CallHistory', label: 'Call History', icon: History },
 ];
 
 const MANAGEMENT_ITEMS: NavItemConfig[] = [
@@ -60,6 +64,7 @@ export const CrmSidebarContent: React.FC<{
   const navigation = useNavigation<any>();
   const { currentRoute, setCurrentRoute, toggleCollapse } = useSidebarStore();
   const { user } = useAuthStore();
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
 
   const handleNav = (route: string) => {
     setCurrentRoute(route);
@@ -100,8 +105,8 @@ export const CrmSidebarContent: React.FC<{
           {!collapsed && (
             <View style={styles.brandTextWrap}>
               <Text style={styles.brandTitle}>
-                <Text style={{ fontWeight: '800' }}>OKBOZ</Text>
-                <Text style={{ fontWeight: '500', color: colors.textSecondary }}> Admin</Text>
+                <Text style={{ fontWeight: '800', color: '#0F172A' }}>OKBOZ</Text>
+                <Text style={{ fontWeight: '600', color: '#64748B' }}> {user?.role === 'ADMIN' ? 'Admin' : 'CRM'}</Text>
               </Text>
             </View>
           )}
@@ -113,7 +118,7 @@ export const CrmSidebarContent: React.FC<{
             onPress={onNavigate}
             activeOpacity={0.7}
           >
-            <X size={18} color={colors.textMuted} />
+            <X size={18} color="#64748B" />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -123,9 +128,9 @@ export const CrmSidebarContent: React.FC<{
             accessibilityLabel={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? (
-              <PanelLeftOpen size={18} color={colors.textMuted} />
+              <PanelLeftOpen size={18} color="#64748B" />
             ) : (
-              <PanelLeftClose size={18} color={colors.textMuted} />
+              <PanelLeftClose size={18} color="#64748B" />
             )}
           </TouchableOpacity>
         )}
@@ -142,6 +147,7 @@ export const CrmSidebarContent: React.FC<{
         {WORKSPACE_ITEMS.map((item) => {
           const isActive = currentRoute === item.route;
           const Icon = item.icon;
+          const badgeCount = item.route === 'FollowUps' ? (unreadCount > 0 ? unreadCount : undefined) : item.badge;
 
           return (
             <TouchableOpacity
@@ -156,7 +162,7 @@ export const CrmSidebarContent: React.FC<{
             >
               <Icon
                 size={18}
-                color={isActive ? colors.primary : colors.textMuted}
+                color={isActive ? '#4F46E5' : '#64748B'}
                 strokeWidth={isActive ? 2.5 : 2}
               />
               {!collapsed && (
@@ -164,9 +170,11 @@ export const CrmSidebarContent: React.FC<{
                   {item.label}
                 </Text>
               )}
-              {!collapsed && item.badge ? (
-                <View style={styles.navBadge}>
-                  <Text style={styles.navBadgeText}>{item.badge}</Text>
+              {!collapsed && badgeCount ? (
+                <View style={[styles.navBadge, item.route === 'FollowUps' && styles.navBadgeAlert]}>
+                  <Text style={[styles.navBadgeText, item.route === 'FollowUps' && styles.navBadgeAlertText]}>
+                    {badgeCount}
+                  </Text>
                 </View>
               ) : null}
             </TouchableOpacity>
@@ -264,12 +272,16 @@ export const CrmSidebarModalDrawer: React.FC = () => {
 
 const styles = StyleSheet.create({
   sidebarContainer: {
-    backgroundColor: colors.surface,
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
+    backgroundColor: '#FFFFFF',
+    borderRightWidth: 0,
     height: '100%',
     display: 'flex',
     flexDirection: 'column',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
   },
   sidebarExpanded: {
     width: 250,
@@ -283,8 +295,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
+    backgroundColor: '#FFFFFF',
   },
   brandWrapCollapsed: {
     paddingHorizontal: 12,
@@ -296,15 +307,20 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   brandMark: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#4F46E5',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
   },
   brandMarkText: {
-    color: colors.textInverse,
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -316,24 +332,13 @@ const styles = StyleSheet.create({
   },
   brandTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: colors.text,
     letterSpacing: -0.3,
-  },
-  brandBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.primary,
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: borderRadius.xs,
   },
   iconToggleBtn: {
     width: 32,
     height: 32,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -347,24 +352,24 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.textQuiet,
+    color: '#94A3B8',
     letterSpacing: 0.8,
     marginTop: 8,
     marginBottom: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
   },
   divider: {
     height: 1,
-    backgroundColor: colors.borderSubtle,
-    marginVertical: 12,
-    marginHorizontal: 4,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
+    marginHorizontal: 8,
   },
   navBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    borderRadius: borderRadius.sm,
+    paddingVertical: 9.5,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     marginBottom: 3,
     gap: 10,
   },
@@ -374,34 +379,39 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   navBtnActive: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: '#EEF2FF',
   },
   navLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: '#475569',
     flex: 1,
   },
   navLabelActive: {
-    color: colors.primary,
+    color: '#4F46E5',
     fontWeight: '700',
   },
   navBadge: {
-    backgroundColor: colors.warningLight,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
     borderRadius: borderRadius.full,
   },
   navBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.warningText,
+    color: '#475569',
+  },
+  navBadgeAlert: {
+    backgroundColor: '#FEE2E2',
+  },
+  navBadgeAlertText: {
+    color: '#DC2626',
+    fontWeight: '800',
   },
   sidebarBottom: {
     padding: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
   },
   sidebarBottomCollapsed: {
     padding: 8,
@@ -411,13 +421,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    padding: 4,
-    borderRadius: borderRadius.sm,
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   accountBtnCollapsed: {
     justifyContent: 'center',
     gap: 0,
-    padding: 0,
+    padding: 4,
   },
   avatarWrap: {
     position: 'relative',
@@ -426,31 +439,31 @@ const styles = StyleSheet.create({
     width: 9,
     height: 9,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.success,
+    backgroundColor: '#10B981',
     position: 'absolute',
     bottom: -1,
     right: -1,
     borderWidth: 1.5,
-    borderColor: colors.surface,
+    borderColor: '#FFFFFF',
   },
   accountTextWrap: {
     flex: 1,
   },
   accountName: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
-    color: colors.text,
+    color: '#0F172A',
   },
   accountRole: {
-    fontSize: 11,
-    color: colors.textMuted,
+    fontSize: 10.5,
+    color: '#64748B',
     fontWeight: '500',
     marginTop: 1,
   },
   drawerOverlay: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: colors.overlay,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
   },
   drawerBackdrop: {
     position: 'absolute',
@@ -462,7 +475,7 @@ const styles = StyleSheet.create({
   drawerSheet: {
     width: 270,
     height: '100%',
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     ...shadows.elevated,
   },
 });

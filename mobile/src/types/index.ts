@@ -173,6 +173,7 @@ export interface Activity {
   campaignId: string;
   userId: User | string;
   phone?: string;
+  customerName?: string;
   branch?: string | null;
   type: 'CALL';
   connected: boolean;
@@ -201,6 +202,7 @@ export type RootStackParamList = {
   Home: undefined;
   MyLeads: undefined;
   FollowUps: undefined;
+  CallHistory: undefined;
   Profile: undefined;
   Team: undefined;
   Campaigns: undefined;

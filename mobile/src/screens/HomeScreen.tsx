@@ -46,6 +46,8 @@ import { StatCard } from '../components/StatCard';
 import { CrmAvatar } from '../components/CrmAvatar';
 import { CrmBadge } from '../components/CrmBadge';
 import { LeadQuickModal } from '../components/LeadQuickModal';
+import { CrmDateTimePickerModal } from '../components/CrmDateTimePickerModal';
+import { getDialerTelUrl, formatDisplayPhone } from '../utils/phoneUtils';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -58,6 +60,8 @@ export const HomeScreen: React.FC = () => {
   const isAdmin = user?.role === 'ADMIN';
 
   const [period, setPeriod] = useState<ReportingPeriod>('Today');
+  const [customDate, setCustomDate] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [selectedBranch, setSelectedBranch] = useState<'ALL' | 'Trichy' | 'Pudukkottai'>('ALL');
   const [selectedLeadForQuickModal, setSelectedLeadForQuickModal] = useState<Lead | null>(null);
 
@@ -68,6 +72,16 @@ export const HomeScreen: React.FC = () => {
       ? (user.branch as any)
       : selectedBranch;
 
+  const handleConfirmCustomDate = (isoStr: string) => {
+    setCustomDate(isoStr);
+    setPeriod('Custom');
+    setShowDatePicker(false);
+  };
+
+  const customDateLabel = customDate
+    ? new Date(customDate).toLocaleDateString([], { month: 'short', day: 'numeric' })
+    : 'Date';
+
   // Compute ISO 'from' date
   const now = new Date();
   let fromDate: string | undefined;
@@ -75,8 +89,11 @@ export const HomeScreen: React.FC = () => {
     fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   } else if (period === '7 Days') {
     fromDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  } else {
+  } else if (period === '30 Days') {
     fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  } else if (period === 'Custom' && customDate) {
+    const cd = new Date(customDate);
+    fromDate = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate()).toISOString();
   }
 
   // 1. Dashboard Metrics
@@ -308,11 +325,19 @@ export const HomeScreen: React.FC = () => {
 
   return (
     <CrmShell
-      title="Dashboard Overview"
+      title="Dashboard"
       headerIcon={<LayoutGrid size={15} color={colors.textSecondary} />}
       showPeriodControl
       period={period}
-      onPeriodChange={setPeriod}
+      onPeriodChange={(newP) => {
+        if (newP === 'Custom') {
+          setShowDatePicker(true);
+        } else {
+          setPeriod(newP);
+        }
+      }}
+      customDateLabel={period === 'Custom' ? customDateLabel : undefined}
+      onPickCustomDate={() => setShowDatePicker(true)}
       rightAction={
         isManagerOrAdmin ? (
           <TouchableOpacity
@@ -970,8 +995,7 @@ export const HomeScreen: React.FC = () => {
                   <View style={[styles.tdCell, { flex: 1.2, alignItems: 'flex-end' }]}>
                     <TouchableOpacity
                       onPress={() => {
-                        const clean = item.phone.replace(/[^0-9+]/g, '');
-                        Linking.openURL(`tel:${clean}`);
+                        Linking.openURL(getDialerTelUrl(item.phone));
                       }}
                       style={{
                         backgroundColor: '#ECFDF5',
@@ -1012,6 +1036,14 @@ export const HomeScreen: React.FC = () => {
         onOpenFullDispose={(leadToDispose) => {
           navigation.navigate('Dispose', { lead: leadToDispose });
         }}
+      />
+      {/* Date Picker Modal for Dashboard Filtering */}
+      <CrmDateTimePickerModal
+        visible={showDatePicker}
+        title="Filter Dashboard by Date"
+        initialDate={customDate || new Date().toISOString()}
+        onClose={() => setShowDatePicker(false)}
+        onConfirm={handleConfirmCustomDate}
       />
     </CrmShell>
   );

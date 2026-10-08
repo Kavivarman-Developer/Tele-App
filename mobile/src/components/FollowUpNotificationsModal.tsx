@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,12 +25,14 @@ import {
   ExternalLink,
   CheckCircle2,
   AlertCircle,
+  CheckCheck,
 } from 'lucide-react-native';
 
 import { fetchMyLeads } from '../api/leadApi';
 import { callService } from '../services/call.service';
 import { useAuthStore } from '../store/authStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
+import { useNotificationStore } from '../store/notificationStore';
 import { Lead, Activity } from '../types';
 import { WhatsAppTemplateModal } from './WhatsAppTemplateModal';
 import { LeadQuickModal } from './LeadQuickModal';
@@ -117,6 +119,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
 }) => {
   const navigation = useNavigation<any>();
   const { user } = useAuthStore();
+  const { markAsRead, markAllAsRead, isRead, unreadCount, setTotalRemindersCount } = useNotificationStore();
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'TODAY' | 'UPCOMING'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -179,6 +182,13 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
     return DEFAULT_SAMPLE_REMINDERS;
   }, [backendFollowUps]);
 
+  // Sync reminder items with notification store
+  useEffect(() => {
+    if (visible && allReminders.length > 0) {
+      setTotalRemindersCount(allReminders.length, allReminders.map((r) => r._id));
+    }
+  }, [visible, allReminders, setTotalRemindersCount]);
+
   // Filtered Reminders
   const filteredList = useMemo(() => {
     return allReminders.filter((item) => {
@@ -197,10 +207,16 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
     });
   }, [allReminders, activeFilter, searchQuery]);
 
-  // Counts
-  const todayDueCount = allReminders.filter((r) => r.isToday || r.isOverdue).length;
-
   const handleCall = async (item: NotificationFollowUp) => {
+    markAsRead(item._id);
+    useLeadHistoryStore.getState().logDialedCall({
+      leadId: item._id,
+      phone: item.phone,
+      customerName: item.name,
+      agentName: user?.name || 'Agent',
+      agentId: user?._id || user?.email,
+      branch: user?.branch || 'General',
+    });
     toast.info(`Initiating call to ${item.name}...`);
     try {
       await callService.startCall({ phone: item.phone, name: item.name } as any);
@@ -213,10 +229,12 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
   };
 
   const handleWhatsApp = (item: NotificationFollowUp) => {
+    markAsRead(item._id);
     setWhatsAppTarget({ name: item.name, phone: item.phone });
   };
 
   const openQuickModal = (item: NotificationFollowUp) => {
+    markAsRead(item._id);
     const syntheticLead: Lead = {
       _id: item._id,
       campaignId: 'default-camp',
@@ -252,30 +270,46 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
             <View style={styles.headerLeft}>
               <View style={styles.bellIconBox}>
                 <Bell size={18} color="#2563EB" />
-                {todayDueCount > 0 && (
+                {unreadCount > 0 && (
                   <View style={styles.headerBadge}>
-                    <Text style={styles.headerBadgeText}>{todayDueCount}</Text>
+                    <Text style={styles.headerBadgeText}>{unreadCount}</Text>
                   </View>
                 )}
               </View>
               <View>
                 <Text style={styles.headerTitle}>Follow-up Notifications</Text>
                 <Text style={styles.headerSubtitle}>
-                  {todayDueCount > 0
-                    ? `${todayDueCount} callback${todayDueCount > 1 ? 's' : ''} require attention today`
+                  {unreadCount > 0
+                    ? `${unreadCount} callback${unreadCount > 1 ? 's' : ''} require attention`
                     : 'All callbacks up to date'}
                 </Text>
               </View>
             </View>
 
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeBtn}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <X size={18} color="#64748B" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {unreadCount > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    markAllAsRead(allReminders.map((r) => r._id));
+                    toast.success('All reminders marked as read', 'Badge Reset');
+                  }}
+                  style={styles.markAllBtn}
+                  activeOpacity={0.7}
+                >
+                  <CheckCheck size={14} color="#2563EB" />
+                  <Text style={styles.markAllBtnText}>Clear ({unreadCount})</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={onClose}
+                style={styles.closeBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Search Bar */}
@@ -352,13 +386,17 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
               filteredList.map((item) => {
                 const isHot = item.temperature === 'HOT';
                 const isCold = item.temperature === 'COLD';
+                const itemIsRead = isRead(item._id);
 
                 return (
-                  <View
+                  <TouchableOpacity
                     key={item._id}
+                    activeOpacity={0.9}
+                    onPress={() => markAsRead(item._id)}
                     style={[
                       styles.reminderCard,
-                      item.isOverdue && styles.reminderCardOverdue,
+                      item.isOverdue && !itemIsRead && styles.reminderCardOverdue,
+                      itemIsRead && styles.reminderCardRead,
                     ]}
                   >
                     {/* Top Row: Customer Info & Temperature */}
@@ -407,17 +445,17 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                       <View
                         style={[
                           styles.timePill,
-                          item.isOverdue ? styles.timePillOverdue : null,
+                          item.isOverdue && !itemIsRead ? styles.timePillOverdue : null,
                         ]}
                       >
                         <Clock
                           size={11}
-                          color={item.isOverdue ? '#DC2626' : '#2563EB'}
+                          color={item.isOverdue && !itemIsRead ? '#DC2626' : '#2563EB'}
                         />
                         <Text
                           style={[
                             styles.timePillText,
-                            item.isOverdue ? styles.timePillTextOverdue : null,
+                            item.isOverdue && !itemIsRead ? styles.timePillTextOverdue : null,
                           ]}
                         >
                           {item.timeLabel}
@@ -431,6 +469,11 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                       {item.branch ? (
                         <Text style={styles.branchText}>· {item.branch}</Text>
                       ) : null}
+                      {itemIsRead && (
+                        <Text style={[styles.branchText, { color: '#059669', fontWeight: '700' }]}>
+                          · Handled
+                        </Text>
+                      )}
                     </View>
 
                     {/* Direct Action Buttons */}
@@ -465,7 +508,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                         <Text style={styles.updateActionBtnText}>Reschedule</Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })
             )}
@@ -597,6 +640,22 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 1,
   },
+  markAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  markAllBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
   closeBtn: {
     width: 32,
     height: 32,
@@ -680,6 +739,11 @@ const styles = StyleSheet.create({
   reminderCardOverdue: {
     borderColor: '#FECACA',
     backgroundColor: '#FEF2F2',
+  },
+  reminderCardRead: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.85,
   },
   cardHeader: {
     flexDirection: 'row',

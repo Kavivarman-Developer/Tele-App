@@ -35,9 +35,11 @@ import { fetchMyLeads, fetchCampaigns, createWalkInLead } from '../api/leadApi';
 import { Lead, RootStackParamList } from '../types';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { CrmShell } from '../components/CrmShell';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
+import { getDialerTelUrl, formatDisplayPhone, normalizePhoneDigits } from '../utils/phoneUtils';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -235,7 +237,7 @@ export const MyLeadsScreen: React.FC = () => {
       const campId = newLead.campaignId || campaignData?.campaigns?.[0]?._id || 'default-campaign';
       return createWalkInLead(campId, {
         name: newLead.name,
-        phone: newLead.phone,
+        phone: normalizePhoneDigits(newLead.phone),
       });
     },
     onSuccess: () => {
@@ -290,7 +292,7 @@ export const MyLeadsScreen: React.FC = () => {
         return {
           _id: l._id,
           name: l.name,
-          phone: l.phone.startsWith('+91') ? l.phone : `+91 ${l.phone}`,
+          phone: formatDisplayPhone(l.phone),
           campaignName: camp,
           attempts: l.attemptCount || 0,
           assignedAgent: agentDisplay,
@@ -308,11 +310,15 @@ export const MyLeadsScreen: React.FC = () => {
     if (isAgent) {
       return DEMO_LEADS.map((lead) => ({
         ...lead,
+        phone: formatDisplayPhone(lead.phone),
         assignedAgent: `${user?.name || 'You'} (${user?.branch || 'Agent'})`,
       }));
     }
 
-    return DEMO_LEADS;
+    return DEMO_LEADS.map((lead) => ({
+      ...lead,
+      phone: formatDisplayPhone(lead.phone),
+    }));
   }, [leadsData, isAgent, user]);
 
   // Compute status pill counts
@@ -350,13 +356,20 @@ export const MyLeadsScreen: React.FC = () => {
   }, [combinedLeads, selectedFilter, selectedCampaign, searchQuery]);
 
   // Handle Direct Call
-  const handleDirectCall = (phone: string) => {
-    const cleanNum = phone.replace(/\D/g, '');
-    if (!cleanNum) {
+  const handleDirectCall = (phone: string, customerName?: string, leadId?: string) => {
+    if (!phone.trim()) {
       Alert.alert('Invalid Number', 'Unable to initiate call.');
       return;
     }
-    Linking.openURL(`tel:+91${cleanNum}`).catch(() => {
+    useLeadHistoryStore.getState().logDialedCall({
+      leadId: leadId || 'lead-' + Date.now(),
+      phone,
+      customerName: customerName || 'Lead Contact',
+      agentName: user?.name || 'Agent',
+      agentId: user?._id || user?.email,
+      branch: user?.branch || 'General',
+    });
+    Linking.openURL(getDialerTelUrl(phone)).catch(() => {
       Alert.alert('Call Error', 'Unable to open phone dialer on this device.');
     });
   };
@@ -396,7 +409,7 @@ export const MyLeadsScreen: React.FC = () => {
       Alert.alert('Queue Empty', 'No leads ready to call in current filter.');
       return;
     }
-    handleDirectCall(filteredLeads[0].phone);
+    handleDirectCall(filteredLeads[0].phone, filteredLeads[0].name, filteredLeads[0]._id);
   };
 
   // Render Status Badge
@@ -738,7 +751,7 @@ export const MyLeadsScreen: React.FC = () => {
                           {item.name}
                         </Text>
                         <TouchableOpacity
-                          onPress={() => handleDirectCall(item.phone)}
+                          onPress={() => handleDirectCall(item.phone, item.name, item._id)}
                           activeOpacity={0.7}
                           style={styles.cardPhoneTouch}
                         >
@@ -792,11 +805,11 @@ export const MyLeadsScreen: React.FC = () => {
                       {/* Call Button */}
                       <TouchableOpacity
                         style={styles.cardCallBtn}
-                        onPress={() => handleDirectCall(item.phone)}
+                        onPress={() => handleDirectCall(item.phone, item.name, item._id)}
                         activeOpacity={0.8}
                       >
-                        <Phone size={14} color="#047857" strokeWidth={2.5} />
-                        <Text style={styles.cardCallBtnText}>Call</Text>
+                        <Phone size={13} color="#047857" strokeWidth={2.5} />
+                        <Text style={styles.cardCallBtnText} numberOfLines={1}>Call</Text>
                       </TouchableOpacity>
 
                       {/* WhatsApp Button */}
@@ -805,8 +818,8 @@ export const MyLeadsScreen: React.FC = () => {
                         onPress={() => handleOpenWhatsApp(item)}
                         activeOpacity={0.8}
                       >
-                        <MessageCircle size={14} color="#15803D" strokeWidth={2.5} />
-                        <Text style={styles.cardWhatsAppBtnText}>WhatsApp</Text>
+                        <MessageCircle size={13} color="#15803D" strokeWidth={2.5} />
+                        <Text style={styles.cardWhatsAppBtnText} numberOfLines={1}>WhatsApp</Text>
                       </TouchableOpacity>
 
                       {/* Open Lead Button */}
@@ -815,8 +828,8 @@ export const MyLeadsScreen: React.FC = () => {
                         onPress={() => handleOpenLead(item)}
                         activeOpacity={0.8}
                       >
-                        <Text style={styles.cardOpenLeadBtnText}>Open Lead</Text>
-                        <ArrowUpRight size={13} color="#2563EB" />
+                        <Text style={styles.cardOpenLeadBtnText} numberOfLines={1}>Open Lead</Text>
+                        <ArrowUpRight size={12} color="#2563EB" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -905,7 +918,7 @@ export const MyLeadsScreen: React.FC = () => {
                       <View style={[styles.tdCell, { width: 140, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }]}>
                         <TouchableOpacity
                           style={styles.directCallBtn}
-                          onPress={() => handleDirectCall(item.phone)}
+                          onPress={() => handleDirectCall(item.phone, item.name, item._id)}
                           activeOpacity={0.7}
                           accessibilityLabel="Call Lead"
                         >
@@ -1504,6 +1517,7 @@ const styles = StyleSheet.create({
   },
   cardLeadInfo: {
     flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
   },
   cardLeadName: {
@@ -1573,7 +1587,7 @@ const styles = StyleSheet.create({
   cardActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
@@ -1581,6 +1595,7 @@ const styles = StyleSheet.create({
   },
   cardCallBtn: {
     flex: 1,
+    minWidth: 0,
     height: 38,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1589,15 +1604,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#A7F3D0',
     borderRadius: 8,
-    gap: 6,
+    paddingHorizontal: 4,
+    gap: 4,
   },
   cardCallBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#047857',
   },
   cardWhatsAppBtn: {
-    flex: 1.2,
+    flex: 1.15,
+    minWidth: 0,
     height: 38,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1606,15 +1623,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#BBF7D0',
     borderRadius: 8,
-    gap: 6,
+    paddingHorizontal: 4,
+    gap: 4,
   },
   cardWhatsAppBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#15803D',
   },
   cardOpenLeadBtn: {
-    flex: 1.2,
+    flex: 1.15,
+    minWidth: 0,
     height: 38,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1623,10 +1642,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#BFDBFE',
     borderRadius: 8,
-    gap: 4,
+    paddingHorizontal: 4,
+    gap: 3,
   },
   cardOpenLeadBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#2563EB',
   },

@@ -17,6 +17,7 @@ const DEMO_ACTIVITIES_9810000129: Activity[] = [
     _id: 'act-john-9810000129',
     leadId: 'lead-2',
     phone: '9810000129',
+    customerName: 'Priya Verma',
     branch: 'Pudukkottai',
     campaignId: 'camp-1',
     userId: {
@@ -49,6 +50,7 @@ const DEMO_ACTIVITIES_9810000129: Activity[] = [
     _id: 'act-kavin-9810000129',
     leadId: 'lead-2',
     phone: '9810000129',
+    customerName: 'Priya Verma',
     branch: 'Trichy',
     campaignId: 'camp-1',
     userId: {
@@ -85,6 +87,7 @@ const INITIAL_DEMO_HISTORIES: Record<string, Activity[]> = {
       _id: 'act-101',
       leadId: 'lead-1',
       phone: '9810000081',
+      customerName: 'Rohan Mehta',
       branch: 'Trichy',
       campaignId: 'camp-1',
       userId: {
@@ -116,6 +119,7 @@ const INITIAL_DEMO_HISTORIES: Record<string, Activity[]> = {
       _id: 'act-102',
       leadId: 'lead-1',
       phone: '9810000081',
+      customerName: 'Rohan Mehta',
       branch: 'Trichy',
       campaignId: 'camp-1',
       userId: {
@@ -158,6 +162,7 @@ const INITIAL_DEMO_HISTORIES: Record<string, Activity[]> = {
       _id: 'act-501',
       leadId: 'lead-5',
       phone: '9810000062',
+      customerName: 'Ayaan Patel',
       branch: 'Pudukkottai',
       campaignId: 'camp-1',
       userId: {
@@ -193,6 +198,7 @@ const INITIAL_DEMO_HISTORIES: Record<string, Activity[]> = {
       _id: 'act-701',
       leadId: 'lead-7',
       phone: '9810000099',
+      customerName: 'Rohit Verma',
       branch: 'Trichy',
       campaignId: 'camp-1',
       userId: {
@@ -228,10 +234,20 @@ interface LeadHistoryStore {
   isLoaded: boolean;
   loadHistory: () => Promise<void>;
   getHistoryForLead: (leadId: string, phone?: string) => Activity[];
+  getAllActivities: (agentId?: string) => Activity[];
+  logDialedCall: (data: {
+    leadId?: string;
+    phone: string;
+    customerName?: string;
+    agentName?: string;
+    agentId?: string;
+    branch?: string | null;
+  }) => Activity;
   addActivity: (
     leadId: string,
     activityData: {
       phone?: string;
+      customerName?: string;
       branch?: string | null;
       agentName?: string;
       agentId?: string;
@@ -266,6 +282,48 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
     } catch {
       set({ isLoaded: true });
     }
+  },
+
+  getAllActivities: (agentId?: string): Activity[] => {
+    const map = get().historyMap;
+    const foundMap = new Map<string, Activity>();
+
+    for (const key of Object.keys(map)) {
+      const list = map[key];
+      if (Array.isArray(list)) {
+        for (const act of list) {
+          if (act && act._id && !foundMap.has(act._id)) {
+            if (agentId) {
+              const uId = typeof act.userId === 'object' && act.userId ? act.userId._id : act.userId;
+              if (uId && uId !== agentId) continue;
+            }
+            foundMap.set(act._id, act);
+          }
+        }
+      }
+    }
+
+    return Array.from(foundMap.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  },
+
+  logDialedCall: (data) => {
+    const normPhone = normalizePhone(data.phone);
+    const key = data.leadId || normPhone || `dial-${Date.now()}`;
+    return get().addActivity(key, {
+      phone: data.phone,
+      customerName: data.customerName,
+      agentName: data.agentName,
+      agentId: data.agentId,
+      branch: data.branch,
+      connected: true,
+      stage: 'Call Initiated',
+      tag: 'WARM',
+      temperature: 'WARM',
+      durationSeconds: 0,
+      remark: 'Agent initiated direct dialer call',
+    });
   },
 
   getHistoryForLead: (leadId: string, phone?: string): Activity[] => {
@@ -343,6 +401,7 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       _id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       leadId,
       phone: normPhone || data.phone || undefined,
+      customerName: data.customerName || undefined,
       branch: data.branch || null,
       campaignId: 'camp-1',
       userId: agentUser,

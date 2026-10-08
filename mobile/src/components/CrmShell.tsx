@@ -23,8 +23,9 @@ import {
 
 import { useSidebarStore } from '../store/sidebarStore';
 import { useAuthStore } from '../store/authStore';
+import { useNotificationStore } from '../store/notificationStore';
 import { CrmSidebarContent, CrmSidebarModalDrawer } from './CrmSidebar';
-import { PeriodControl } from './PeriodControl';
+import { PeriodControl, ReportingPeriod } from './PeriodControl';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
 import { colors, borderRadius, shadows } from '../theme';
 
@@ -35,8 +36,10 @@ interface CrmShellProps {
   breadcrumb?: string;
   showBack?: boolean;
   showPeriodControl?: boolean;
-  period?: 'Today' | '7 Days' | '30 Days';
-  onPeriodChange?: (p: 'Today' | '7 Days' | '30 Days') => void;
+  period?: ReportingPeriod;
+  onPeriodChange?: (p: ReportingPeriod) => void;
+  customDateLabel?: string;
+  onPickCustomDate?: () => void;
   rightAction?: React.ReactNode;
   children: React.ReactNode;
 }
@@ -50,6 +53,8 @@ export const CrmShell: React.FC<CrmShellProps> = ({
   showPeriodControl = false,
   period = 'Today',
   onPeriodChange,
+  customDateLabel,
+  onPickCustomDate,
   rightAction,
   children,
 }) => {
@@ -59,6 +64,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
 
   const { isCollapsed, toggleCollapse, toggleDrawer } = useSidebarStore();
   const { user } = useAuthStore();
+  const unreadNotifications = useNotificationStore((s) => s.unreadCount);
   const [showNotifications, setShowNotifications] = useState(false);
 
   const handleToggle = () => {
@@ -146,9 +152,15 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                 </View>
               ) : null}
 
-              {showPeriodControl && onPeriodChange ? (
+              {/* On wide desktop screens, PeriodControl sits in the top header */}
+              {isWide && showPeriodControl && onPeriodChange ? (
                 <View style={styles.periodWrap}>
-                  <PeriodControl selected={period} onSelect={onPeriodChange} />
+                  <PeriodControl
+                    selected={period}
+                    onSelect={onPeriodChange}
+                    customDateLabel={customDateLabel}
+                    onPickCustomDate={onPickCustomDate}
+                  />
                 </View>
               ) : null}
 
@@ -160,14 +172,28 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                 accessibilityLabel="Follow-up Notifications"
               >
                 <Bell size={17} color={colors.text} />
-                <View style={styles.bellBadge}>
-                  <Text style={styles.bellBadgeText}>4</Text>
-                </View>
+                {unreadNotifications > 0 ? (
+                  <View style={styles.bellBadge}>
+                    <Text style={styles.bellBadgeText}>{unreadNotifications}</Text>
+                  </View>
+                ) : null}
               </TouchableOpacity>
 
               {rightAction || null}
             </View>
           </View>
+
+          {/* On mobile screens, PeriodControl renders as a dedicated full-width sub-header strip */}
+          {!isWide && showPeriodControl && onPeriodChange ? (
+            <View style={styles.mobileSubHeader}>
+              <PeriodControl
+                selected={period}
+                onSelect={onPeriodChange}
+                customDateLabel={customDateLabel}
+                onPickCustomDate={onPickCustomDate}
+              />
+            </View>
+          ) : null}
 
           {/* Screen Body */}
           <View style={styles.contentWrap}>{children}</View>
@@ -211,6 +237,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     ...shadows.soft,
+  },
+  mobileSubHeader: {
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   headerLeft: {
     flexDirection: 'row',

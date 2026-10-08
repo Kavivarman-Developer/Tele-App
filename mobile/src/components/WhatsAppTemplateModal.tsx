@@ -22,6 +22,7 @@ import {
 import { useTemplateStore, WhatsAppTemplate } from '../store/templateStore';
 import { toast } from '../store/toastStore';
 import { colors, borderRadius, shadows } from '../theme';
+import { getWhatsAppUrl, formatDisplayPhone } from '../utils/phoneUtils';
 
 interface WhatsAppTemplateModalProps {
   visible: boolean;
@@ -68,14 +69,12 @@ export const WhatsAppTemplateModal: React.FC<WhatsAppTemplateModalProps> = ({
   };
 
   const handleSend = () => {
-    const cleanNum = activePhone.replace(/\D/g, '');
-    if (!cleanNum) {
+    if (!activePhone.trim()) {
       Alert.alert('Invalid Number', 'This lead does not have a valid phone number.');
       return;
     }
 
-    const encoded = encodeURIComponent(messageText);
-    const url = `https://wa.me/91${cleanNum}?text=${encoded}`;
+    const url = getWhatsAppUrl(activePhone, messageText);
 
     Linking.openURL(url)
       .then(() => {
@@ -105,10 +104,10 @@ export const WhatsAppTemplateModal: React.FC<WhatsAppTemplateModalProps> = ({
               <View style={styles.iconCircle}>
                 <MessageSquare size={18} color="#16A34A" />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.headerTitle}>Send WhatsApp Service Details</Text>
-                <Text style={styles.headerSubtitle}>
-                  To: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{activeName}</Text> ({activePhone})
+                <Text style={styles.headerSubtitle} numberOfLines={1}>
+                  To: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{activeName}</Text> ({formatDisplayPhone(activePhone)})
                 </Text>
               </View>
             </View>

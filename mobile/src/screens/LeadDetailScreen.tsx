@@ -44,6 +44,7 @@ import { CallPermissionModal } from '../components/CallPermissionModal';
 import { LeadTimeline } from '../components/LeadTimeline';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
+import { getWhatsAppUrl, getDialerTelUrl, formatDisplayPhone } from '../utils/phoneUtils';
 
 type ScreenRouteProp = RouteProp<RootStackParamList, 'LeadDetail'>;
 type ScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -198,8 +199,7 @@ export const LeadDetailScreen: React.FC = () => {
   };
 
   const handleDirectWhatsApp = () => {
-    const clean = lead.phone.replace(/\D/g, '');
-    Linking.openURL(`https://wa.me/91${clean}`).catch(() => {
+    Linking.openURL(getWhatsAppUrl(lead.phone)).catch(() => {
       Alert.alert('Error', 'WhatsApp is not installed.');
     });
   };
@@ -215,7 +215,6 @@ export const LeadDetailScreen: React.FC = () => {
     return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
-  const cleanNum = (lead.phone || '').replace(/\D/g, '');
   const campaignName =
     typeof lead.campaign === 'object' && lead.campaign?.name
       ? lead.campaign.name
@@ -241,7 +240,7 @@ export const LeadDetailScreen: React.FC = () => {
             <CrmAvatar name={currentLead.name} size="lg" />
             <View style={styles.heroInfo}>
               <Text style={styles.heroName}>{currentLead.name}</Text>
-              <Text style={styles.heroPhone}>+91 {cleanNum}</Text>
+              <Text style={styles.heroPhone}>{formatDisplayPhone(currentLead.phone)}</Text>
               <View style={styles.badgeRow}>
                 <Badge label={currentLead.stage} stage={currentLead.stage} />
                 {currentLead.tag ? (
