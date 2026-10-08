@@ -3,18 +3,14 @@ import { Platform } from 'react-native';
 /**
  * API Configuration
  *
- * NOTE FOR PHYSICAL PHONES:
- * When testing on a real phone via Wi-Fi, change this to your computer's local IP address
- * (e.g. 'http://192.168.1.100:5000/api').
- *
- * - Android Emulator uses: 'http://10.0.2.2:5000/api'
- * - Web / iOS Simulator uses: 'http://localhost:5000/api'
+ * Production / Live Backend URL:
+ * https://tele-app-n9wu.onrender.com/api
  */
 const getDefaultApiBaseUrl = (): string => {
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:5000/api';
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
-  return 'http://localhost:5000/api';
+  return 'https://tele-app-n9wu.onrender.com/api';
 };
 
 export const API_BASE_URL = getDefaultApiBaseUrl();
