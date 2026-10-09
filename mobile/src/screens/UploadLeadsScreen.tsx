@@ -21,6 +21,8 @@ import {
   Download,
   Users,
   FileSpreadsheet,
+  CheckCircle2,
+  X,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -440,77 +442,391 @@ export const UploadLeadsScreen: React.FC = () => {
 
               {/* Dotted Upload Dropzone Box */}
               <TouchableOpacity
-                style={styles.dottedDropzone}
                 onPress={handlePickDocument}
                 activeOpacity={0.7}
+                style={{
+                  borderWidth: 2,
+                  borderColor: pickedFile ? '#10B981' : '#CBD5E1',
+                  borderStyle: 'dashed',
+                  borderRadius: 14,
+                  padding: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: pickedFile ? '#F0FDF4' : '#F8FAFC',
+                  marginBottom: 16,
+                }}
               >
-                <View style={styles.dropzoneIconWrap}>
-                  <UploadCloud size={24} color="#2563EB" />
+                <View
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    backgroundColor: pickedFile ? '#DCFCE7' : '#EFF6FF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 10,
+                  }}
+                >
+                  <UploadCloud size={26} color={pickedFile ? '#10B981' : '#4F46E5'} />
                 </View>
-                <Text style={styles.dropzoneTitle}>
-                  {pickedFile ? pickedFile.name : 'Choose a file or drag it here'}
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', textAlign: 'center' }}>
+                  {pickedFile ? pickedFile.name : 'Tap to Select CSV File'}
                 </Text>
-                <Text style={styles.dropzoneSubtitle}>
-                  {pickedFile ? 'File ready to upload' : 'CSV files up to 5 MB'}
+                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, textAlign: 'center' }}>
+                  {pickedFile
+                    ? `Ready for ingest (${pickedFile.size ? (pickedFile.size / 1024).toFixed(1) + ' KB' : 'Standard CSV'})`
+                    : 'Standard CSV with columns: name, phone'}
                 </Text>
+
+                {pickedFile && (
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setPickedFile(null);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      marginTop: 10,
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 20,
+                      backgroundColor: '#FEE2E2',
+                    }}
+                  >
+                    <X size={12} color="#EF4444" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#DC2626' }}>
+                      Clear File
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
 
               {/* Action Button: Upload & distribute leads */}
               <TouchableOpacity
-                style={styles.uploadSubmitBtn}
                 onPress={() => uploadMutation.mutate()}
                 disabled={uploadMutation.isPending || !pickedFile}
                 activeOpacity={0.8}
+                style={{
+                  height: 52,
+                  backgroundColor: pickedFile && !uploadMutation.isPending ? '#10B981' : '#94A3B8',
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  shadowColor: '#10B981',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: pickedFile ? 0.25 : 0,
+                  shadowRadius: 4,
+                  elevation: pickedFile ? 3 : 0,
+                }}
               >
                 {uploadMutation.isPending ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <UploadCloud size={16} color="#FFFFFF" />
-                    <Text style={styles.uploadSubmitText}>Upload & distribute leads</Text>
+                    <UploadCloud size={18} color="#FFFFFF" strokeWidth={2.5} />
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+                      Upload & Distribute Leads
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Right Info Card: A clean, organized queue */}
-          <View style={styles.infoCard}>
-            <View style={styles.infoShieldBadge}>
-              <ShieldCheck size={20} color="#10B981" />
+          {/* Distribution Preview Card */}
+          <View
+            style={{
+              flex: 1.2,
+              minWidth: 280,
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              borderRadius: 14,
+              padding: 18,
+              shadowColor: '#0F172A',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 3,
+              elevation: 2,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Users size={18} color="#4F46E5" />
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                DISTRIBUTION PREVIEW
+              </Text>
             </View>
 
-            <Text style={styles.infoCardTitle}>A clean, organized queue</Text>
+            <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>
+              Target Campaign: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{selectedCampaignName}</Text>
+            </Text>
 
-            <View style={styles.checklist}>
-              <View style={styles.checkItem}>
-                <Check size={14} color="#10B981" />
-                <Text style={styles.checkText}>Duplicate phone numbers are skipped</Text>
-              </View>
-              <View style={styles.checkItem}>
-                <Check size={14} color="#10B981" />
-                <Text style={styles.checkText}>Choose a campaign before importing</Text>
-              </View>
-              <View style={styles.checkItem}>
-                <Check size={14} color="#10B981" />
-                <Text style={styles.checkText}>Only enabled agents receive leads</Text>
-              </View>
+            {/* Active Routing Mode */}
+            <View
+              style={{
+                backgroundColor: '#F8FAFC',
+                borderRadius: 10,
+                padding: 10,
+                borderWidth: 1,
+                borderColor: '#F1F5F9',
+                marginBottom: 14,
+              }}
+            >
+              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                Allocation Mode
+              </Text>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#4F46E5', marginTop: 2 }}>
+                {selectedAgent.id ? 'Direct Single Agent' : 'Automatic Round-Robin'}
+              </Text>
             </View>
 
-            <View style={styles.infoDivider} />
+            {/* Agent Roster Preview */}
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', marginBottom: 8 }}>
+              Assigned Queue Receivers
+            </Text>
 
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>SELECTED CAMPAIGN</Text>
-              <Text style={styles.summaryValue}>{selectedCampaignName}</Text>
+            <View style={{ gap: 8, marginBottom: 16 }}>
+              {selectedAgent.id ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 10,
+                    borderRadius: 8,
+                    backgroundColor: '#ECFDF5',
+                    borderWidth: 1,
+                    borderColor: '#A7F3D0',
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#047857' }}>
+                    {selectedAgent.name}
+                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#059669' }}>
+                    100% Leads
+                  </Text>
+                </View>
+              ) : (
+                agentOptions.slice(0, 4).map((ag) => {
+                  const pct = Math.round(100 / Math.min(agentOptions.length, 4));
+                  return (
+                    <View
+                      key={ag.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: 10,
+                        borderRadius: 8,
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+                        <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>
+                          {ag.name}
+                        </Text>
+                        {ag.branch && (
+                          <Text style={{ fontSize: 10, color: '#64748B' }}>
+                            ({ag.branch})
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#4F46E5' }}>
+                        ~{pct}% Share
+                      </Text>
+                    </View>
+                  );
+                })
+              )}
             </View>
 
-            <View style={[styles.summaryRow, { marginTop: 12 }]}>
-              <Text style={styles.summaryLabel}>DISTRIBUTION</Text>
-              <Text style={styles.summaryValue}>{selectedAgent.name}</Text>
+            {/* Hygiene Checks */}
+            <View style={{ borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12, gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Check size={13} color="#10B981" />
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>DND & duplicates automatically deduped</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Check size={13} color="#10B981" />
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>Immediate push notification to callers</Text>
+              </View>
             </View>
           </View>
         </View>
       </ScrollView>
+
+      {/* Success Modal with Checkmark + Stats */}
+      {uploadResult && (
+        <Modal
+          visible={Boolean(uploadResult)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setUploadResult(null)}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 20,
+            }}
+          >
+            <View
+              style={{
+                width: '100%',
+                maxWidth: 400,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 20,
+                padding: 24,
+                alignItems: 'center',
+                shadowColor: '#0F172A',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.15,
+                shadowRadius: 16,
+                elevation: 10,
+              }}
+            >
+              {/* Green Checkmark Circle */}
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: '#ECFDF5',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 2,
+                  borderColor: '#A7F3D0',
+                  marginBottom: 16,
+                }}
+              >
+                <CheckCircle2 size={36} color="#10B981" />
+              </View>
+
+              <Text style={{ fontSize: 19, fontWeight: '800', color: '#0F172A', textAlign: 'center' }}>
+                Batch Ingest Complete!
+              </Text>
+              <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 4 }}>
+                Leads successfully imported into{' '}
+                <Text style={{ fontWeight: '700', color: '#0F172A' }}>{selectedCampaignName}</Text>
+              </Text>
+
+              {/* 3 Stats Badges */}
+              <View style={{ flexDirection: 'row', gap: 8, marginVertical: 20, width: '100%' }}>
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#F0FDF4',
+                    borderRadius: 10,
+                    padding: 10,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#BBF7D0',
+                  }}
+                >
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: '#15803D' }}>
+                    +{uploadResult.created}
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#166534', marginTop: 2 }}>
+                    NEW LEADS
+                  </Text>
+                </View>
+
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#FFFBEB',
+                    borderRadius: 10,
+                    padding: 10,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#FDE68A',
+                  }}
+                >
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: '#B45309' }}>
+                    {uploadResult.merged}
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#92400E', marginTop: 2 }}>
+                    UPDATED
+                  </Text>
+                </View>
+
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 10,
+                    padding: 10,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: '#64748B' }}>
+                    {uploadResult.skipped}
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#475569', marginTop: 2 }}>
+                    SKIPPED
+                  </Text>
+                </View>
+              </View>
+
+              {/* CTAs */}
+              <TouchableOpacity
+                onPress={() => {
+                  setUploadResult(null);
+                  setPickedFile(null);
+                  navigation.navigate('Home');
+                }}
+                activeOpacity={0.8}
+                style={{
+                  width: '100%',
+                  height: 50,
+                  backgroundColor: '#10B981',
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 10,
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                  📞 View Live Calling Queue
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setUploadResult(null);
+                  setPickedFile(null);
+                }}
+                activeOpacity={0.7}
+                style={{
+                  width: '100%',
+                  height: 44,
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>
+                  Upload Another CSV File
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </CrmShell>
   );
 };
@@ -522,7 +838,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   bannerRow: {
     flexDirection: 'row',

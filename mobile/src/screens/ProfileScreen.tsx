@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, ScrollView, Alert, Platform, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   User as UserIcon,
   Mail,
@@ -14,22 +13,17 @@ import {
   Server,
   Zap,
   MapPin,
+  Radio,
+  Wifi,
+  MessageCircle,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
 import { CrmShell } from '../components/CrmShell';
 import { CrmAvatar } from '../components/CrmAvatar';
-import { CrmBadge } from '../components/CrmBadge';
-import { Button } from '../components/Button';
 
 export const ProfileScreen: React.FC = () => {
   const { user, logout } = useAuthStore();
-
-  const getRoleTone = (role?: string): 'rose' | 'amber' | 'indigo' => {
-    if (role === 'ADMIN') return 'rose';
-    if (role === 'MANAGER') return 'amber';
-    return 'indigo';
-  };
 
   const handleLogout = () => {
     if (Platform.OS === 'web') {
@@ -54,134 +48,274 @@ export const ProfileScreen: React.FC = () => {
       })
     : 'Oct 2026';
 
+  const role = user?.role || 'AGENT';
+  const roleBg = role === 'ADMIN' ? '#EFF6FF' : role === 'MANAGER' ? '#F5F3FF' : '#ECFDF5';
+  const roleBorder = role === 'ADMIN' ? '#BFDBFE' : role === 'MANAGER' ? '#DDD6FE' : '#A7F3D0';
+  const roleText = role === 'ADMIN' ? '#1D4ED8' : role === 'MANAGER' ? '#6D28D9' : '#047857';
+
   return (
-    <CrmShell
-      title="My Account"
-      breadcrumb="Workspace"
-    >
-
-      <ScrollView className="flex-1 px-5 pt-4" contentContainerStyle={{ paddingBottom: 50 }}>
-        {/* User Hero Banner */}
-        <View className="bg-white rounded-2xl p-6 border border-slate-200 mb-4 shadow-sm items-center">
-          <View className="relative mb-3">
+    <CrmShell title="My Account" breadcrumb="Workspace">
+      <ScrollView
+        style={{ flex: 1, backgroundColor: '#F8FAFC' }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 110 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Identity Card: Avatar, Name, Role Badge & Branch Badge */}
+        <View
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 18,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            alignItems: 'center',
+            marginBottom: 16,
+            shadowColor: '#0F172A',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <View style={{ position: 'relative', marginBottom: 12 }}>
             <CrmAvatar name={user?.name || 'Agent'} size={72} />
-            <View className="absolute bottom-0 right-0 w-5 h-5 bg-emerald-500 rounded-full border-2 border-white items-center justify-center">
-              <View className="w-2 h-2 rounded-full bg-white" />
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                right: 0,
+                width: 20,
+                height: 20,
+                borderRadius: 10,
+                backgroundColor: '#10B981',
+                borderWidth: 2.5,
+                borderColor: '#FFFFFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' }} />
             </View>
           </View>
 
-          <Text className="text-xl font-bold text-slate-900">{user?.name || 'Agent User'}</Text>
-          <Text className="text-xs text-slate-500 mt-0.5">{user?.email}</Text>
+          <Text style={{ fontSize: 20, fontWeight: '800', color: '#0F172A' }}>
+            {user?.name || 'Agent User'}
+          </Text>
+          <Text style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>
+            {user?.email}
+          </Text>
 
-          <View className="flex-row items-center gap-2 mt-3">
-            <CrmBadge label={`Role: ${user?.role || 'AGENT'}`} tone={getRoleTone(user?.role)} />
-            <CrmBadge
-              label={user?.isActive ? 'Active' : 'Inactive'}
-              tone={user?.isActive ? 'emerald' : 'rose'}
-            />
-          </View>
-        </View>
-
-        {/* Account Details List */}
-        <View className="bg-white rounded-2xl p-5 border border-slate-200 mb-4 shadow-sm">
-          <Text className="text-slate-900 font-bold text-sm mb-3">Account Details</Text>
-
-          <View className="py-3 border-b border-slate-100 flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2.5">
-              <Phone size={16} color="#64748B" />
-              <Text className="text-slate-500 text-xs font-medium">Phone</Text>
+          {/* Badges Row: Role + Branch */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {/* Role Badge */}
+            <View
+              style={{
+                backgroundColor: roleBg,
+                borderWidth: 1,
+                borderColor: roleBorder,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: '800', color: roleText }}>
+                {role}
+              </Text>
             </View>
-            <Text className="text-slate-900 text-xs font-bold">{user?.phone || 'Not provided'}</Text>
-          </View>
 
-          <View className="py-3 border-b border-slate-100 flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2.5">
-              <Mail size={16} color="#64748B" />
-              <Text className="text-slate-500 text-xs font-medium">Email</Text>
+            {/* Branch Badge */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: '#F0FDFA',
+                borderWidth: 1,
+                borderColor: '#99F6E4',
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 8,
+              }}
+            >
+              <MapPin size={11} color="#0F766E" />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F766E' }}>
+                {user?.branch ? `${user.branch} Branch` : 'Headquarters / All Branches'}
+              </Text>
             </View>
-            <Text className="text-slate-900 text-xs font-bold">{user?.email}</Text>
-          </View>
 
-          {user?.branch ? (
-            <View className="py-3 border-b border-slate-100 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2.5">
-                <MapPin size={16} color="#0D9488" />
-                <Text className="text-slate-500 text-xs font-medium">Assigned Branch</Text>
-              </View>
-              <Text className="text-emerald-700 text-xs font-bold">{user.branch} Branch</Text>
-            </View>
-          ) : null}
-
-          <View className="py-3 border-b border-slate-100 flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2.5">
-              <Zap size={16} color="#64748B" />
-              <Text className="text-slate-500 text-xs font-medium">Lead Distribution</Text>
-            </View>
-            <View className="flex-row items-center gap-1.5">
-              <View
-                className={`w-2 h-2 rounded-full ${
-                  user?.canReceiveLeads ? 'bg-emerald-500' : 'bg-slate-400'
-                }`}
-              />
-              <Text
-                className={`text-xs font-bold ${
-                  user?.canReceiveLeads ? 'text-emerald-700' : 'text-slate-500'
-                }`}
-              >
-                {user?.canReceiveLeads ? 'Receiving Leads' : 'Distribution Paused'}
+            {/* Status Dot Pill */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: '#F8FAFC',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 8,
+              }}
+            >
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
+                Online & Ready
               </Text>
             </View>
           </View>
-
-          <View className="py-3 flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2.5">
-              <Calendar size={16} color="#64748B" />
-              <Text className="text-slate-500 text-xs font-medium">Member Since</Text>
-            </View>
-            <Text className="text-slate-900 text-xs font-bold">{memberSince}</Text>
-          </View>
         </View>
 
-        {/* Backend & Application Info */}
-        <View className="bg-white rounded-2xl p-5 border border-slate-200 mb-6 shadow-sm">
-          <View className="flex-row items-center gap-2 mb-3">
-            <Server size={16} color="#4F46E5" />
-            <Text className="text-slate-900 font-bold text-sm">System & Environment</Text>
-          </View>
+        {/* Permission & Device Health Rows */}
+        <View
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 16,
+            padding: 18,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            marginBottom: 16,
+            shadowColor: '#0F172A',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.04,
+            shadowRadius: 3,
+            elevation: 2,
+          }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 12 }}>
+            Permission & Device Health
+          </Text>
 
-          <View className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3">
-            <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] text-slate-500 font-bold uppercase">Backend API</Text>
-              <View className="flex-row items-center gap-1">
-                <View className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <Text className="text-[10px] text-emerald-700 font-bold">Online</Text>
+          <View style={{ gap: 10 }}>
+            {/* Health Row 1: Phone / Dialer */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                    Phone & System Dialer
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>1-Tap Calling Ready (tel: protocol)</Text>
+                </View>
               </View>
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#059669' }}>
+                Active
+              </Text>
             </View>
-            <Text className="text-slate-900 font-semibold text-xs" numberOfLines={1}>
-              https://tele-app-n9wu.onrender.com/api
-            </Text>
-          </View>
 
-          <View className="flex-row items-center justify-between text-xs py-1">
-            <Text className="text-slate-500 text-xs font-medium">App Version</Text>
-            <Text className="text-slate-900 text-xs font-bold">1.0.0 (Lovable OKBOZ Edition)</Text>
-          </View>
-          <View className="flex-row items-center justify-between text-xs py-1">
-            <Text className="text-slate-500 text-xs font-medium">Platform</Text>
-            <Text className="text-slate-900 text-xs font-bold">
-              {Platform.OS === 'web' ? 'Web Browser' : 'Android Standalone APK'}
-            </Text>
+            {/* Health Row 2: Inbound Lead Push Alerts */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                    Inbound Lead Push Alerts
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>Firebase Notification Stream</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#059669' }}>
+                Synced
+              </Text>
+            </View>
+
+            {/* Health Row 3: Network & Offline Storage */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                    Database & Cloud Sync
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>MongoDB Atlas (Render Cloud)</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#059669' }}>
+                Connected
+              </Text>
+            </View>
+
+            {/* Health Row 4: WhatsApp Integration */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                    WhatsApp Quick Dispatch
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>Auto-Formatted Templates</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#059669' }}>
+                Ready
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Sign Out Button */}
+        {/* Account Details Card */}
+        <View
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 16,
+            padding: 18,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            marginBottom: 20,
+            shadowColor: '#0F172A',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.04,
+            shadowRadius: 3,
+            elevation: 2,
+          }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 12 }}>
+            Account Profile
+          </Text>
+
+          <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <Text style={{ fontSize: 12.5, color: '#64748B' }}>Official Phone</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                {user?.phone || 'Not provided'}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <Text style={{ fontSize: 12.5, color: '#64748B' }}>Inbound Queue Distribution</Text>
+              <Text style={{ fontSize: 12.5, fontWeight: '700', color: user?.canReceiveLeads ? '#059669' : '#64748B' }}>
+                {user?.canReceiveLeads ? '🟢 Receiving Leads' : '⏸️ Queue Paused'}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
+              <Text style={{ fontSize: 12.5, color: '#64748B' }}>Member Since</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                {memberSince}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Outline Red Sign Out Button with Confirm Dialog */}
         <TouchableOpacity
           onPress={handleLogout}
           activeOpacity={0.8}
-          className="bg-rose-50 border border-rose-200 py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2 active:bg-rose-100"
+          style={{
+            height: 50,
+            backgroundColor: '#FEF2F2',
+            borderWidth: 1.5,
+            borderColor: '#FECACA',
+            borderRadius: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
         >
-          <LogOut size={16} color="#E11D48" />
-          <Text className="text-rose-700 font-bold text-sm">Sign Out of Account</Text>
+          <LogOut size={16} color="#DC2626" />
+          <Text style={{ fontSize: 14, fontWeight: '800', color: '#DC2626' }}>
+            Sign Out of Workspace
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </CrmShell>

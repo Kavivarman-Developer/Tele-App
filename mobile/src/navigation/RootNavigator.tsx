@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   LayoutGrid,
   Users,
@@ -36,40 +37,46 @@ const Tab = createBottomTabNavigator();
 
 const MainTabs: React.FC = () => {
   const { user } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+
+  // Compute safe bottom padding for Android navigation gestures & iOS home bar
+  const isAndroid = Platform.OS === 'android';
+  const bottomPadding = Math.max(insets.bottom, isAndroid ? 12 : 8);
+  const tabHeight = (isAndroid ? 54 : 50) + bottomPadding;
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        tabBarShowLabel: false,
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#E2E8F0',
           borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 8,
+          height: tabHeight,
           paddingTop: 8,
-          elevation: 8,
+          paddingBottom: bottomPadding,
+          elevation: 12,
           shadowColor: '#0F172A',
           shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.05,
-          shadowRadius: 8,
+          shadowOpacity: 0.08,
+          shadowRadius: 10,
         },
-        tabBarActiveTintColor: '#4F46E5',
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        tabBarActiveTintColor: '#10B981',
         tabBarInactiveTintColor: '#94A3B8',
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
       }}
     >
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarLabel: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <LayoutGrid size={21} color={color} strokeWidth={focused ? 2.5 : 2} />
+            <LayoutGrid size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />
@@ -77,9 +84,8 @@ const MainTabs: React.FC = () => {
         name="MyLeads"
         component={MyLeadsScreen}
         options={{
-          tabBarLabel: 'Leads',
           tabBarIcon: ({ color, focused }) => (
-            <Users size={21} color={color} strokeWidth={focused ? 2.5 : 2} />
+            <Users size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />
@@ -87,9 +93,8 @@ const MainTabs: React.FC = () => {
         name="FollowUps"
         component={FollowUpsScreen}
         options={{
-          tabBarLabel: 'Follow-ups',
           tabBarIcon: ({ color, focused }) => (
-            <CalendarClock size={21} color={color} strokeWidth={focused ? 2.5 : 2} />
+            <CalendarClock size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />
@@ -99,9 +104,8 @@ const MainTabs: React.FC = () => {
           name="Dashboard"
           component={DashboardScreen}
           options={{
-            tabBarLabel: 'Manage',
             tabBarIcon: ({ color, focused }) => (
-              <SlidersHorizontal size={21} color={color} strokeWidth={focused ? 2.5 : 2} />
+              <SlidersHorizontal size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
             ),
           }}
         />
@@ -111,9 +115,8 @@ const MainTabs: React.FC = () => {
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarLabel: 'Profile',
           tabBarIcon: ({ color, focused }) => (
-            <UserIcon size={21} color={color} strokeWidth={focused ? 2.5 : 2} />
+            <UserIcon size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />

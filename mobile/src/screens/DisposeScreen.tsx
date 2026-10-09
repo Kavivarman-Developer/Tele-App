@@ -592,7 +592,7 @@ export const DisposeScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F8FAFC]" edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Platform.OS === 'android' ? 6 : 0 }} edges={['top']}>
       {/* Top Header */}
       <View className="bg-white px-4 py-3.5 border-b border-slate-200 flex-row justify-between items-center">
         <TouchableOpacity
@@ -606,7 +606,7 @@ export const DisposeScreen: React.FC = () => {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 50 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110 }}>
         {/* Lead Summary Hero Card */}
         <View className="bg-white rounded-2xl p-4 border border-slate-200 mb-4 shadow-sm flex-row items-center justify-between">
           <View className="flex-row items-center gap-3 flex-1 mr-3">
@@ -648,40 +648,126 @@ export const DisposeScreen: React.FC = () => {
           </View>
         )}
 
-        {/* STEP 1: Connected / Not Connected Segmented Switch */}
+        {/* STEP 1: NeoDove 4 Outcome Cards Grid */}
         <View className="mb-5">
           <Text className="text-slate-900 font-bold text-sm mb-2.5">
-            Was the call connected? <Text className="text-rose-500">*</Text>
+            Select Call Outcome <Text className="text-rose-500">*</Text>
           </Text>
-          <View className="flex-row bg-slate-100 p-1.5 rounded-2xl border border-slate-200 gap-2">
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            {/* Outcome 1: Interested */}
             <TouchableOpacity
-              onPress={() => setIsConnected(true)}
-              activeOpacity={0.85}
-              className={`flex-1 py-3.5 rounded-xl items-center flex-row justify-center gap-2 ${
-                isConnected ? 'bg-emerald-600 shadow-sm' : 'bg-transparent'
-              }`}
+              onPress={() => {
+                setIsConnected(true);
+                setSelectedStageName('Interested');
+                setCustomerTemperature('HOT');
+              }}
+              activeOpacity={0.8}
+              style={{
+                flex: 1,
+                minWidth: '45%',
+                paddingVertical: 14,
+                paddingHorizontal: 12,
+                borderRadius: 14,
+                backgroundColor: isConnected && selectedStageName === 'Interested' ? '#ECFDF5' : '#FFFFFF',
+                borderWidth: 2,
+                borderColor: isConnected && selectedStageName === 'Interested' ? '#10B981' : '#E2E8F0',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Phone size={17} color={isConnected ? '#FFFFFF' : '#64748B'} />
-              <Text
-                className={`font-bold text-sm ${isConnected ? 'text-white' : 'text-slate-700'}`}
-              >
-                Call Connected
+              <Text style={{ fontSize: 18, marginBottom: 2 }}>🔥</Text>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: isConnected && selectedStageName === 'Interested' ? '#065F46' : '#0F172A' }}>
+                Interested
               </Text>
+              <Text style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>Hot Opportunity</Text>
             </TouchableOpacity>
 
+            {/* Outcome 2: Follow-up */}
             <TouchableOpacity
-              onPress={() => setIsConnected(false)}
-              activeOpacity={0.85}
-              className={`flex-1 py-3.5 rounded-xl items-center flex-row justify-center gap-2 ${
-                !isConnected ? 'bg-amber-600 shadow-sm' : 'bg-transparent'
-              }`}
+              onPress={() => {
+                setIsConnected(true);
+                setSelectedStageName('Follow-up');
+                setCustomerTemperature('WARM');
+                if (!followUpAt) {
+                  const d = new Date(Date.now() + 24 * 3600 * 1000);
+                  d.setHours(10, 0, 0, 0);
+                  setFollowUpAt(d.toISOString());
+                }
+              }}
+              activeOpacity={0.8}
+              style={{
+                flex: 1,
+                minWidth: '45%',
+                paddingVertical: 14,
+                paddingHorizontal: 12,
+                borderRadius: 14,
+                backgroundColor: isConnected && selectedStageName === 'Follow-up' ? '#FFFBEB' : '#FFFFFF',
+                borderWidth: 2,
+                borderColor: isConnected && selectedStageName === 'Follow-up' ? '#F59E0B' : '#E2E8F0',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <PhoneOff size={17} color={!isConnected ? '#FFFFFF' : '#64748B'} />
-              <Text
-                className={`font-bold text-sm ${!isConnected ? 'text-white' : 'text-slate-700'}`}
-              >
+              <Text style={{ fontSize: 18, marginBottom: 2 }}>⏰</Text>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: isConnected && selectedStageName === 'Follow-up' ? '#92400E' : '#0F172A' }}>
+                Follow-up
+              </Text>
+              <Text style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>Callback Required</Text>
+            </TouchableOpacity>
+
+            {/* Outcome 3: Not Connected */}
+            <TouchableOpacity
+              onPress={() => {
+                setIsConnected(false);
+              }}
+              activeOpacity={0.8}
+              style={{
+                flex: 1,
+                minWidth: '45%',
+                paddingVertical: 14,
+                paddingHorizontal: 12,
+                borderRadius: 14,
+                backgroundColor: !isConnected ? '#F1F5F9' : '#FFFFFF',
+                borderWidth: 2,
+                borderColor: !isConnected ? '#64748B' : '#E2E8F0',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 18, marginBottom: 2 }}>📵</Text>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: !isConnected ? '#334155' : '#0F172A' }}>
                 Not Connected
               </Text>
+              <Text style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>Ringing / Busy / Off</Text>
+            </TouchableOpacity>
+
+            {/* Outcome 4: Not Interested */}
+            <TouchableOpacity
+              onPress={() => {
+                setIsConnected(true);
+                setSelectedStageName('Not Interested');
+                setCustomerTemperature('COLD');
+                setFollowUpAt(null);
+              }}
+              activeOpacity={0.8}
+              style={{
+                flex: 1,
+                minWidth: '45%',
+                paddingVertical: 14,
+                paddingHorizontal: 12,
+                borderRadius: 14,
+                backgroundColor: isConnected && (selectedStageName === 'Not Interested' || selectedStageName === 'Lost') ? '#FEF2F2' : '#FFFFFF',
+                borderWidth: 2,
+                borderColor: isConnected && (selectedStageName === 'Not Interested' || selectedStageName === 'Lost') ? '#EF4444' : '#E2E8F0',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 18, marginBottom: 2 }}>🚫</Text>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: isConnected && (selectedStageName === 'Not Interested' || selectedStageName === 'Lost') ? '#991B1B' : '#0F172A' }}>
+                Not Interested
+              </Text>
+              <Text style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>DND / Dropped</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1307,15 +1393,35 @@ export const DisposeScreen: React.FC = () => {
           </>
         )}
 
-        {/* Submit Disposition Button */}
+        {/* Submit Disposition Button: Save & Next Lead */}
         <View className="mt-6">
-          <Button
-            title={disposeMutation.isPending ? 'Saving Outcome...' : 'Submit Disposition'}
+          <TouchableOpacity
             onPress={handleSubmit}
-            loading={disposeMutation.isPending}
             disabled={disposeMutation.isPending}
-            variant="primary"
-          />
+            activeOpacity={0.8}
+            style={{
+              height: 52,
+              backgroundColor: '#10B981',
+              borderRadius: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              shadowColor: '#10B981',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
+          >
+            {disposeMutation.isPending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+                Save & Next Lead ➔
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
       </ScrollView>
 

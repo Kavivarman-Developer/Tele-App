@@ -25,6 +25,10 @@ import {
   X,
   FileText,
   Sparkles,
+  CheckCheck,
+  Volume2,
+  Bell,
+  Clock,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -52,6 +56,8 @@ export const SettingsScreen: React.FC = () => {
   const [allowDisposeWithoutFollowUp, setAllowDisposeWithoutFollowUp] = useState(false);
   const [followUpMandatoryForNotConnected, setFollowUpMandatoryForNotConnected] = useState(true);
   const [autoLeadDistribution, setAutoLeadDistribution] = useState(true);
+  const [callDelaySeconds, setCallDelaySeconds] = useState<number>(3);
+  const [dialSoundEnabled, setDialSoundEnabled] = useState<boolean>(true);
 
   // Template Store
   const { templates, loadTemplates, addTemplate, updateTemplate, deleteTemplate, resetToDefaults } =
@@ -62,6 +68,10 @@ export const SettingsScreen: React.FC = () => {
   const [templateTitle, setTemplateTitle] = useState('');
   const [templateCategory, setTemplateCategory] = useState('Services');
   const [templateContent, setTemplateContent] = useState('');
+
+  const handleInsertVariable = (token: string) => {
+    setTemplateContent((prev) => `${prev} ${token}`);
+  };
 
   useEffect(() => {
     loadTemplates();
@@ -207,14 +217,67 @@ export const SettingsScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Section 1 Heading: Follow-up policies */}
+        {/* Section 1 Heading: Follow-up & Calling Pacing policies */}
         <View style={styles.sectionHeaderRow}>
-          <RotateCw size={15} color="#2563EB" />
-          <Text style={styles.sectionHeaderTitle}>Follow-up policies</Text>
+          <RotateCw size={15} color="#4F46E5" />
+          <Text style={styles.sectionHeaderTitle}>Follow-up & Calling Policies</Text>
         </View>
 
         {/* Settings Card */}
         <View style={styles.settingsCard}>
+          {/* Policy 0: Call Delay Pacing */}
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Auto-dialer lead pacing delay</Text>
+              <Text style={styles.settingSubtitle}>
+                Countdown gap before next lead is queued for dialing.
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {[3, 5, 10].map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  onPress={() => setCallDelaySeconds(s)}
+                  activeOpacity={0.7}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 8,
+                    backgroundColor: callDelaySeconds === s ? '#10B981' : '#F1F5F9',
+                    borderWidth: 1,
+                    borderColor: callDelaySeconds === s ? '#10B981' : '#E2E8F0',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: '800',
+                      color: callDelaySeconds === s ? '#FFFFFF' : '#64748B',
+                    }}
+                  >
+                    {s}s
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Policy 0.5: Dial Sound / Chimes */}
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Dialing chimes & connection vibration</Text>
+              <Text style={styles.settingSubtitle}>
+                Play subtle audio cue when phone call is answered.
+              </Text>
+            </View>
+            <Switch
+              value={dialSoundEnabled}
+              onValueChange={setDialSoundEnabled}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
           {/* Policy 1: Allow disposing without follow-up */}
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
@@ -226,7 +289,7 @@ export const SettingsScreen: React.FC = () => {
             <Switch
               value={allowDisposeWithoutFollowUp}
               onValueChange={setAllowDisposeWithoutFollowUp}
-              trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -242,7 +305,7 @@ export const SettingsScreen: React.FC = () => {
             <Switch
               value={followUpMandatoryForNotConnected}
               onValueChange={setFollowUpMandatoryForNotConnected}
-              trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -258,7 +321,7 @@ export const SettingsScreen: React.FC = () => {
             <Switch
               value={autoLeadDistribution}
               onValueChange={setAutoLeadDistribution}
-              trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
+              trackColor={{ false: '#E2E8F0', true: '#10B981' }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -266,11 +329,11 @@ export const SettingsScreen: React.FC = () => {
 
         {/* Organization Scope Callout */}
         <View style={styles.calloutCard}>
-          <ShieldCheck size={18} color="#64748B" />
+          <ShieldCheck size={18} color="#10B981" />
           <View style={styles.calloutTextWrap}>
             <Text style={styles.calloutTitle}>Applies to your entire organization</Text>
             <Text style={styles.calloutSubtitle}>
-              These preferences are shared by all agents in this workspace.
+              These preferences are shared by all agents across active branches.
             </Text>
           </View>
         </View>
@@ -278,45 +341,80 @@ export const SettingsScreen: React.FC = () => {
         {/* Section 2: WhatsApp Service Templates Management */}
         <View style={[styles.sectionHeaderRow, { marginTop: 28, justifyContent: 'space-between' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <MessageSquare size={16} color="#16A34A" />
+            <MessageSquare size={16} color="#15803D" />
             <Text style={styles.sectionHeaderTitle}>WhatsApp Service Templates</Text>
           </View>
 
           <TouchableOpacity
-            style={styles.addTemplateBtn}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#10B981',
+              paddingVertical: 7,
+              paddingHorizontal: 12,
+              borderRadius: 8,
+              gap: 6,
+            }}
             onPress={handleOpenAddTemplate}
             activeOpacity={0.8}
           >
             <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
-            <Text style={styles.addTemplateText}>Add Template</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Add Template</Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.templatesSubtitle}>
-          Message templates automatically sent to customers when they request service or company details on WhatsApp.
+          Message templates automatically formatted with client variables for 1-tap customer outreach.
         </Text>
 
-        {/* Templates List */}
-        <View style={styles.templatesGrid}>
+        {/* Templates List with WhatsApp Bubble Previews */}
+        <View style={{ gap: 14 }}>
           {templates.map((tmpl) => (
-            <View key={tmpl.id} style={styles.templateCard}>
-              <View style={styles.templateCardHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.templateCardTitle} numberOfLines={1}>
+            <View
+              key={tmpl.id}
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 14,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                shadowColor: '#0F172A',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 3,
+                elevation: 2,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
                     {tmpl.title}
                   </Text>
-                  <View style={styles.templateCategoryBadge}>
-                    <Text style={styles.templateCategoryText}>{tmpl.category || 'General'}</Text>
+                  <View
+                    style={{
+                      alignSelf: 'flex-start',
+                      backgroundColor: '#F0FDF4',
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: '#BBF7D0',
+                      marginTop: 4,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#15803D' }}>
+                      {tmpl.category || 'General'}
+                    </Text>
                   </View>
                 </View>
 
-                <View style={styles.templateCardActions}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <TouchableOpacity
                     style={styles.iconActionBtn}
                     onPress={() => handleOpenEditTemplate(tmpl)}
                     activeOpacity={0.7}
                   >
-                    <Edit2 size={13} color="#2563EB" />
+                    <Edit2 size={13} color="#4F46E5" />
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -329,15 +427,44 @@ export const SettingsScreen: React.FC = () => {
                 </View>
               </View>
 
-              <Text style={styles.templateSnippet} numberOfLines={3}>
-                {tmpl.content}
-              </Text>
+              {/* Realistic WhatsApp Chat Bubble Preview */}
+              <View
+                style={{
+                  backgroundColor: '#ECE5DD',
+                  borderRadius: 12,
+                  padding: 10,
+                  marginTop: 12,
+                }}
+              >
+                <View
+                  style={{
+                    backgroundColor: '#DCF8C6',
+                    borderRadius: 10,
+                    padding: 10,
+                    maxWidth: '92%',
+                    alignSelf: 'flex-start',
+                    shadowColor: '#000000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 2,
+                    elevation: 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: '#111B21', lineHeight: 18 }}>
+                    {tmpl.content}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
+                    <Text style={{ fontSize: 10, color: '#667781' }}>11:45 AM</Text>
+                    <CheckCheck size={13} color="#34B7F1" />
+                  </View>
+                </View>
+              </View>
             </View>
           ))}
         </View>
       </ScrollView>
 
-      {/* Add / Edit Template Modal */}
+      {/* Add / Edit Template Modal with Tappable Variable Chips */}
       <Modal
         visible={showTemplateModal}
         transparent
@@ -345,10 +472,10 @@ export const SettingsScreen: React.FC = () => {
         onRequestClose={() => setShowTemplateModal(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <MessageSquare size={18} color="#16A34A" />
+                <MessageSquare size={18} color="#15803D" />
                 <Text style={styles.modalTitle}>
                   {editingTemplateId ? 'Edit WhatsApp Template' : 'New Service Template'}
                 </Text>
@@ -358,50 +485,116 @@ export const SettingsScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>TEMPLATE TITLE</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Our Services Overview"
-                placeholderTextColor="#94A3B8"
-                value={templateTitle}
-                onChangeText={setTemplateTitle}
-              />
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalBody}>
+                <Text style={styles.inputLabel}>TEMPLATE TITLE</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. Service Introduction & Pricing"
+                  placeholderTextColor="#94A3B8"
+                  value={templateTitle}
+                  onChangeText={setTemplateTitle}
+                />
 
-              <Text style={[styles.inputLabel, { marginTop: 12 }]}>CATEGORY</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Services / Pricing / Portfolio"
-                placeholderTextColor="#94A3B8"
-                value={templateCategory}
-                onChangeText={setTemplateCategory}
-              />
+                <Text style={[styles.inputLabel, { marginTop: 12 }]}>CATEGORY</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. Services / Quotation / Follow-up"
+                  placeholderTextColor="#94A3B8"
+                  value={templateCategory}
+                  onChangeText={setTemplateCategory}
+                />
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-                <Text style={styles.inputLabel}>MESSAGE CONTENT</Text>
-                <Text style={{ fontSize: 10, color: '#16A34A', fontWeight: '600' }}>
-                  Use {'{name}'} for customer's name
-                </Text>
+                <View style={{ marginTop: 12 }}>
+                  <Text style={styles.inputLabel}>INSERT DYNAMIC VARIABLES</Text>
+                  {/* Tappable Variable Chips */}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    {[
+                      { label: '+ {name}', token: '{name}' },
+                      { label: '+ {phone}', token: '{phone}' },
+                      { label: '+ {agent}', token: '{agent}' },
+                      { label: '+ {branch}', token: '{branch}' },
+                      { label: '+ {company}', token: '{company}' },
+                    ].map((chip) => (
+                      <TouchableOpacity
+                        key={chip.token}
+                        onPress={() => handleInsertVariable(chip.token)}
+                        activeOpacity={0.7}
+                        style={{
+                          backgroundColor: '#F0FDF4',
+                          borderWidth: 1,
+                          borderColor: '#BBF7D0',
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#15803D' }}>
+                          {chip.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <Text style={[styles.inputLabel, { marginTop: 12 }]}>MESSAGE CONTENT</Text>
+                <TextInput
+                  style={[styles.modalTextarea, { minHeight: 90 }]}
+                  placeholder="Write your WhatsApp message here..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  value={templateContent}
+                  onChangeText={setTemplateContent}
+                  textAlignVertical="top"
+                />
+
+                {/* Live Bubble Preview */}
+                <Text style={[styles.inputLabel, { marginTop: 10 }]}>LIVE PREVIEW</Text>
+                <View
+                  style={{
+                    backgroundColor: '#ECE5DD',
+                    borderRadius: 10,
+                    padding: 8,
+                    marginTop: 4,
+                  }}
+                >
+                  <View
+                    style={{
+                      backgroundColor: '#DCF8C6',
+                      borderRadius: 8,
+                      padding: 8,
+                      maxWidth: '94%',
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12.5, color: '#111B21' }}>
+                      {templateContent || 'Type message above to preview bubble...'}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 3 }}>
+                      <Text style={{ fontSize: 9.5, color: '#667781' }}>Now</Text>
+                      <CheckCheck size={12} color="#34B7F1" />
+                    </View>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleSaveTemplate}
+                  activeOpacity={0.8}
+                  style={{
+                    height: 50,
+                    backgroundColor: '#10B981',
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 16,
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                    Save WhatsApp Template
+                  </Text>
+                </TouchableOpacity>
               </View>
-
-              <TextInput
-                style={styles.modalTextarea}
-                placeholder="Write your WhatsApp message here..."
-                placeholderTextColor="#94A3B8"
-                multiline
-                value={templateContent}
-                onChangeText={setTemplateContent}
-                textAlignVertical="top"
-              />
-
-              <TouchableOpacity
-                style={styles.submitTemplateBtn}
-                onPress={handleSaveTemplate}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.submitTemplateText}>Save Template</Text>
-              </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -416,7 +609,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   bannerRow: {
     flexDirection: 'row',

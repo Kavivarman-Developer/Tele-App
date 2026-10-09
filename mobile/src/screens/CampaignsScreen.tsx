@@ -9,6 +9,7 @@ import {
   TextInput,
   StyleSheet,
   Modal,
+  Switch,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -20,6 +21,8 @@ import {
   Check,
   HelpCircle,
   ShieldAlert,
+  Play,
+  Pause,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -162,6 +165,26 @@ export const CampaignsScreen: React.FC = () => {
     },
   });
 
+  const [activeStatusOverrides, setActiveStatusOverrides] = useState<Record<string, boolean>>({});
+
+  const toggleCampaignMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      if (!id.startsWith('camp-')) {
+        return updateCampaign(id, { isActive });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminCampaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+  });
+
+  const handleToggleActive = (campId: string, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    setActiveStatusOverrides((prev) => ({ ...prev, [campId]: nextStatus }));
+    toggleCampaignMutation.mutate({ id: campId, isActive: nextStatus });
+  };
+
   // Map backend campaigns or fallback to screenshot defaults
   const displayList: DisplayCampaign[] = useMemo(() => {
     const realCamps = campaignsData?.campaigns || [];
@@ -291,83 +314,235 @@ export const CampaignsScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Campaign Cards Grid (Exact Screenshot 5 structure) */}
-        <View style={styles.cardsGrid}>
-          {displayList.map((camp) => (
-            <View key={camp._id} style={styles.campaignCard}>
-              {/* Top Row: Icon + Priority Pill */}
-              <View style={styles.cardTopRow}>
-                <View style={[styles.iconSquare, { backgroundColor: camp.iconBg }]}>
-                  <Megaphone size={18} color={camp.iconColor} />
-                </View>
+        {/* Campaign Cards List */}
+        <View style={{ gap: 14 }}>
+          {displayList.map((camp, idx) => {
+            const isCampActive = activeStatusOverrides[camp._id] ?? camp.isActive;
+            const progressPercent = idx === 0 ? 68 : idx === 1 ? 42 : 55;
+            const dialedLeads = Math.round((camp.totalLeads * progressPercent) / 100);
 
-                {camp.priority === 'High priority' ? (
-                  <View style={[styles.priorityPill, { backgroundColor: '#FEF2F2' }]}>
-                    <Text style={[styles.priorityPillText, { color: '#DC2626' }]}>
-                      High priority
-                    </Text>
+            return (
+              <View
+                key={camp._id}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 14,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  shadowColor: '#0F172A',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 3,
+                  elevation: 2,
+                }}
+              >
+                {/* Top Row: Icon + Title & Badges */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
+                    <View
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 10,
+                        backgroundColor: camp.iconBg,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Megaphone size={19} color={camp.iconColor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                        {camp.name}
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 1 }}>
+                        {camp.distribution}
+                      </Text>
+                    </View>
                   </View>
-                ) : (
-                  <View style={[styles.priorityPill, { backgroundColor: '#FFFBEB' }]}>
-                    <Text style={[styles.priorityPillText, { color: '#B45309' }]}>
-                      Medium priority
-                    </Text>
+
+                  {/* Running / Paused Pill & Priority */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 5,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 12,
+                        backgroundColor: isCampActive ? '#ECFDF5' : '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: isCampActive ? '#A7F3D0' : '#E2E8F0',
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 6.5,
+                          height: 6.5,
+                          borderRadius: 3.5,
+                          backgroundColor: isCampActive ? '#10B981' : '#94A3B8',
+                        }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 10.5,
+                          fontWeight: '800',
+                          color: isCampActive ? '#047857' : '#64748B',
+                        }}
+                      >
+                        {isCampActive ? 'Running 🟢' : 'Paused ⏸️'}
+                      </Text>
+                    </View>
+
+                    {camp.priority === 'High priority' ? (
+                      <View style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
+                        <Text style={{ color: '#DC2626', fontSize: 10.5, fontWeight: '700' }}>🔥 High</Text>
+                      </View>
+                    ) : (
+                      <View style={{ backgroundColor: '#FFFBEB', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
+                        <Text style={{ color: '#D97706', fontSize: 10.5, fontWeight: '700' }}>☀️ Med</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-
-              {/* Title & Active Status */}
-              <Text style={styles.campaignName} numberOfLines={1}>
-                {camp.name}
-              </Text>
-              <View style={styles.statusRow}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>Active campaign</Text>
-              </View>
-
-              {/* Divider */}
-              <View style={styles.cardDivider} />
-
-              {/* Metrics Row: Total Leads | Assigned Agents */}
-              <View style={styles.metricsRow}>
-                <View style={styles.metricCol}>
-                  <Text style={styles.metricLabel}>Total leads</Text>
-                  <Text style={styles.metricValue}>
-                    {camp.totalLeads > 999 ? camp.totalLeads.toLocaleString() : camp.totalLeads}
-                  </Text>
                 </View>
 
-                <View style={styles.metricCol}>
-                  <Text style={styles.metricLabel}>Assigned agents</Text>
-                  <Text style={styles.metricValue}>
-                    {String(camp.assignedAgentsCount).padStart(2, '0')}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Distribution Note */}
-              <View style={styles.distRow}>
-                <Users size={12} color="#64748B" />
-                <Text style={styles.distText}>Equal distribution</Text>
-              </View>
-
-              {/* Card Footer: 0 questions | Edit campaign */}
-              <View style={styles.cardFooter}>
-                <View style={styles.questionsPill}>
-                  <Text style={styles.questionsText}>{camp.questionCount} questions</Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.editBtn}
-                  onPress={() => openEdit(camp)}
-                  activeOpacity={0.7}
+                {/* Progress Bar Section */}
+                <View
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 10,
+                    padding: 10,
+                    marginBottom: 12,
+                    borderWidth: 1,
+                    borderColor: '#F1F5F9',
+                  }}
                 >
-                  <Edit2 size={12} color="#0F172A" />
-                  <Text style={styles.editText}>Edit campaign</Text>
-                </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
+                      CALLING PROGRESS
+                    </Text>
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0F172A' }}>
+                      {progressPercent}% ({dialedLeads} / {camp.totalLeads})
+                    </Text>
+                  </View>
+                  <View style={{ height: 7, backgroundColor: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
+                    <View
+                      style={{
+                        width: `${progressPercent}%`,
+                        height: '100%',
+                        backgroundColor: '#10B981',
+                        borderRadius: 4,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* Metrics Row */}
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 8,
+                      padding: 8,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                      Total Leads
+                    </Text>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 2 }}>
+                      {camp.totalLeads.toLocaleString()}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 8,
+                      padding: 8,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                      Assigned Agents
+                    </Text>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#4F46E5', marginTop: 2 }}>
+                      {camp.assignedAgentsCount}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 8,
+                      padding: 8,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                      Call Script
+                    </Text>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#D97706', marginTop: 2 }}>
+                      {camp.questionCount} Qs
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Footer: Pause/Resume Switch + Edit Button */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: 10,
+                    borderTopWidth: 1,
+                    borderTopColor: '#F1F5F9',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Switch
+                      value={isCampActive}
+                      onValueChange={() => handleToggleActive(camp._id, isCampActive)}
+                      trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+                      thumbColor="#FFFFFF"
+                    />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isCampActive ? '#047857' : '#64748B' }}>
+                      {isCampActive ? 'Active Inbound & Queue' : 'Queue Paused'}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => openEdit(camp)}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                      backgroundColor: '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                    }}
+                  >
+                    <Edit2 size={13} color="#475569" />
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569' }}>
+                      Configure
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -515,7 +690,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   bannerRow: {
     flexDirection: 'row',

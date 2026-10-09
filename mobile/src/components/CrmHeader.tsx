@@ -17,7 +17,7 @@ interface CrmHeaderProps {
 }
 
 export const CrmHeader: React.FC<CrmHeaderProps> = ({
-  title = 'OKBOZ CRM',
+  title = 'Tell',
   subtitle,
   showBack = false,
   rightAction,
@@ -43,7 +43,7 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({
             </TouchableOpacity>
           ) : (
             <View style={styles.brandMark}>
-              <Text style={styles.brandMarkText}>OK</Text>
+              <Text style={styles.brandMarkText}>Tell</Text>
             </View>
           )}
 
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.primary,
+    backgroundColor: '#10B981',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,

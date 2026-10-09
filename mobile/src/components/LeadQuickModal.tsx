@@ -25,9 +25,11 @@ import {
   Snowflake,
   History,
   FileEdit,
-  ShieldAlert,
   Ban,
+  PhoneOff,
   CheckCircle2,
+  CalendarClock,
+  ArrowRight,
 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 
@@ -51,12 +53,11 @@ interface LeadQuickModalProps {
   onOpenFullDispose?: (lead: Lead) => void;
 }
 
-const STAGE_OPTIONS = [
-  'Interested',
-  'Follow-up',
-  'Not connected',
-  'Not Interested',
-  'Closed',
+const OUTCOME_OPTIONS = [
+  { stage: 'Interested', label: 'Interested', icon: CheckCircle2, color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0' },
+  { stage: 'Follow-up', label: 'Follow-up', icon: CalendarClock, color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+  { stage: 'Not connected', label: 'Not Connected', icon: PhoneOff, color: '#64748B', bg: '#F1F5F9', border: '#CBD5E1' },
+  { stage: 'Not Interested', label: 'Not Interested', icon: Ban, color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
 ];
 
 const LOST_REASONS = [
@@ -126,7 +127,6 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
     const backendActivities = backendHistoryData?.activities || [];
     const localActivities = getHistoryForLead(lead._id, lead.phone);
 
-    // If backend has activities, merge; else fallback to local
     if (backendActivities.length > 0) {
       const existingIds = new Set(backendActivities.map((a) => a._id));
       const nonDuplicateLocal = localActivities.filter((a) => !existingIds.has(a._id));
@@ -142,7 +142,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
   const campaignName =
     typeof lead.campaign === 'object' && lead.campaign?.name
       ? lead.campaign.name
-      : 'Demo Sales Campaign';
+      : 'Outreach Campaign';
 
   const handleCall = () => {
     const isSuppressed =
@@ -189,7 +189,6 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
   const setQuickFollowUp = (hoursAhead: number, specificHour?: number) => {
     const d = new Date();
     if (specificHour !== undefined) {
-      // Calculate target date
       const daysToAdd = hoursAhead >= 24 ? Math.floor(hoursAhead / 24) : 1;
       d.setDate(d.getDate() + daysToAdd);
       d.setHours(specificHour, 0, 0, 0);
@@ -225,7 +224,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       const isClosing = selectedStage === 'Not Interested' || selectedStage === 'Closed';
       const isConnected = selectedStage !== 'Not connected';
 
-      // 1. Log to backend if connected
+      // 1. Log to backend
       try {
         await disposeLead(lead._id, {
           connected: isConnected,
@@ -238,7 +237,6 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
           answers: [],
         });
       } catch (backendErr) {
-        // If backend fails (e.g. mock lead or offline), continue to record locally
         console.log('Backend dispose notice:', backendErr);
       }
 
@@ -263,15 +261,15 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
 
       if (isClosing) {
         toast.success(
-          `${lead.name} marked as ${selectedStage} · Archived from active queue`,
-          'Lead Closed & Suppressed',
+          `${lead.name} marked as ${selectedStage} · Suppressed from active queue`,
+          'Lead Closed',
         );
       } else {
         toast.success(
           `${lead.name} updated to ${selectedStage} (${selectedTemperature})${
             followUpDate ? ` · Next: ${formatScheduledDate(followUpDate)}` : ''
           }`,
-          'Lead Updated',
+          'Saved',
         );
       }
       onClose();
@@ -287,58 +285,53 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       <Modal
         visible={visible && !showWhatsAppModal}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={onClose}
       >
-        <View style={styles.overlay}>
-          <View style={styles.modalCard}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View style={styles.headerTitleWrap}>
-                <Text style={styles.leadName}>{lead.name}</Text>
-                <Text style={styles.campaignSub}>
-                  {campaignName} · {lead.attemptCount || 0} attempts
+        <View style={styles.sheetOverlay}>
+          <View style={styles.sheetCard}>
+            {/* Sheet Handle */}
+            <View style={styles.handleBar} />
+
+            {/* Header: Lead Info + Actions */}
+            <View style={styles.headerRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetLeadName} numberOfLines={1}>
+                  {lead.name}
+                </Text>
+                <Text style={styles.sheetLeadPhone}>
+                  {formatDisplayPhone(lead.phone)} · {campaignName}
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={onClose}
-                activeOpacity={0.7}
-              >
-                <X size={18} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
 
-            {/* Quick Contact Bar */}
-            <View style={styles.contactBox}>
-              <CrmAvatar name={lead.name} size="md" />
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>{lead.name}</Text>
-                <Text style={styles.contactPhone}>{formatDisplayPhone(lead.phone)}</Text>
-              </View>
-
-              <View style={styles.actionButtons}>
+              <View style={styles.headerActionIcons}>
                 <TouchableOpacity
-                  style={[styles.circleBtn, styles.callBtn]}
+                  style={[styles.headerCircleBtn, styles.headerCallBtn]}
                   onPress={handleCall}
                   activeOpacity={0.7}
-                  accessibilityLabel="Call Lead"
                 >
-                  <Phone size={16} color="#FFFFFF" strokeWidth={2.5} />
+                  <Phone size={15} color="#FFFFFF" strokeWidth={2.5} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.circleBtn, styles.whatsappBtn]}
+                  style={[styles.headerCircleBtn, styles.headerWhatsAppBtn]}
                   onPress={handleWhatsApp}
                   activeOpacity={0.7}
-                  accessibilityLabel="WhatsApp Lead"
                 >
-                  <MessageCircle size={16} color="#FFFFFF" strokeWidth={2.5} />
+                  <MessageCircle size={15} color="#FFFFFF" strokeWidth={2.5} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={onClose}
+                  activeOpacity={0.7}
+                >
+                  <X size={16} color="#64748B" />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Segmented Tabs: 1. Update / Disposition  |  2. History Timeline */}
+            {/* Segmented Tabs */}
             <View style={styles.tabBar}>
               <TouchableOpacity
                 style={[styles.tabButton, activeTab === 'DISPOSITION' && styles.tabButtonActive]}
@@ -347,7 +340,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
               >
                 <FileEdit
                   size={14}
-                  color={activeTab === 'DISPOSITION' ? '#2563EB' : '#64748B'}
+                  color={activeTab === 'DISPOSITION' ? '#4F46E5' : '#64748B'}
                 />
                 <Text
                   style={[
@@ -355,7 +348,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                     activeTab === 'DISPOSITION' && styles.tabButtonTextActive,
                   ]}
                 >
-                  Update & Follow-up
+                  Call Outcome
                 </Text>
               </TouchableOpacity>
 
@@ -366,7 +359,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
               >
                 <History
                   size={14}
-                  color={activeTab === 'HISTORY' ? '#2563EB' : '#64748B'}
+                  color={activeTab === 'HISTORY' ? '#4F46E5' : '#64748B'}
                 />
                 <Text
                   style={[
@@ -374,34 +367,82 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                     activeTab === 'HISTORY' && styles.tabButtonTextActive,
                   ]}
                 >
-                  Call History ({combinedActivities.length})
+                  Timeline ({combinedActivities.length})
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {/* TAB CONTENT */}
+            {/* Tab Body */}
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}
+              contentContainerStyle={styles.sheetScrollContent}
             >
               {activeTab === 'DISPOSITION' ? (
-                /* TAB 1: DISPOSITION & FOLLOW-UP FORM */
                 <View>
-                  {/* Customer Importance / Temperature Rating (NeoDove style) */}
-                  <View style={styles.formField}>
-                    <View style={styles.labelWithIcon}>
-                      <Flame size={13} color="#EF4444" />
-                      <Text style={styles.fieldLabel}>
-                        Customer Importance / Temperature
-                      </Text>
+                  {/* 1. Big Tactile Outcome Chips (NeoDove signature) */}
+                  <View style={styles.formSection}>
+                    <Text style={styles.fieldSectionTitle}>SELECT CALL OUTCOME</Text>
+                    <View style={styles.outcomeGrid}>
+                      {OUTCOME_OPTIONS.map((item) => {
+                        const isSelected = selectedStage === item.stage;
+                        const IconComponent = item.icon;
+                        return (
+                          <TouchableOpacity
+                            key={item.stage}
+                            style={[
+                              styles.outcomeCard,
+                              isSelected && {
+                                backgroundColor: item.bg,
+                                borderColor: item.color,
+                                borderWidth: 2,
+                              },
+                            ]}
+                            onPress={() => {
+                              setSelectedStage(item.stage);
+                              if (item.stage === 'Not Interested') {
+                                setSelectedTemperature('COLD');
+                                setFollowUpDate('');
+                              } else if (item.stage === 'Interested') {
+                                setSelectedTemperature('HOT');
+                              }
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View
+                              style={[
+                                styles.outcomeIconWrap,
+                                { backgroundColor: isSelected ? '#FFFFFF' : item.bg },
+                              ]}
+                            >
+                              <IconComponent
+                                size={16}
+                                color={isSelected ? item.color : '#64748B'}
+                                strokeWidth={2.5}
+                              />
+                            </View>
+                            <Text
+                              style={[
+                                styles.outcomeLabel,
+                                isSelected && { color: item.color, fontWeight: '800' },
+                              ]}
+                            >
+                              {item.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                    <View style={styles.temperatureRow}>
+                  </View>
+
+                  {/* 2. Customer Priority / Temperature */}
+                  <View style={styles.formSection}>
+                    <Text style={styles.fieldSectionTitle}>CUSTOMER TEMPERATURE</Text>
+                    <View style={styles.tempRow}>
                       {/* HOT */}
                       <TouchableOpacity
                         style={[
-                          styles.tempChip,
-                          styles.tempChipHot,
-                          selectedTemperature === 'HOT' && styles.tempChipHotActive,
+                          styles.tempPill,
+                          selectedTemperature === 'HOT' && styles.tempPillHotActive,
                         ]}
                         onPress={() => setSelectedTemperature('HOT')}
                         activeOpacity={0.7}
@@ -413,138 +454,74 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                         />
                         <Text
                           style={[
-                            styles.tempChipText,
-                            selectedTemperature === 'HOT' && styles.tempChipTextHotActive,
+                            styles.tempPillText,
+                            selectedTemperature === 'HOT' && styles.tempPillTextHot,
                           ]}
                         >
-                          Hot (High)
+                          Hot
                         </Text>
                       </TouchableOpacity>
 
                       {/* WARM */}
                       <TouchableOpacity
                         style={[
-                          styles.tempChip,
-                          styles.tempChipWarm,
-                          selectedTemperature === 'WARM' && styles.tempChipWarmActive,
+                          styles.tempPill,
+                          selectedTemperature === 'WARM' && styles.tempPillWarmActive,
                         ]}
                         onPress={() => setSelectedTemperature('WARM')}
                         activeOpacity={0.7}
                       >
                         <Sun
                           size={13}
-                          color={selectedTemperature === 'WARM' ? '#B45309' : '#F59E0B'}
+                          color={selectedTemperature === 'WARM' ? '#D97706' : '#F59E0B'}
                         />
                         <Text
                           style={[
-                            styles.tempChipText,
-                            selectedTemperature === 'WARM' && styles.tempChipTextWarmActive,
+                            styles.tempPillText,
+                            selectedTemperature === 'WARM' && styles.tempPillTextWarm,
                           ]}
                         >
-                          Warm (Medium)
+                          Warm
                         </Text>
                       </TouchableOpacity>
 
                       {/* COLD */}
                       <TouchableOpacity
                         style={[
-                          styles.tempChip,
-                          styles.tempChipCold,
-                          selectedTemperature === 'COLD' && styles.tempChipColdActive,
+                          styles.tempPill,
+                          selectedTemperature === 'COLD' && styles.tempPillColdActive,
                         ]}
                         onPress={() => setSelectedTemperature('COLD')}
                         activeOpacity={0.7}
                       >
                         <Snowflake
                           size={13}
-                          color={selectedTemperature === 'COLD' ? '#1D4ED8' : '#3B82F6'}
+                          color={selectedTemperature === 'COLD' ? '#2563EB' : '#3B82F6'}
                         />
                         <Text
                           style={[
-                            styles.tempChipText,
-                            selectedTemperature === 'COLD' && styles.tempChipTextColdActive,
+                            styles.tempPillText,
+                            selectedTemperature === 'COLD' && styles.tempPillTextCold,
                           ]}
                         >
-                          Cold (Low)
+                          Cold
                         </Text>
                       </TouchableOpacity>
                     </View>
                   </View>
 
-                  {/* Stage Selector */}
-                  <View style={styles.formField}>
-                    <Text style={styles.fieldLabel}>Lead status / Stage</Text>
-                    <View style={styles.stagesRow}>
-                      {STAGE_OPTIONS.map((stg) => {
-                        const isSelected = selectedStage === stg;
-                        return (
-                          <TouchableOpacity
-                            key={stg}
-                            style={[
-                              styles.stageChip,
-                              isSelected && styles.stageChipSelected,
-                              (stg === 'Not Interested' || stg === 'Closed') &&
-                                isSelected && {
-                                  backgroundColor: '#FEE2E2',
-                                  borderColor: '#EF4444',
-                                },
-                            ]}
-                            onPress={() => {
-                              setSelectedStage(stg);
-                              if (stg === 'Not Interested' || stg === 'Closed') {
-                                setSelectedTemperature('COLD');
-                                setFollowUpDate('');
-                              }
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Text
-                              style={[
-                                styles.stageChipText,
-                                isSelected && styles.stageChipTextSelected,
-                                (stg === 'Not Interested' || stg === 'Closed') &&
-                                  isSelected && { color: '#B91C1C' },
-                              ]}
-                            >
-                              {stg}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {/* Conversation Notes */}
-                  <View style={styles.formField}>
-                    <Text style={styles.fieldLabel}>Conversation Notes / Feedback</Text>
-                    <TextInput
-                      style={styles.notesInput}
-                      placeholder="Add notes about what customer said (e.g. requested service details, call tomorrow morning)..."
-                      placeholderTextColor={colors.textQuiet}
-                      value={notes}
-                      onChangeText={setNotes}
-                      multiline
-                      numberOfLines={3}
-                      textAlignVertical="top"
-                    />
-                  </View>
-
-                  {/* CONDITIONAL: If Not Interested or Closed, Show DND & Lost Reason Safeguard; Else Show Schedule Follow-up */}
+                  {/* 3. Conditional: Lost Reason OR Follow-up Scheduler */}
                   {selectedStage === 'Not Interested' || selectedStage === 'Closed' ? (
-                    <View style={styles.suppressionCard}>
-                      <View style={styles.suppressionHeader}>
-                        <View style={styles.suppressionIconBadge}>
-                          <Ban size={15} color="#DC2626" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.suppressionTitle}>Lead Suppression & DND Safeguard</Text>
-                          <Text style={styles.suppressionDesc}>
-                            This customer will be marked as Closed and immediately removed from your active calling queue and reminders so you won't accidentally call them again.
-                          </Text>
-                        </View>
+                    <View style={styles.suppressionBox}>
+                      <View style={styles.suppressionHead}>
+                        <Ban size={15} color="#DC2626" />
+                        <Text style={styles.suppressionTitle}>Lead DND & Suppression Safeguard</Text>
                       </View>
+                      <Text style={styles.suppressionSub}>
+                        This number will be removed from your active queue so customer irritation is prevented.
+                      </Text>
 
-                      <Text style={styles.lostReasonsTitle}>Select Reason (1-Tap):</Text>
+                      <Text style={styles.lostReasonsHeading}>SELECT REASON (1-TAP):</Text>
                       <View style={styles.lostReasonsWrap}>
                         {LOST_REASONS.map((r) => {
                           const isReasonActive = notes.includes(r.label);
@@ -566,11 +543,11 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                               }}
                               activeOpacity={0.7}
                             >
-                              <Text style={styles.lostReasonEmoji}>{r.emoji}</Text>
+                              <Text style={{ fontSize: 12 }}>{r.emoji}</Text>
                               <Text
                                 style={[
-                                  styles.lostReasonText,
-                                  isReasonActive && styles.lostReasonTextActive,
+                                  styles.lostReasonChipText,
+                                  isReasonActive && styles.lostReasonChipTextActive,
                                 ]}
                               >
                                 {r.label}
@@ -581,117 +558,100 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                       </View>
                     </View>
                   ) : (
-                    /* Regular Quick Follow-up Presets (Tomorrow & Fast Scheduler) */
-                    <View style={styles.formField}>
-                      <View style={styles.labelWithIcon}>
-                        <Calendar size={13} color="#2563EB" />
-                        <Text style={styles.fieldLabel}>Schedule Follow-up</Text>
+                    /* Regular Quick Follow-up Presets */
+                    <View style={styles.formSection}>
+                      <View style={styles.fieldHeaderWithAction}>
+                        <Text style={styles.fieldSectionTitle}>SCHEDULE FOLLOW-UP</Text>
+                        {followUpDate ? (
+                          <TouchableOpacity onPress={() => setFollowUpDate('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Text style={styles.clearDateText}>Clear Date</Text>
+                          </TouchableOpacity>
+                        ) : null}
                       </View>
 
-                      <View style={styles.quickDateRow}>
+                      <View style={styles.quickPresetRow}>
                         <TouchableOpacity
-                          style={styles.quickDateBtn}
+                          style={styles.presetChip}
                           onPress={() => setQuickFollowUp(24, 10)}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.quickDateText}>Tomorrow 10 AM</Text>
+                          <Text style={styles.presetChipText}>Tomorrow 10 AM</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.quickDateBtn}
+                          style={styles.presetChip}
                           onPress={() => setQuickFollowUp(24, 15)}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.quickDateText}>Tomorrow 3 PM</Text>
+                          <Text style={styles.presetChipText}>Tomorrow 3 PM</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.quickDateBtn}
+                          style={styles.presetChip}
                           onPress={() => setQuickFollowUp(24, 18)}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.quickDateText}>Tomorrow 6 PM</Text>
+                          <Text style={styles.presetChipText}>Tomorrow 6 PM</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.quickDateBtn}
-                          onPress={() => setQuickFollowUp(3)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.quickDateText}>Today +3h</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.quickDateBtn}
+                          style={styles.presetChip}
                           onPress={() => setQuickFollowUp(48, 10)}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.quickDateText}>In 2 Days</Text>
+                          <Text style={styles.presetChipText}>In 2 Days</Text>
                         </TouchableOpacity>
                       </View>
 
-                      {/* Interactive Custom Date & Time Picker Button */}
+                      {/* Custom Date & Time Picker */}
                       <TouchableOpacity
-                        style={styles.customDatePickerBtn}
+                        style={styles.customDateBtn}
                         onPress={() => setShowCustomDatePicker(true)}
                         activeOpacity={0.8}
                       >
-                        <Calendar size={14} color="#2563EB" />
-                        <Text style={styles.customDatePickerBtnText}>
-                          Pick Custom Date & Time...
+                        <Calendar size={14} color="#4F46E5" />
+                        <Text style={styles.customDateBtnText}>
+                          {followUpDate ? formatScheduledDate(followUpDate) : 'Pick Custom Date & Time...'}
                         </Text>
                       </TouchableOpacity>
-
-                      {followUpDate ? (
-                        <View style={styles.scheduledBanner}>
-                          <Clock size={14} color="#0D9488" />
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.scheduledBannerLabel}>Scheduled Callback:</Text>
-                            <Text style={styles.scheduledBannerText}>
-                              {formatScheduledDate(followUpDate)}
-                            </Text>
-                          </View>
-                          <TouchableOpacity
-                            onPress={() => setShowCustomDatePicker(true)}
-                            style={styles.changeDateBtn}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.changeDateText}>Change</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => setFollowUpDate('')}
-                            style={styles.clearFollowUpBtn}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.clearFollowUpText}>Clear</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : null}
                     </View>
                   )}
+
+                  {/* 4. Notes Input */}
+                  <View style={styles.formSection}>
+                    <Text style={styles.fieldSectionTitle}>CONVERSATION NOTES</Text>
+                    <TextInput
+                      style={styles.notesBox}
+                      placeholder="Add brief notes about customer needs, price discussed, or questions asked..."
+                      placeholderTextColor="#94A3B8"
+                      value={notes}
+                      onChangeText={setNotes}
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                    />
+                  </View>
 
                   {/* Full Disposition Form Link */}
                   {onOpenFullDispose ? (
                     <TouchableOpacity
-                      style={styles.fullDisposeLink}
+                      style={styles.fullFormLink}
                       onPress={() => {
                         onClose();
                         onOpenFullDispose(lead);
                       }}
                       activeOpacity={0.7}
                     >
-                      <View style={styles.fullDisposeLeft}>
-                        <UserCheck size={16} color={colors.primary} />
-                        <Text style={styles.fullDisposeText}>
-                          Complete Full Call Form & Custom Questions
-                        </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <UserCheck size={14} color="#4F46E5" />
+                        <Text style={styles.fullFormLinkText}>Complete Full Multi-Step Form</Text>
                       </View>
-                      <ChevronRight size={16} color={colors.textQuiet} />
+                      <ChevronRight size={14} color="#64748B" />
                     </TouchableOpacity>
                   ) : null}
                 </View>
               ) : (
-                /* TAB 2: CALL HISTORY & MULTI-AGENT TIMELINE */
+                /* TAB 2: CALL HISTORY */
                 <View style={{ paddingTop: 4 }}>
                   <LeadTimeline
                     activities={combinedActivities}
@@ -701,27 +661,20 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
               )}
             </ScrollView>
 
-            {/* Modal Actions Footer */}
-            <View style={styles.modalFooter}>
+            {/* Bottom Primary Button */}
+            <View style={styles.sheetFooter}>
               <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={onClose}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.saveBtn, isSubmitting && { opacity: 0.7 }]}
+                style={[styles.saveNextBtn, isSubmitting && { opacity: 0.7 }]}
                 onPress={handleQuickSave}
                 disabled={isSubmitting}
+                activeOpacity={0.85}
               >
                 {isSubmitting ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <Check size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
-                    <Text style={styles.saveBtnText}>Save Update</Text>
+                    <Text style={styles.saveNextBtnText}>Save & Next Lead</Text>
+                    <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.5} />
                   </>
                 )}
               </TouchableOpacity>
@@ -751,91 +704,72 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  overlay: {
+  sheetOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
   },
-  modalCard: {
-    width: '100%',
-    maxHeight: '92%',
+  sheetCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 24,
     ...shadows.elevated,
   },
-  modalHeader: {
+  handleBar: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  headerTitleWrap: {
-    flex: 1,
-  },
-  leadName: {
+  sheetLeadName: {
     fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.3,
   },
-  campaignSub: {
+  sheetLeadPhone: {
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
+  },
+  headerActionIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCallBtn: {
+    backgroundColor: '#10B981',
+  },
+  headerWhatsAppBtn: {
+    backgroundColor: '#16A34A',
   },
   closeBtn: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 16,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 10,
-  },
-  contactBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  contactInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  contactName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  contactPhone: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  circleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  callBtn: {
-    backgroundColor: '#10B981',
-  },
-  whatsappBtn: {
-    backgroundColor: '#16A34A',
+    marginLeft: 4,
   },
   tabBar: {
     flexDirection: 'row',
@@ -850,316 +784,144 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 8,
     gap: 6,
   },
   tabButtonActive: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 1,
+    ...shadows.soft,
   },
   tabButtonText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#64748B',
   },
   tabButtonTextActive: {
-    color: '#2563EB',
+    color: '#4F46E5',
     fontWeight: '700',
   },
-  formField: {
+  sheetScrollContent: {
+    paddingBottom: 16,
+  },
+  formSection: {
     marginBottom: 14,
   },
-  fieldLabel: {
+  fieldSectionTitle: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  outcomeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  outcomeCard: {
+    flex: 1,
+    minWidth: '45%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  outcomeIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outcomeLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
-    marginBottom: 6,
   },
-  labelWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  temperatureRow: {
+  tempRow: {
     flexDirection: 'row',
     gap: 8,
   },
-  tempChip: {
+  tempPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
     paddingVertical: 8,
-    paddingHorizontal: 8,
+    backgroundColor: '#F8FAFC',
     borderRadius: 8,
     borderWidth: 1,
-    gap: 4,
+    borderColor: '#E2E8F0',
   },
-  tempChipHot: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
-  },
-  tempChipHotActive: {
+  tempPillHotActive: {
     backgroundColor: '#FEE2E2',
     borderColor: '#DC2626',
-    borderWidth: 2,
+    borderWidth: 1.5,
   },
-  tempChipWarm: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-  },
-  tempChipWarmActive: {
+  tempPillWarmActive: {
     backgroundColor: '#FEF3C7',
     borderColor: '#D97706',
-    borderWidth: 2,
+    borderWidth: 1.5,
   },
-  tempChipCold: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#BFDBFE',
-  },
-  tempChipColdActive: {
+  tempPillColdActive: {
     backgroundColor: '#DBEAFE',
     borderColor: '#2563EB',
-    borderWidth: 2,
+    borderWidth: 1.5,
   },
-  tempChipText: {
-    fontSize: 11,
+  tempPillText: {
+    fontSize: 11.5,
     fontWeight: '600',
-    color: '#475569',
+    color: '#64748B',
   },
-  tempChipTextHotActive: {
+  tempPillTextHot: {
     color: '#DC2626',
     fontWeight: '800',
   },
-  tempChipTextWarmActive: {
+  tempPillTextWarm: {
     color: '#D97706',
     fontWeight: '800',
   },
-  tempChipTextColdActive: {
+  tempPillTextCold: {
     color: '#2563EB',
     fontWeight: '800',
   },
-  stagesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  stageChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  stageChipSelected: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
-  },
-  stageChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  stageChipTextSelected: {
-    color: '#2563EB',
-    fontWeight: '700',
-  },
-  notesInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 12,
-    color: '#0F172A',
-    minHeight: 70,
-  },
-  quickDateRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  quickDateBtn: {
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  quickDateText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  customDatePickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-    borderRadius: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    marginTop: 8,
-  },
-  customDatePickerBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1D4ED8',
-  },
-  scheduledBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDFA',
-    borderWidth: 1,
-    borderColor: '#99F6E4',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    marginTop: 8,
-    gap: 8,
-  },
-  scheduledBannerLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#0F766E',
-    textTransform: 'uppercase',
-  },
-  scheduledBannerText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 1,
-  },
-  changeDateBtn: {
-    backgroundColor: '#CCFBF1',
-    borderWidth: 1,
-    borderColor: '#5EEAD4',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  changeDateText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0F766E',
-  },
-  clearFollowUpBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  clearFollowUpText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  fullDisposeLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#EFF6FF',
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  fullDisposeLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  fullDisposeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  cancelBtn: {
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-  },
-  cancelBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-    backgroundColor: '#2563EB',
-  },
-  saveBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  suppressionCard: {
+  suppressionBox: {
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FECACA',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  suppressionHeader: {
+  suppressionHead: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: 10,
-  },
-  suppressionIconBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#FEE2E2',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
+    gap: 6,
+    marginBottom: 4,
   },
   suppressionTitle: {
     fontSize: 12,
     fontWeight: '800',
     color: '#991B1B',
   },
-  suppressionDesc: {
-    fontSize: 10,
-    fontWeight: '500',
+  suppressionSub: {
+    fontSize: 10.5,
     color: '#7F1D1D',
-    marginTop: 2,
-    lineHeight: 14,
+    marginBottom: 10,
+    lineHeight: 15,
   },
-  lostReasonsTitle: {
-    fontSize: 11,
-    fontWeight: '700',
+  lostReasonsHeading: {
+    fontSize: 10,
+    fontWeight: '800',
     color: '#991B1B',
     marginBottom: 6,
-    textTransform: 'uppercase',
   },
   lostReasonsWrap: {
     flexDirection: 'row',
@@ -1175,21 +937,117 @@ const styles = StyleSheet.create({
     borderColor: '#FCA5A5',
     paddingVertical: 5,
     paddingHorizontal: 8,
-    borderRadius: 7,
+    borderRadius: 8,
   },
   lostReasonChipActive: {
     backgroundColor: '#DC2626',
     borderColor: '#B91C1C',
   },
-  lostReasonEmoji: {
-    fontSize: 12,
-  },
-  lostReasonText: {
-    fontSize: 10,
+  lostReasonChipText: {
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#991B1B',
   },
-  lostReasonTextActive: {
+  lostReasonChipTextActive: {
     color: '#FFFFFF',
+  },
+  fieldHeaderWithAction: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  clearDateText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  quickPresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  presetChip: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  presetChipText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  customDateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  customDateBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  notesBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 12,
+    color: '#0F172A',
+    minHeight: 64,
+  },
+  fullFormLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 2,
+  },
+  fullFormLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  sheetFooter: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  saveNextBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#4F46E5',
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  saveNextBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
 });

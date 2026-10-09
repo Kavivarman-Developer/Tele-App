@@ -15,6 +15,10 @@ import {
   RotateCw,
   Save,
   ShieldAlert,
+  Plus,
+  Minus,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -38,17 +42,17 @@ const DEFAULT_RULES: DisplayRetryItem[] = [
   {
     id: 'rule-1',
     reasonKey: 'BUSY',
-    title: 'Busy',
-    subtitle: 'Automatic retry scheduled',
-    firstRetryMin: '10',
+    title: 'Customer Line Busy / Call Waiting',
+    subtitle: 'Auto-redials after a short rest period',
+    firstRetryMin: '15',
     secondRetryMin: '720',
     enabled: true,
   },
   {
     id: 'rule-2',
     reasonKey: 'CALL_NOT_COMPLETED',
-    title: 'Call not completed',
-    subtitle: 'Automatic retry scheduled',
+    title: 'Call Dropped / Disconnected Midway',
+    subtitle: 'Re-queues customer for an immediate agent callback',
     firstRetryMin: '15',
     secondRetryMin: '1440',
     enabled: true,
@@ -56,8 +60,8 @@ const DEFAULT_RULES: DisplayRetryItem[] = [
   {
     id: 'rule-3',
     reasonKey: 'DID_NOT_PICK',
-    title: 'Did not pick',
-    subtitle: 'Automatic retry scheduled',
+    title: 'Customer Rings Out / Did Not Pick Up',
+    subtitle: 'Schedules automated follow-up attempts across shifts',
     firstRetryMin: '60',
     secondRetryMin: '1440',
     enabled: true,
@@ -65,22 +69,49 @@ const DEFAULT_RULES: DisplayRetryItem[] = [
   {
     id: 'rule-4',
     reasonKey: 'INCOMING_NOT_AVAILABLE',
-    title: 'Incoming not available',
-    subtitle: 'No retry configured',
-    firstRetryMin: '60',
+    title: 'Incoming Calls Barred / Switched Off',
+    subtitle: 'Snoozes retries until customer phone re-connects',
+    firstRetryMin: '120',
     secondRetryMin: '1440',
     enabled: false,
   },
   {
     id: 'rule-5',
     reasonKey: 'INVALID_NUMBER',
-    title: 'Invalid number',
-    subtitle: 'No retry configured',
+    title: 'Invalid Number / Disconnected Service',
+    subtitle: 'Disabled: Automatically closes invalid leads',
     firstRetryMin: '60',
     secondRetryMin: '1440',
     enabled: false,
   },
 ];
+
+const formatMinutesFriendly = (minsStr: string) => {
+  const m = parseInt(minsStr, 10) || 0;
+  if (m < 60) return `${m} mins`;
+  if (m < 1440) {
+    const h = (m / 60).toFixed(1).replace('.0', '');
+    return `${h} hrs (${m}m)`;
+  }
+  const d = (m / 1440).toFixed(1).replace('.0', '');
+  return `${d} days (${m}m)`;
+};
+
+const stepMinutes = (curStr: string, delta: number) => {
+  const cur = parseInt(curStr, 10) || 15;
+  let next = cur;
+  if (delta > 0) {
+    if (cur < 60) next = cur + 15;
+    else if (cur < 1440) next = cur + 60;
+    else next = cur + 1440;
+  } else {
+    if (cur <= 15) next = Math.max(5, cur - 5);
+    else if (cur <= 60) next = cur - 15;
+    else if (cur <= 1440) next = cur - 60;
+    else next = Math.max(1440, cur - 1440);
+  }
+  return String(next);
+};
 
 export const RetryRulesScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -237,80 +268,250 @@ export const RetryRulesScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Rules Table (Exact Screenshot 8 structure) */}
-        <View style={styles.rulesCard}>
-          {/* Table Header Row */}
-          <View style={styles.tableHeaderRow}>
-            <Text style={[styles.thCell, { flex: 2.8 }]}>Call outcome</Text>
-            <Text style={[styles.thCell, { flex: 3.2 }]}>Retry schedule</Text>
-            <Text style={[styles.thCell, { flex: 1.0, textAlign: 'right' }]}>Enabled</Text>
-          </View>
-
-          {/* Table Rows */}
+        {/* Plain Language Rule Cards List */}
+        <View style={{ gap: 14 }}>
           {rules.map((item, index) => {
-            const isLast = index === rules.length - 1;
-
             return (
               <View
                 key={item.id || item.reasonKey}
-                style={[styles.tableDataRow, isLast && { borderBottomWidth: 0 }]}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 14,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: item.enabled ? '#E2E8F0' : '#F1F5F9',
+                  shadowColor: '#0F172A',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: item.enabled ? 0.05 : 0.02,
+                  shadowRadius: 3,
+                  elevation: item.enabled ? 2 : 1,
+                  opacity: item.enabled ? 1 : 0.75,
+                }}
               >
-                {/* Column 1: Call outcome */}
-                <View style={[styles.tdCell, { flex: 2.8, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
-                  <View style={styles.iconCircle}>
-                    <RotateCw size={15} color="#64748B" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.outcomeTitle}>{item.title}</Text>
-                    <Text style={styles.outcomeSubtitle}>{item.subtitle}</Text>
-                  </View>
-                </View>
-
-                {/* Column 2: Retry schedule (First retry & Second retry inputs) */}
-                <View style={[styles.tdCell, { flex: 3.2, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-                  {/* First retry */}
-                  <View style={styles.retryInputWrap}>
-                    <Text style={styles.retryInputLabel}>First retry</Text>
-                    <View style={[styles.inputBox, !item.enabled && styles.inputBoxDisabled]}>
-                      <TextInput
-                        style={[styles.numericInput, !item.enabled && styles.numericInputDisabled]}
-                        value={item.firstRetryMin}
-                        onChangeText={(txt) => handleUpdateStep(index, 'first', txt)}
-                        keyboardType="numeric"
-                        editable={item.enabled}
-                      />
-                      <Text style={styles.minLabel}>min</Text>
+                {/* Header Row: Title, Subtitle & Switch */}
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 12 }}>
+                    <View
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 10,
+                        backgroundColor: item.enabled ? '#ECFDF5' : '#F1F5F9',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <RotateCw size={18} color={item.enabled ? '#10B981' : '#94A3B8'} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                        {item.title}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                        {item.subtitle}
+                      </Text>
                     </View>
                   </View>
 
-                  {/* Second retry */}
-                  <View style={styles.retryInputWrap}>
-                    <Text style={styles.retryInputLabel}>Second retry</Text>
-                    <View style={[styles.inputBox, !item.enabled && styles.inputBoxDisabled]}>
-                      <TextInput
-                        style={[styles.numericInput, !item.enabled && styles.numericInputDisabled]}
-                        value={item.secondRetryMin}
-                        onChangeText={(txt) => handleUpdateStep(index, 'second', txt)}
-                        keyboardType="numeric"
-                        editable={item.enabled}
-                      />
-                      <Text style={styles.minLabel}>min</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Column 3: Enabled Switch */}
-                <View style={[styles.tdCell, { flex: 1.0, alignItems: 'flex-end' }]}>
                   <Switch
                     value={item.enabled}
                     onValueChange={() => handleToggle(index)}
-                    trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
+                    trackColor={{ false: '#E2E8F0', true: '#10B981' }}
                     thumbColor="#FFFFFF"
                   />
                 </View>
+
+                {item.enabled ? (
+                  <View
+                    style={{
+                      borderTopWidth: 1,
+                      borderTopColor: '#F1F5F9',
+                      paddingTop: 14,
+                      gap: 12,
+                    }}
+                  >
+                    {/* Stepper 1: First Retry */}
+                    <View
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: 10,
+                        padding: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                      }}
+                    >
+                      <View>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                          1st Retry Attempt
+                        </Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', marginTop: 2 }}>
+                          {formatMinutesFriendly(item.firstRetryMin)}
+                        </Text>
+                      </View>
+
+                      {/* Stepper Controls */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const nextVal = stepMinutes(item.firstRetryMin, -1);
+                            handleUpdateStep(index, 'first', nextVal);
+                          }}
+                          activeOpacity={0.7}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: '#CBD5E1',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Minus size={16} color="#334155" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => {
+                            const nextVal = stepMinutes(item.firstRetryMin, 1);
+                            handleUpdateStep(index, 'first', nextVal);
+                          }}
+                          activeOpacity={0.7}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: '#CBD5E1',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Plus size={16} color="#334155" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Stepper 2: Second Retry */}
+                    <View
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: 10,
+                        padding: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                      }}
+                    >
+                      <View>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                          2nd Retry Attempt
+                        </Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#4F46E5', marginTop: 2 }}>
+                          {formatMinutesFriendly(item.secondRetryMin)}
+                        </Text>
+                      </View>
+
+                      {/* Stepper Controls */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const nextVal = stepMinutes(item.secondRetryMin, -1);
+                            handleUpdateStep(index, 'second', nextVal);
+                          }}
+                          activeOpacity={0.7}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: '#CBD5E1',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Minus size={16} color="#334155" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => {
+                            const nextVal = stepMinutes(item.secondRetryMin, 1);
+                            handleUpdateStep(index, 'second', nextVal);
+                          }}
+                          activeOpacity={0.7}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: '#CBD5E1',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Plus size={16} color="#334155" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      borderTopWidth: 1,
+                      borderTopColor: '#F1F5F9',
+                      paddingTop: 10,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>
+                      Automated retry cadence paused for this outcome. Leads will remain open in queue without auto-scheduling.
+                    </Text>
+                  </View>
+                )}
               </View>
             );
           })}
+        </View>
+
+        {/* Bottom Save Rules Button */}
+        <View style={{ marginTop: 20 }}>
+          <TouchableOpacity
+            onPress={() => updateMutation.mutate(rules)}
+            disabled={updateMutation.isPending}
+            activeOpacity={0.8}
+            style={{
+              height: 52,
+              backgroundColor: '#10B981',
+              borderRadius: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              shadowColor: '#10B981',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
+          >
+            {updateMutation.isPending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Save size={18} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+                  Save Retry Rules Cadence
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </CrmShell>
@@ -324,7 +525,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   bannerRow: {
     flexDirection: 'row',

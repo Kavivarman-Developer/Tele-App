@@ -22,6 +22,9 @@ import {
   Shield,
   ShieldAlert,
   Building2,
+  Phone,
+  Mail,
+  UserCheck,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -410,21 +413,9 @@ export const TeamScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Table Card */}
-        <View style={styles.tableCard}>
-          {/* Table Header */}
-          <View style={styles.tableHeaderRow}>
-            <Text style={[styles.thCell, { flex: 2.6 }]}>TEAM MEMBER</Text>
-            <Text style={[styles.thCell, { flex: 1.6 }]}>BRANCH</Text>
-            <Text style={[styles.thCell, { flex: 1.8 }]}>PHONE NUMBER</Text>
-            <Text style={[styles.thCell, { flex: 1.3 }]}>ROLE</Text>
-            <Text style={[styles.thCell, { flex: 1.5 }]}>RECEIVE LEADS</Text>
-            <Text style={[styles.thCell, { flex: 0.6, textAlign: 'right' }]}></Text>
-          </View>
-
-          {/* Table Rows */}
-          {filteredMembers.map((item, idx) => {
-            const isLast = idx === filteredMembers.length - 1;
+        {/* Roster Cards List */}
+        <View style={{ gap: 12 }}>
+          {filteredMembers.map((item) => {
             const initials = item.name
               .split(' ')
               .map((w) => w[0])
@@ -435,95 +426,187 @@ export const TeamScreen: React.FC = () => {
             return (
               <View
                 key={item._id}
-                style={[styles.tableDataRow, isLast && { borderBottomWidth: 0 }]}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 14,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  shadowColor: '#0F172A',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 3,
+                  elevation: 2,
+                }}
               >
-                {/* Team Member: Avatar + Name + Email */}
-                <View
-                  style={[
-                    styles.tdCell,
-                    { flex: 2.6, flexDirection: 'row', alignItems: 'center', gap: 10 },
-                  ]}
-                >
-                  <View style={[styles.avatarCircle, { backgroundColor: '#EEF2FF' }]}>
-                    <Text style={[styles.avatarText, { color: '#3730A3' }]}>{initials}</Text>
+                {/* Card Top: Avatar, Name, Role & Edit */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: item.role === 'ADMIN' ? '#EFF6FF' : item.role === 'MANAGER' ? '#F5F3FF' : '#ECFDF5',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: item.role === 'ADMIN' ? '#BFDBFE' : item.role === 'MANAGER' ? '#DDD6FE' : '#A7F3D0',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: '800',
+                          color: item.role === 'ADMIN' ? '#1D4ED8' : item.role === 'MANAGER' ? '#6D28D9' : '#047857',
+                        }}
+                      >
+                        {initials}
+                      </Text>
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                        {/* Role Pill */}
+                        <View
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                            backgroundColor: item.role === 'ADMIN' ? '#EFF6FF' : item.role === 'MANAGER' ? '#F5F3FF' : '#F1F5F9',
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: '700',
+                              color: item.role === 'ADMIN' ? '#2563EB' : item.role === 'MANAGER' ? '#7C3AED' : '#475569',
+                            }}
+                          >
+                            {item.role}
+                          </Text>
+                        </View>
+
+                        {/* Branch Pill */}
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 3,
+                            paddingHorizontal: 7,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                            backgroundColor: '#F0FDFA',
+                            borderWidth: 1,
+                            borderColor: '#CCFBF1',
+                          }}
+                        >
+                          <MapPin size={10} color="#0F766E" />
+                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0F766E' }}>
+                            {item.branch ? `${item.branch}` : 'HQ / All'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.memberNameText} numberOfLines={1}>
-                      {item.name}
+
+                  {/* Edit Button */}
+                  <TouchableOpacity
+                    onPress={() => setEditingMember(item)}
+                    activeOpacity={0.7}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Edit2 size={15} color="#475569" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Contact Meta Details */}
+                <View
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 10,
+                    padding: 10,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 12,
+                    borderWidth: 1,
+                    borderColor: '#F1F5F9',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Phone size={13} color="#64748B" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                      {item.phone}
                     </Text>
-                    <Text style={styles.memberEmailText} numberOfLines={1}>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '55%' }}>
+                    <Mail size={13} color="#64748B" />
+                    <Text style={{ fontSize: 12, color: '#64748B' }} numberOfLines={1}>
                       {item.email}
                     </Text>
                   </View>
                 </View>
 
-                {/* Branch Badge */}
-                <View style={[styles.tdCell, { flex: 1.6 }]}>
-                  {item.branch ? (
-                    <View style={styles.memberBranchBadge}>
-                      <MapPin size={9} color="#0F766E" />
-                      <Text style={styles.memberBranchBadgeText}>{item.branch}</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.hqBranchBadge}>
-                      <Building2 size={9} color="#6366F1" />
-                      <Text style={styles.hqBranchBadgeText}>HQ / All</Text>
-                    </View>
-                  )}
-                </View>
+                {/* Status & Inbound Distribution Toggle */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: 8,
+                    borderTopWidth: 1,
+                    borderTopColor: '#F1F5F9',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: item.canReceiveLeads ? '#10B981' : '#94A3B8',
+                      }}
+                    />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: item.canReceiveLeads ? '#047857' : '#64748B' }}>
+                      {item.canReceiveLeads ? 'Inbound Calling Active' : 'Queue Paused'}
+                    </Text>
+                  </View>
 
-                {/* Phone Number */}
-                <View style={[styles.tdCell, { flex: 1.8 }]}>
-                  <Text style={styles.phoneText}>{item.phone}</Text>
-                </View>
-
-                {/* Role Pill */}
-                <View style={[styles.tdCell, { flex: 1.3 }]}>
-                  {item.role === 'ADMIN' ? (
-                    <View style={[styles.rolePill, { backgroundColor: '#EFF6FF' }]}>
-                      <Text style={[styles.rolePillText, { color: '#2563EB' }]}>Admin</Text>
-                    </View>
-                  ) : item.role === 'MANAGER' ? (
-                    <View style={[styles.rolePill, { backgroundColor: '#F5F3FF' }]}>
-                      <Text style={[styles.rolePillText, { color: '#7C3AED' }]}>Manager</Text>
-                    </View>
-                  ) : (
-                    <View style={[styles.rolePill, { backgroundColor: '#F1F5F9' }]}>
-                      <Text style={[styles.rolePillText, { color: '#64748B' }]}>Agent</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Receive Leads Switch */}
-                <View style={[styles.tdCell, { flex: 1.5 }]}>
-                  <Switch
-                    value={item.canReceiveLeads}
-                    onValueChange={() => handleToggleReceiveLeads(item)}
-                    trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
-                    thumbColor="#FFFFFF"
-                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                  />
-                </View>
-
-                {/* Edit Action */}
-                <View style={[styles.tdCell, { flex: 0.6, alignItems: 'flex-end' }]}>
-                  <TouchableOpacity
-                    style={styles.editBtn}
-                    onPress={() => setEditingMember(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Edit2 size={13} color="#64748B" />
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>
+                      {item.canReceiveLeads ? 'Accepting' : 'Off'}
+                    </Text>
+                    <Switch
+                      value={item.canReceiveLeads}
+                      onValueChange={() => handleToggleReceiveLeads(item)}
+                      trackColor={{ false: '#E2E8F0', true: '#10B981' }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
                 </View>
               </View>
             );
           })}
+        </View>
 
-          {/* Table Footer */}
-          <View style={styles.tableFooter}>
-            <Text style={styles.tableFooterCount}>{filteredMembers.length} team members</Text>
-            <Text style={styles.tableFooterStatus}>Branch-assigned lead distribution</Text>
-          </View>
+        {/* Footer Summary */}
+        <View style={{ marginTop: 16, alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>
+            Showing {filteredMembers.length} team members · Real-time round-robin queue distribution
+          </Text>
         </View>
       </ScrollView>
 
@@ -765,7 +848,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   bannerRow: {
     flexDirection: 'row',

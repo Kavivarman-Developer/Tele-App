@@ -18,16 +18,12 @@ import {
   Users,
   Phone,
   Clock3,
-  Megaphone,
   ArrowUpRight,
   ChevronRight,
   PhoneCall,
-  UserCheck,
   Plus,
   LayoutGrid,
   MapPin,
-  Building2,
-  Shield,
   CheckCircle2,
   Calendar,
   MessageCircle,
@@ -35,6 +31,11 @@ import {
   Target,
   Sparkles,
   PhoneOff,
+  Flame,
+  Sun,
+  Snowflake,
+  FileEdit,
+  Check,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
@@ -263,7 +264,7 @@ export const HomeScreen: React.FC = () => {
     connectedCalls > 0
       ? Math.round(localTotalDuration / connectedCalls)
       : dashboardData?.connectedCalls && dashboardData.callsMade > 0
-      ? Math.round((dashboardData.callsMade * 6))
+      ? Math.round(dashboardData.callsMade * 6)
       : 0;
   const avgDurationFormatted = callsMade > 0 ? formatSeconds(avgDurationSeconds) : '00:00';
 
@@ -318,10 +319,10 @@ export const HomeScreen: React.FC = () => {
       }
 
       return [
-        { name: 'New', count: counts.New, color: '#2563EB' },
+        { name: 'New', count: counts.New, color: '#3B82F6' },
         { name: 'Contacted', count: counts.Contacted, color: '#F59E0B' },
         { name: 'Interested', count: counts.Interested, color: '#10B981' },
-        { name: 'Follow-up', count: counts.FollowUp, color: '#64748B' },
+        { name: 'Follow-up', count: counts.FollowUp, color: '#6366F1' },
         { name: 'Converted', count: counts.Converted, color: '#059669' },
       ];
     }
@@ -332,36 +333,37 @@ export const HomeScreen: React.FC = () => {
         count: s.count,
         color:
           s.stage === 'New'
-            ? '#2563EB'
+            ? '#3B82F6'
             : s.stage === 'Contacted'
             ? '#F59E0B'
             : s.stage === 'Interested'
             ? '#10B981'
-            : '#64748B',
+            : '#6366F1',
       }));
     }
 
     return [
-      { name: 'New', count: 0, color: '#2563EB' },
+      { name: 'New', count: 0, color: '#3B82F6' },
       { name: 'Contacted', count: 0, color: '#F59E0B' },
       { name: 'Interested', count: 0, color: '#10B981' },
-      { name: 'Follow-up', count: 0, color: '#64748B' },
+      { name: 'Follow-up', count: 0, color: '#6366F1' },
       { name: 'Converted', count: 0, color: '#059669' },
     ];
   }, [myLeadsData, dashboardData]);
 
-  const maxStageCount = Math.max(...pipelineStages.map((s) => s.count), 1);
-
-  // Immediate queue (top 3 leads ready to call - strictly excludes Not Interested / Closed / Lost)
-  const queueLeads = (myLeadsData?.leads || [])
-    .filter(
+  // Immediate queue (top leads ready to call - strictly excludes Not Interested / Closed / Lost)
+  const queueLeads = useMemo(() => {
+    return (myLeadsData?.leads || []).filter(
       (l) =>
         l.status !== 'CLOSED' &&
         l.stage !== 'Not Interested' &&
         l.stage !== 'Closed' &&
         l.stage !== 'Lost',
-    )
-    .slice(0, 3);
+    );
+  }, [myLeadsData]);
+
+  const heroLead: Lead | null = queueLeads.length > 0 ? queueLeads[0] : null;
+  const nextInQueueLeads = queueLeads.slice(1, 4);
 
   // Handle direct call from dashboard
   const handleDirectDial = (leadItem: Lead) => {
@@ -405,9 +407,26 @@ export const HomeScreen: React.FC = () => {
     setWhatsAppTarget({ name: leadItem.name, phone: leadItem.phone });
   };
 
+  const heroLeadInitials = heroLead?.name
+    ? heroLead.name
+        .split(' ')
+        .filter(Boolean)
+        .map((w) => w[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : 'LD';
+
+  const heroLeadCampaign =
+    typeof heroLead?.campaign === 'object' && heroLead?.campaign?.name
+      ? heroLead.campaign.name
+      : 'Demo Outreach Campaign';
+
+  const heroLeadTemp = (heroLead?.tag || 'WARM').toUpperCase();
+
   return (
     <CrmShell
-      title="Dashboard"
+      title="Telecalling Desk"
       headerIcon={<LayoutGrid size={15} color={colors.textSecondary} />}
       showPeriodControl
       period={period}
@@ -445,26 +464,18 @@ export const HomeScreen: React.FC = () => {
           />
         }
       >
-        {/* 1. AGENT BRANCH OFFICE BANNER */}
-        <View style={styles.branchOfficeBanner}>
-          <View style={styles.branchOfficeLeft}>
-            <View style={styles.branchIconBox}>
-              <MapPin size={18} color="#0D9488" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <Text style={styles.branchOfficeTitle}>
-                  {user?.branch ? `${user.branch} Branch Office` : 'Global Headquarters'}
-                </Text>
-                <View style={styles.branchStatusPill}>
-                  <View style={styles.liveGreenDot} />
-                  <Text style={styles.branchStatusPillText}>Active Office</Text>
-                </View>
-              </View>
-              <Text style={styles.branchOfficeSub}>
-                Logged in as <Text style={{ fontWeight: '700', color: '#0F172A' }}>{user?.name || 'Agent'}</Text> ({user?.email}) · {user?.role || 'AGENT'} · {isAgent ? 'Assigned strictly to your calling queue' : `Routing calls for ${user?.branch || 'General'} queue`}
-              </Text>
-            </View>
+        {/* 1. NEODOVE AGENT WELCOME & STATUS HEADER */}
+        <View style={styles.neoWelcomeRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.neoGreetingText}>Welcome back 👋</Text>
+            <Text style={styles.neoAgentNameText}>{user?.name || 'Agent'}</Text>
+            <Text style={styles.neoBranchSubText}>
+              {user?.branch ? `${user.branch} Branch` : 'Main Office'} · {isAgent ? 'Telecalling Desk' : user?.role || 'Admin'}
+            </Text>
+          </View>
+          <View style={styles.neoStatusPill}>
+            <View style={styles.liveGreenDot} />
+            <Text style={styles.neoStatusPillText}>Ready to Call</Text>
           </View>
         </View>
 
@@ -472,7 +483,7 @@ export const HomeScreen: React.FC = () => {
         {isAgent && assignedLeadAlert && (
           <View style={styles.newLeadsAlertBanner}>
             <View style={styles.newLeadsAlertIconBox}>
-              <Sparkles size={20} color="#2563EB" />
+              <Sparkles size={18} color="#2563EB" />
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -493,263 +504,391 @@ export const HomeScreen: React.FC = () => {
               }}
               activeOpacity={0.8}
             >
-              <PhoneCall size={13} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.newLeadsAlertBtnText}>Call Now</Text>
+              <PhoneCall size={12} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.newLeadsAlertBtnText}>Call</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* 2. AGENT TELECALLER DESK (Agent Only) */}
-        {isAgent && (
-          <View style={styles.agentTelecallerPanel}>
-            <View style={styles.agentTelecallerHeaderRow}>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.agentTelecallerTitle}>TELECALLER DESK</Text>
-                  <View style={styles.periodPill}>
-                    <Text style={styles.periodPillText}>{period}</Text>
-                  </View>
-                </View>
-                <Text style={styles.agentTelecallerSub}>
-                  Assigned calling queue for {user?.name || 'Agent'} ({user?.branch || 'General'} Branch)
-                </Text>
-              </View>
-              <View style={styles.agentStatusPill}>
-                <View style={styles.liveGreenDot} />
-                <Text style={styles.agentStatusPillText}>Ready to Call</Text>
+        {/* 2. NEODOVE DAILY TARGET & PERFORMANCE OVERVIEW CARD */}
+        <View style={styles.neoTargetCard}>
+          <View style={styles.neoTargetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Target size={15} color="#4F46E5" />
+              <Text style={styles.neoTargetTitle}>DAILY TARGET PROGRESS</Text>
+            </View>
+            <View style={styles.periodPill}>
+              <Text style={styles.periodPillText}>{period}</Text>
+            </View>
+          </View>
+
+          {/* Target Progress Bar & Counter */}
+          <View style={styles.targetProgressSection}>
+            <View style={styles.targetScoreRow}>
+              <Text style={styles.targetCallsBig}>
+                {callsMade}
+                <Text style={styles.targetCallsTotal}> / {dailyTargetTotal} Calls</Text>
+              </Text>
+              <View style={styles.targetPercentBadge}>
+                <Text style={styles.targetPercentBadgeText}>{targetCompletedPercent}% Done</Text>
               </View>
             </View>
 
-            {/* Dynamic Calling Targets Row */}
-            <View style={styles.agentTargetRow}>
-              {/* Daily Target */}
-              <View style={styles.agentTargetCol}>
-                <Text style={styles.agentTargetLabel}>Daily Target</Text>
-                <Text style={styles.agentTargetVal}>
-                  {callsMade} / {dailyTargetTotal} Calls
-                </Text>
-                <View style={styles.progressBarTrack}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      { width: `${targetCompletedPercent}%` },
-                    ]}
-                  />
+            {/* Visual Progress Bar Track */}
+            <View style={styles.neoProgressBarTrack}>
+              <View
+                style={[
+                  styles.neoProgressBarFill,
+                  { width: `${Math.max(4, targetCompletedPercent)}%` },
+                ]}
+              />
+            </View>
+          </View>
+
+          {/* 3 Metric Pills */}
+          <View style={styles.neoMetricsRow}>
+            <View style={styles.neoMetricBox}>
+              <Text style={styles.neoMetricVal}>{connectedCalls}</Text>
+              <Text style={styles.neoMetricLabel}>Connected</Text>
+              <Text style={styles.neoMetricSub}>{connectRatePercent}</Text>
+            </View>
+
+            <View style={styles.neoMetricDivider} />
+
+            <View style={styles.neoMetricBox}>
+              <Text
+                style={[
+                  styles.neoMetricVal,
+                  callbacksDueTodayCount > 0 && { color: '#D97706' },
+                ]}
+              >
+                {callbacksDueTodayCount}
+              </Text>
+              <Text style={styles.neoMetricLabel}>Callbacks Due</Text>
+              <Text style={styles.neoMetricSub}>Scheduled</Text>
+            </View>
+
+            <View style={styles.neoMetricDivider} />
+
+            <View style={styles.neoMetricBox}>
+              <Text style={styles.neoMetricVal}>{avgDurationFormatted}</Text>
+              <Text style={styles.neoMetricLabel}>Avg Talk Time</Text>
+              <Text style={styles.neoMetricSub}>mm:ss</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 3. NEODOVE HERO CALLER CARD (The Core Clean Focus!) */}
+        <View style={styles.heroSection}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>UP NEXT TO CALL</Text>
+            <View style={styles.queueReadyBadge}>
+              <Text style={styles.queueReadyBadgeText}>{queueLeads.length} leads in queue</Text>
+            </View>
+          </View>
+
+          {heroLead ? (
+            <View style={styles.heroLeadCard}>
+              {/* Top Tag Row */}
+              <View style={styles.heroCardTopRow}>
+                <View style={styles.heroQueuePill}>
+                  <Text style={styles.heroQueuePillText}>Next Lead #1</Text>
                 </View>
-                <Text style={styles.agentTargetSub}>
-                  {callsMade === 0 ? 'No calls dialed yet today' : `${targetCompletedPercent}% completed today`}
+
+                <View style={styles.heroTempBadgeRow}>
+                  {heroLeadTemp === 'HOT' ? (
+                    <View style={[styles.heroTempBadge, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                      <Flame size={11} color="#DC2626" fill="#DC2626" />
+                      <Text style={[styles.heroTempBadgeText, { color: '#DC2626' }]}>Hot Lead</Text>
+                    </View>
+                  ) : heroLeadTemp === 'COLD' ? (
+                    <View style={[styles.heroTempBadge, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                      <Snowflake size={11} color="#2563EB" />
+                      <Text style={[styles.heroTempBadgeText, { color: '#2563EB' }]}>Cold Lead</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.heroTempBadge, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                      <Sun size={11} color="#D97706" />
+                      <Text style={[styles.heroTempBadgeText, { color: '#D97706' }]}>Warm Lead</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.heroStageBadge}>
+                    <Text style={styles.heroStageBadgeText}>{heroLead.stage || 'New'}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Lead Information */}
+              <View style={styles.heroLeadInfo}>
+                <View style={styles.heroAvatarBox}>
+                  <Text style={styles.heroAvatarText}>{heroLeadInitials}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.heroLeadName} numberOfLines={1}>
+                    {heroLead.name}
+                  </Text>
+                  <Text style={styles.heroLeadPhone}>
+                    {formatDisplayPhone(heroLead.phone)}
+                  </Text>
+                  <Text style={styles.heroLeadCampaign} numberOfLines={1}>
+                    {heroLeadCampaign} · Attempt #{heroLead.attemptCount || 1}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Last Call Note Preview Line (Display only) */}
+              <View style={styles.heroNotePreviewBox}>
+                <Clock3 size={12} color="#64748B" />
+                <Text style={styles.heroNotePreviewText} numberOfLines={1}>
+                  {heroLead.customProperties?.lastRemark || (heroLead.attemptCount && heroLead.attemptCount > 0 ? 'Prior conversation noted · Callback scheduled' : 'New lead · Ready for initial pitch')}
                 </Text>
               </View>
 
-              {/* Connected */}
-              <View style={styles.agentTargetCol}>
-                <Text style={styles.agentTargetLabel}>Connected</Text>
-                <Text
-                  style={[
-                    styles.agentTargetVal,
-                    { color: connectedCalls > 0 ? '#047857' : '#64748B' },
-                  ]}
-                >
-                  {connectedCalls} Leads
-                </Text>
-                <Text style={styles.agentTargetSub}>
-                  {callsMade > 0 ? `${connectRatePercent} connect rate` : '0% connect rate'}
-                </Text>
-              </View>
+              {/* Big NeoDove Primary Call Action Button */}
+              <TouchableOpacity
+                style={styles.heroCallNowBtn}
+                onPress={() => handleDirectDial(heroLead)}
+                activeOpacity={0.85}
+              >
+                <Phone size={18} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.heroCallNowBtnText}>CALL NOW</Text>
+              </TouchableOpacity>
 
-              {/* Callbacks Due */}
-              <View style={styles.agentTargetCol}>
-                <Text style={styles.agentTargetLabel}>Callbacks Due</Text>
-                <Text
-                  style={[
-                    styles.agentTargetVal,
-                    { color: callbacksDueTodayCount > 0 ? '#D97706' : '#64748B' },
-                  ]}
+              {/* Secondary Actions: WhatsApp & Disposition Note */}
+              <View style={styles.heroSecondaryActionsRow}>
+                <TouchableOpacity
+                  style={styles.heroSecondaryBtn}
+                  onPress={() => handleOpenWhatsApp(heroLead)}
+                  activeOpacity={0.8}
                 >
-                  {callbacksDueTodayCount} Pending
-                </Text>
-                <Text style={styles.agentTargetSub}>Scheduled today</Text>
+                  <MessageCircle size={15} color="#15803D" strokeWidth={2.5} />
+                  <Text style={styles.heroWhatsAppText}>WhatsApp</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.heroSecondaryBtn, styles.heroNoteBtn]}
+                  onPress={() => setSelectedLeadForQuickModal(heroLead)}
+                  activeOpacity={0.8}
+                >
+                  <FileEdit size={15} color="#2563EB" strokeWidth={2.5} />
+                  <Text style={styles.heroNoteText}>Update / Note</Text>
+                </TouchableOpacity>
               </View>
+            </View>
+          ) : (
+            /* Queue Completed State */
+            <View style={styles.emptyQueueCard}>
+              <CheckCircle2 size={38} color="#10B981" />
+              <Text style={styles.emptyQueueCardTitle}>Queue is all caught up! 🎉</Text>
+              <Text style={styles.emptyQueueCardSub}>
+                You have reached all active leads in this queue. Tap below to browse all leads or import a new contact list.
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyBrowseBtn}
+                onPress={() => navigation.navigate('MyLeads')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.emptyBrowseBtnText}>Browse All {myAssignedLeadsCount} Leads</Text>
+                <ArrowUpRight size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* 4. UPCOMING IN QUEUE (Next 2-3 Leads Preview) */}
+        {nextInQueueLeads.length > 0 && (
+          <View style={styles.upcomingSection}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>NEXT IN LINE</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('MyLeads')}
+                activeOpacity={0.7}
+                style={styles.viewAllRow}
+              >
+                <Text style={styles.viewAllText}>View All ({myAssignedLeadsCount})</Text>
+                <ChevronRight size={13} color="#2563EB" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.upcomingList}>
+              {nextInQueueLeads.map((item, idx) => {
+                const initials = item.name
+                  .split(' ')
+                  .filter(Boolean)
+                  .map((w) => w[0])
+                  .join('')
+                  .toUpperCase()
+                  .slice(0, 2) || 'LD';
+
+                return (
+                  <View key={item._id} style={styles.upcomingCard}>
+                    <View style={styles.upcomingAvatar}>
+                      <Text style={styles.upcomingAvatarText}>{initials}</Text>
+                    </View>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.upcomingName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.upcomingPhone}>{formatDisplayPhone(item.phone)}</Text>
+                    </View>
+
+                    <View style={styles.upcomingActions}>
+                      <TouchableOpacity
+                        style={styles.upcomingMiniCallBtn}
+                        onPress={() => handleDirectDial(item)}
+                        activeOpacity={0.8}
+                      >
+                        <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                        <Text style={styles.upcomingMiniCallText}>Call</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.upcomingMiniIconBtn}
+                        onPress={() => handleOpenWhatsApp(item)}
+                        activeOpacity={0.8}
+                      >
+                        <MessageCircle size={14} color="#15803D" strokeWidth={2.5} />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.upcomingMiniIconBtn}
+                        onPress={() => setSelectedLeadForQuickModal(item)}
+                        activeOpacity={0.7}
+                      >
+                        <FileEdit size={14} color="#4F46E5" strokeWidth={2} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           </View>
         )}
 
-        {/* 3. Top 4 KPI Metrics Grid */}
-        <View style={styles.statsGrid}>
-          {/* Card 1: MY LEADS TO CALL / TOTAL LEADS */}
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>{isAgent ? 'MY LEADS TO CALL' : 'TOTAL LEADS'}</Text>
-            <View style={styles.statValueRow}>
-              <Text style={styles.statValue}>{myAssignedLeadsCount}</Text>
-              <View style={styles.statTrendPill}>
-                <ArrowUpRight size={10} color="#047857" strokeWidth={3} />
-                <Text style={styles.statTrendText}>Ready</Text>
-              </View>
-            </View>
-            <Text style={styles.statSub}>
-              {isAgent ? 'Assigned exclusively to you' : 'In organization pipeline'}
-            </Text>
-          </View>
-
-          {/* Card 2: CONNECT RATE */}
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>{isAgent ? 'MY CONNECT RATE' : 'CONNECT RATE'}</Text>
-            <View style={styles.statValueRow}>
-              <Text style={styles.statValue}>{connectRatePercent}</Text>
-              <View style={styles.statStablePill}>
-                <Text style={styles.statStableText}>
-                  {connectedCalls} Connected
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.statSub}>
-              {callsMade > 0
-                ? `${connectedCalls} connected out of ${callsMade} dialed`
-                : 'Start calling to calculate rate'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={[styles.statsGrid, { marginTop: 12 }]}>
-          {/* Card 3: AVG TALK TIME */}
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>{isAgent ? 'MY AVG TALK TIME' : 'AVG TALK TIME'}</Text>
-            <View style={styles.statValueRow}>
-              <Text style={styles.statValue}>{avgDurationFormatted}</Text>
-              <Text style={styles.statUnit}>min/sec</Text>
-            </View>
-            <Text style={styles.statSub}>
-              {callsMade > 0
-                ? 'Personal average talk duration'
-                : 'No calls completed today'}
-            </Text>
-          </View>
-
-          {/* Card 4: PENDING FOLLOW-UPS */}
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>
-              {isAgent ? 'PENDING FOLLOW-UPS' : 'CALLBACKS DUE'}
-            </Text>
-            <View style={styles.statValueRow}>
-              <Text
-                style={[
-                  styles.statValue,
-                  { color: callbacksDueTodayCount > 0 ? '#D97706' : '#64748B' },
-                ]}
-              >
-                {String(callbacksDueTodayCount).padStart(2, '0')}
-              </Text>
-              {callbacksDueTodayCount > 0 && (
-                <View style={[styles.statTrendPill, { backgroundColor: '#FEF3C7' }]}>
-                  <Text style={[styles.statTrendText, { color: '#B45309' }]}>Due</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.statSub}>Scheduled callbacks due today</Text>
-          </View>
-        </View>
-
-        {/* 4. PIPELINE DISTRIBUTION (Vertical Bar Chart with Real Values) */}
-        <View style={styles.panel}>
-          <View style={styles.panelHeaderRow}>
-            <View>
-              <Text style={styles.panelTitle}>PIPELINE DISTRIBUTION</Text>
-              <Text style={styles.panelSubtitle}>
-                {isAgent
-                  ? 'Your assigned leads across each outreach stage'
-                  : 'Leads across each outreach stage'}
-              </Text>
-            </View>
+        {/* 5. PIPELINE STAGE SUMMARY */}
+        <View style={styles.pipelineSection}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>LEAD STAGES OVERVIEW</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate('MyLeads')}
               activeOpacity={0.7}
-              style={styles.viewDetailsBtn}
+              style={styles.viewAllRow}
             >
-              <Text style={styles.viewDetailsText}>View all leads</Text>
-              <ArrowUpRight size={12} color="#2563EB" />
+              <Text style={styles.viewAllText}>Manage Leads</Text>
+              <ChevronRight size={13} color="#2563EB" />
             </TouchableOpacity>
           </View>
 
-          {/* Vertical Column Chart */}
-          <View style={styles.barChartContainer}>
-            {/* Y Axis Labels */}
-            <View style={styles.yAxisCol}>
-              <Text style={styles.yAxisText}>{maxStageCount}</Text>
-              <Text style={styles.yAxisText}>{Math.round(maxStageCount * 0.75)}</Text>
-              <Text style={styles.yAxisText}>{Math.round(maxStageCount * 0.5)}</Text>
-              <Text style={styles.yAxisText}>{Math.round(maxStageCount * 0.25)}</Text>
-              <Text style={styles.yAxisText}>0</Text>
+          <View style={styles.pipelinePillsRow}>
+            {pipelineStages.map((stg) => (
+              <View key={stg.name} style={styles.pipelinePillCard}>
+                <View style={styles.pipelinePillHeader}>
+                  <View style={[styles.pipelineDot, { backgroundColor: stg.color }]} />
+                  <Text style={styles.pipelinePillName}>{stg.name}</Text>
+                </View>
+                <Text style={styles.pipelinePillCount}>{stg.count}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* 6. RECENT CALL DISPOSITIONS (Agent Only) */}
+        {isAgent && (
+          <View style={styles.historySection}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>RECENT CALL ACTIVITY</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('CallHistory')}
+                activeOpacity={0.7}
+                style={styles.viewAllRow}
+              >
+                <Text style={styles.viewAllText}>Full History</Text>
+                <ChevronRight size={13} color="#2563EB" />
+              </TouchableOpacity>
             </View>
 
-            {/* Bars Area */}
-            <View style={styles.barsArea}>
-              <View style={[styles.gridLine, { top: '0%' }]} />
-              <View style={[styles.gridLine, { top: '25%' }]} />
-              <View style={[styles.gridLine, { top: '50%' }]} />
-              <View style={[styles.gridLine, { top: '75%' }]} />
-              <View style={[styles.gridLine, { top: '100%' }]} />
-
-              {/* Dynamic Columns */}
-              <View style={styles.barsColumnsRow}>
-                {pipelineStages.map((stage) => {
-                  const barHeightPct =
-                    stage.count === 0
-                      ? '6%'
-                      : `${Math.max(12, Math.round((stage.count / maxStageCount) * 85))}%`;
+            {periodActivities.length === 0 ? (
+              <View style={styles.emptyHistoryBox}>
+                <Clock3 size={28} color="#94A3B8" />
+                <Text style={styles.emptyHistoryTitle}>No calls logged for this period</Text>
+                <Text style={styles.emptyHistorySub}>
+                  When you dial or dispose calls, they will appear here with call duration and outcome tags.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.historyCardList}>
+                {periodActivities.slice(0, 4).map((act, index) => {
+                  const isLast = index === Math.min(periodActivities.length, 4) - 1;
+                  const durText = act.connected
+                    ? formatSeconds(act.durationSeconds || 0)
+                    : 'Missed';
+                  const timeStr = new Date(act.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
 
                   return (
-                    <View key={stage.name} style={styles.barCol}>
-                      <View
-                        style={[
-                          styles.barFill,
-                          {
-                            height: barHeightPct as any,
-                            backgroundColor: stage.count === 0 ? '#E2E8F0' : stage.color,
-                          },
-                        ]}
-                      >
-                        <Text
+                    <View
+                      key={act._id}
+                      style={[styles.historyRow, isLast && { borderBottomWidth: 0 }]}
+                    >
+                      <View style={styles.historyLeft}>
+                        <View
                           style={[
-                            styles.barValueText,
-                            stage.count === 0 && { color: '#64748B' },
+                            styles.historyIconWrap,
+                            { backgroundColor: act.connected ? '#ECFDF5' : '#FEF2F2' },
                           ]}
                         >
-                          {stage.count}
-                        </Text>
+                          {act.connected ? (
+                            <Phone size={13} color="#059669" />
+                          ) : (
+                            <PhoneOff size={13} color="#DC2626" />
+                          )}
+                        </View>
+                        <View>
+                          <Text style={styles.historyName}>
+                            {act.customerName || (act.phone ? formatDisplayPhone(act.phone) : 'Contact')}
+                          </Text>
+                          <Text style={styles.historyPhone}>
+                            {act.phone ? formatDisplayPhone(act.phone) : 'No phone'}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={styles.barLegendRow}>
-                        <View style={[styles.legendDot, { backgroundColor: stage.color }]} />
-                        <Text style={styles.barLegendText} numberOfLines={1}>
-                          {stage.name}
+
+                      <View style={styles.historyCenter}>
+                        <View style={styles.stageTagMini}>
+                          <Text style={styles.stageTagMiniText}>{act.stage}</Text>
+                        </View>
+                        <Text style={styles.historyTimeText}>{timeStr}</Text>
+                      </View>
+
+                      <View style={styles.historyRight}>
+                        <Text
+                          style={[
+                            styles.historyDurationText,
+                            { color: act.connected ? '#059669' : '#DC2626' },
+                          ]}
+                        >
+                          {durText}
                         </Text>
                       </View>
                     </View>
                   );
                 })}
               </View>
-            </View>
+            )}
           </View>
+        )}
 
-          {/* Chart Footer */}
-          <View style={styles.pipelineFooter}>
-            <View style={styles.pipelineFooterLeft}>
-              <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-              <Text style={styles.pipelineFooterText}>
-                {myAssignedLeadsCount} assigned leads in your pipeline
-              </Text>
-            </View>
-            <Text style={styles.pipelineFooterRight}>Live Status</Text>
-          </View>
-        </View>
-
-        {/* OVERALL AGENTS CALLING REPORT (Admin & Manager Only) */}
+        {/* 7. OVERALL AGENTS CALLING REPORT (Admin & Manager Only) */}
         {isManagerOrAdmin && (
-          <View style={styles.panel}>
-            <View style={styles.panelHeaderRow}>
+          <View style={styles.adminReportSection}>
+            <View style={styles.sectionHeaderRow}>
               <View>
-                <Text style={styles.panelTitle}>OVERALL AGENTS CALLING REPORT</Text>
-                <Text style={styles.panelSubtitle}>
-                  Real call metrics for {period.toLowerCase()} across all branch agents
+                <Text style={styles.sectionTitle}>OVERALL AGENTS CALLING REPORT</Text>
+                <Text style={styles.adminSectionSub}>
+                  Live metrics for {period.toLowerCase()} across all branch agents
                 </Text>
               </View>
               <View style={styles.periodPill}>
@@ -782,10 +921,10 @@ export const HomeScreen: React.FC = () => {
             </View>
 
             {agentCallsList.length === 0 ? (
-              <View style={styles.emptyQueueBox}>
-                <Users size={32} color="#94A3B8" />
-                <Text style={styles.emptyQueueTitle}>No agents found</Text>
-                <Text style={styles.emptyQueueSub}>
+              <View style={styles.emptyHistoryBox}>
+                <Users size={28} color="#94A3B8" />
+                <Text style={styles.emptyHistoryTitle}>No agents found</Text>
+                <Text style={styles.emptyHistorySub}>
                   No active agents found in {selectedBranch === 'ALL' ? 'organization' : selectedBranch + ' Branch'}.
                 </Text>
               </View>
@@ -814,10 +953,8 @@ export const HomeScreen: React.FC = () => {
                       style={[styles.agentReportCard, isLast && { marginBottom: 0 }]}
                     >
                       <View style={styles.agentReportCardHeader}>
-                        <View style={[styles.queueAvatar, { backgroundColor: '#EEF2FF' }]}>
-                          <Text style={[styles.queueAvatarText, { color: '#4F46E5' }]}>
-                            {initials}
-                          </Text>
+                        <View style={styles.agentAvatarBox}>
+                          <Text style={styles.agentAvatarText}>{initials}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -881,198 +1018,6 @@ export const HomeScreen: React.FC = () => {
             )}
           </View>
         )}
-
-        {/* 5. IMMEDIATE QUEUE (Real Leads from Queue) */}
-        <View style={styles.panel}>
-          <View style={styles.panelHeaderRow}>
-            <View>
-              <Text style={styles.panelTitle}>IMMEDIATE CALLING QUEUE</Text>
-              <Text style={styles.panelSubtitle}>
-                {isAgent ? 'Your prioritized leads ready to call next' : 'Upcoming conversations'}
-              </Text>
-            </View>
-            <View style={styles.queueCountBadge}>
-              <Text style={styles.queueCountText}>{queueLeads.length} ready</Text>
-            </View>
-          </View>
-
-          {queueLeads.length === 0 ? (
-            <View style={styles.emptyQueueBox}>
-              <CheckCircle2 size={32} color="#10B981" />
-              <Text style={styles.emptyQueueTitle}>Calling Queue is Clear</Text>
-              <Text style={styles.emptyQueueSub}>
-                No immediate leads waiting. Tap below to browse all leads or import new leads.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.queueList}>
-              {queueLeads.map((item, idx) => {
-                const isLast = idx === queueLeads.length - 1;
-                const initials = item.name
-                  .split(' ')
-                  .filter(Boolean)
-                  .map((w) => w[0])
-                  .join('')
-                  .toUpperCase()
-                  .slice(0, 2) || 'LD';
-
-                return (
-                  <View
-                    key={item._id}
-                    style={[styles.queueRow, isLast && { borderBottomWidth: 0 }]}
-                  >
-                    <View style={[styles.queueAvatar, { backgroundColor: '#EEF2FF' }]}>
-                      <Text style={[styles.queueAvatarText, { color: '#4F46E5' }]}>{initials}</Text>
-                    </View>
-                    <View style={styles.queueInfo}>
-                      <Text style={styles.queueName}>{item.name}</Text>
-                      <Text style={styles.queuePhone}>{formatDisplayPhone(item.phone)}</Text>
-                    </View>
-
-                    <View style={styles.queueActionsGroup}>
-                      <TouchableOpacity
-                        style={styles.queueCallBtn}
-                        onPress={() => handleDirectDial(item)}
-                        activeOpacity={0.8}
-                        accessibilityLabel="Dial Lead"
-                      >
-                        <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
-                        <Text style={styles.queueCallBtnText}>Call</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.queueWhatsAppBtn}
-                        onPress={() => handleOpenWhatsApp(item)}
-                        activeOpacity={0.8}
-                        accessibilityLabel="WhatsApp Lead"
-                      >
-                        <MessageCircle size={14} color="#15803D" strokeWidth={2.5} />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.queueOpenBtn}
-                        onPress={() => setSelectedLeadForQuickModal(item)}
-                        activeOpacity={0.7}
-                      >
-                        <ArrowUpRight size={14} color="#64748B" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Full-width View all link */}
-          <TouchableOpacity
-            style={styles.queueFooterBtn}
-            onPress={() => navigation.navigate('MyLeads')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.queueFooterBtnText}>View all {myAssignedLeadsCount} leads ›</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 6. MY RECENT CALL DISPOSITIONS (Real Period Activities) */}
-        {isAgent && (
-          <View style={styles.panel}>
-            <View style={styles.panelHeaderRow}>
-              <View>
-                <Text style={styles.panelTitle}>MY RECENT CALL DISPOSITIONS</Text>
-                <Text style={styles.panelSubtitle}>
-                  Calls logged for {period.toLowerCase()} by {user?.name || 'You'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('CallHistory')}
-                activeOpacity={0.7}
-                style={styles.viewDetailsBtn}
-              >
-                <Text style={styles.viewDetailsText}>Full history</Text>
-                <ArrowUpRight size={12} color="#2563EB" />
-              </TouchableOpacity>
-            </View>
-
-            {periodActivities.length === 0 ? (
-              <View style={styles.emptyQueueBox}>
-                <Clock3 size={32} color="#94A3B8" />
-                <Text style={styles.emptyQueueTitle}>No calls logged for this period</Text>
-                <Text style={styles.emptyQueueSub}>
-                  When you dial or dispose calls, they will appear here with talk duration and outcome notes.
-                </Text>
-                <TouchableOpacity
-                  style={styles.startDialingBtn}
-                  onPress={() => navigation.navigate('MyLeads')}
-                  activeOpacity={0.8}
-                >
-                  <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
-                  <Text style={styles.startDialingBtnText}>Start Dialing from Queue</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.recentCallsList}>
-                {periodActivities.slice(0, 5).map((act, index) => {
-                  const isLast = index === Math.min(periodActivities.length, 5) - 1;
-                  const durText = act.connected
-                    ? formatSeconds(act.durationSeconds || 0)
-                    : 'Missed';
-                  const timeStr = new Date(act.createdAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
-
-                  return (
-                    <View
-                      key={act._id}
-                      style={[styles.callHistoryRow, isLast && { borderBottomWidth: 0 }]}
-                    >
-                      <View style={styles.callHistoryLeft}>
-                        <View
-                          style={[
-                            styles.callHistoryIconWrap,
-                            { backgroundColor: act.connected ? '#ECFDF5' : '#FEF2F2' },
-                          ]}
-                        >
-                          {act.connected ? (
-                            <Phone size={12} color="#059669" />
-                          ) : (
-                            <PhoneOff size={12} color="#DC2626" />
-                          )}
-                        </View>
-                        <View>
-                          <Text style={styles.callHistoryName}>
-                            {act.customerName || (act.phone ? formatDisplayPhone(act.phone) : 'Contact')}
-                          </Text>
-                          <Text style={styles.callHistoryPhone}>
-                            {act.phone ? formatDisplayPhone(act.phone) : 'No phone'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.callHistoryCenter}>
-                        <View style={styles.stagePillMini}>
-                          <Text style={styles.stagePillMiniText}>{act.stage}</Text>
-                        </View>
-                        <Text style={styles.callHistoryTime}>{timeStr}</Text>
-                      </View>
-
-                      <View style={styles.callHistoryRight}>
-                        <Text
-                          style={[
-                            styles.callHistoryDuration,
-                            { color: act.connected ? '#059669' : '#DC2626' },
-                          ]}
-                        >
-                          {durText}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        )}
       </ScrollView>
 
       {/* Embedded Lead Quick Modal */}
@@ -1121,7 +1066,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   headerAddBtn: {
     flexDirection: 'row',
@@ -1137,43 +1082,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  branchOfficeBanner: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 14,
-    ...shadows.soft,
-  },
-  branchOfficeLeft: {
+
+  // 1. Neo Welcome Row
+  neoWelcomeRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 14,
   },
-  branchIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#F0FDFA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
+  neoGreetingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
   },
-  branchOfficeTitle: {
-    fontSize: 15,
+  neoAgentNameText: {
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.4,
   },
-  branchStatusPill: {
+  neoBranchSubText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  neoStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     backgroundColor: '#ECFDF5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
@@ -1183,500 +1123,13 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#10B981',
   },
-  branchStatusPillText: {
-    fontSize: 9.5,
+  neoStatusPillText: {
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#047857',
   },
-  branchOfficeSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  agentTelecallerPanel: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 14,
-    ...shadows.soft,
-  },
-  agentTelecallerHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  agentTelecallerTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: 0.5,
-  },
-  periodPill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  periodPillText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  agentTelecallerSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  agentStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  agentStatusPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#047857',
-  },
-  agentTargetRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  agentTargetCol: {
-    flex: 1,
-    minWidth: 95,
-  },
-  agentTargetLabel: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-  },
-  agentTargetVal: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  progressBarTrack: {
-    height: 5,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 3,
-    marginTop: 6,
-    marginBottom: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#4F46E5',
-    borderRadius: 3,
-  },
-  agentTargetSub: {
-    fontSize: 9.5,
-    color: '#94A3B8',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.md,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...shadows.soft,
-  },
-  statLabel: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.3,
-  },
-  statValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  statUnit: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  statTrendPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 6,
-  },
-  statTrendText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#047857',
-  },
-  statStablePill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
-  },
-  statStableText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  statSub: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  panel: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginTop: 14,
-    ...shadows.soft,
-  },
-  panelHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  panelTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: 0.4,
-  },
-  panelSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  viewDetailsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  viewDetailsText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  barChartContainer: {
-    flexDirection: 'row',
-    height: 160,
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  yAxisCol: {
-    width: 32,
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingBottom: 22,
-  },
-  yAxisText: {
-    fontSize: 9,
-    color: '#94A3B8',
-    fontWeight: '600',
-  },
-  barsArea: {
-    flex: 1,
-    position: 'relative',
-  },
-  gridLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: '#F1F5F9',
-  },
-  barsColumnsRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-around',
-    paddingBottom: 22,
-  },
-  barCol: {
-    alignItems: 'center',
-    width: 48,
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  barFill: {
-    width: 24,
-    borderRadius: 4,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: 4,
-  },
-  barValueText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  barLegendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginTop: 6,
-    position: 'absolute',
-    bottom: 2,
-  },
-  legendDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  barLegendText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  pipelineFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  pipelineFooterLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  pipelineFooterText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  pipelineFooterRight: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  queueCountBadge: {
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  queueCountText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#4F46E5',
-  },
-  emptyQueueBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-  },
-  emptyQueueTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 8,
-  },
-  emptyQueueSub: {
-    fontSize: 11.5,
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 4,
-    maxWidth: 280,
-  },
-  startDialingBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  startDialingBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  queueList: {
-    gap: 4,
-  },
-  queueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: 10,
-  },
-  queueAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  queueAvatarText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  queueInfo: {
-    flex: 1,
-  },
-  queueName: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  queuePhone: {
-    fontSize: 11.5,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  queueActionsGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  queueCallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#10B981',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  queueCallBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  queueWhatsAppBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  queueOpenBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  queueFooterBtn: {
-    paddingTop: 12,
-    alignItems: 'center',
-  },
-  queueFooterBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  recentCallsList: {
-    gap: 4,
-  },
-  callHistoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  callHistoryLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1.8,
-  },
-  callHistoryIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  callHistoryName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  callHistoryPhone: {
-    fontSize: 10.5,
-    color: '#64748B',
-  },
-  callHistoryCenter: {
-    alignItems: 'center',
-    flex: 1.2,
-  },
-  stagePillMini: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-  },
-  stagePillMiniText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  callHistoryTime: {
-    fontSize: 9.5,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  callHistoryRight: {
-    alignItems: 'flex-end',
-    flex: 0.8,
-  },
-  callHistoryDuration: {
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
+
+  // Alert Banner
   newLeadsAlertBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1684,26 +1137,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#BFDBFE',
-    borderRadius: borderRadius.lg,
-    padding: 14,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 14,
-    ...shadows.soft,
   },
   newLeadsAlertIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: '#DBEAFE',
     justifyContent: 'center',
     alignItems: 'center',
   },
   newLeadsAlertTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#1E3A8A',
   },
   newLeadsAlertSubtitle: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#3B82F6',
     marginTop: 1,
   },
@@ -1712,19 +1164,590 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#2563EB',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 8,
   },
   newLeadsAlertBtnText: {
     color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
+  // 2. NeoDove Target Card
+  neoTargetCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+    ...shadows.soft,
+  },
+  neoTargetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  neoTargetTitle: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.5,
+  },
+  periodPill: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  periodPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  targetProgressSection: {
+    marginBottom: 14,
+  },
+  targetScoreRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 6,
+  },
+  targetCallsBig: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  targetCallsTotal: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  targetPercentBadge: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  targetPercentBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  neoProgressBarTrack: {
+    height: 7,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  neoProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#10B981',
+    borderRadius: 4,
+  },
+  neoMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  neoMetricBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  neoMetricVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  neoMetricLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  neoMetricSub: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginTop: 1,
+  },
+  neoMetricDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#F1F5F9',
+  },
+
+  // 3. NeoDove Hero Caller Card
+  heroSection: {
+    marginBottom: 16,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.5,
+  },
+  queueReadyBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  queueReadyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  heroLeadCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: '#10B981',
+    ...shadows.elevated,
+  },
+  heroCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  heroQueuePill: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  heroQueuePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#4F46E5',
+    textTransform: 'uppercase',
+  },
+  heroTempBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroTempBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  heroTempBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  heroStageBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  heroStageBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  heroLeadInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  heroAvatarBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroAvatarText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  heroLeadName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  heroLeadPhone: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  heroLeadCampaign: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  heroNotePreviewBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+  },
+  heroNotePreviewText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+    flex: 1,
+  },
+  heroCallNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#10B981',
+    minHeight: 52,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 10,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  heroCallNowBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  heroSecondaryActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  heroSecondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  heroWhatsAppText: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#15803D',
+  },
+  heroNoteBtn: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  heroNoteText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+
+  // Empty Queue State
+  emptyQueueCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.soft,
+  },
+  emptyQueueCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 10,
+  },
+  emptyQueueCardSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 18,
+    maxWidth: 300,
+  },
+  emptyBrowseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 14,
+  },
+  emptyBrowseBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+
+  // 4. Upcoming Leads
+  upcomingSection: {
+    marginBottom: 16,
+  },
+  viewAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  viewAllText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  upcomingList: {
+    gap: 8,
+  },
+  upcomingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.soft,
+  },
+  upcomingAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  upcomingAvatarText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  upcomingName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  upcomingPhone: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  upcomingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  upcomingMiniCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  upcomingMiniCallText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  upcomingMiniIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // 5. Pipeline Stage Summary
+  pipelineSection: {
+    marginBottom: 16,
+  },
+  pipelinePillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pipelinePillCard: {
+    flex: 1,
+    minWidth: 80,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.soft,
+  },
+  pipelinePillHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 4,
+  },
+  pipelineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  pipelinePillName: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  pipelinePillCount: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+
+  // 6. Recent Call Activity
+  historySection: {
+    marginBottom: 16,
+  },
+  emptyHistoryBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyHistoryTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 6,
+  },
+  emptyHistorySub: {
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    maxWidth: 260,
+  },
+  historyCardList: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.soft,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  historyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1.8,
+  },
+  historyIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  historyName: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  historyPhone: {
+    fontSize: 10.5,
+    color: '#64748B',
+  },
+  historyCenter: {
+    alignItems: 'center',
+    flex: 1.2,
+  },
+  stageTagMini: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  stageTagMiniText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  historyTimeText: {
+    fontSize: 9.5,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  historyRight: {
+    alignItems: 'flex-end',
+    flex: 0.8,
+  },
+  historyDurationText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
+  // 7. Admin Report Section
+  adminReportSection: {
+    marginBottom: 16,
+  },
+  adminSectionSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
   },
   adminBranchFilterRow: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 12,
+    marginTop: 8,
   },
   adminBranchPill: {
     paddingHorizontal: 12,
@@ -1750,17 +1773,31 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   agentReportCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 12,
     padding: 12,
     gap: 10,
+    ...shadows.soft,
   },
   agentReportCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  agentAvatarBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  agentAvatarText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4F46E5',
   },
   agentReportName: {
     fontSize: 13,
@@ -1789,7 +1826,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 10,

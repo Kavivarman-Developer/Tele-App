@@ -5,17 +5,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ShieldCheck } from 'lucide-react-native';
+import { ShieldCheck, Phone, Eye, EyeOff, AlertCircle, Mail, Lock } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
-import { Input } from '../components/Input';
-import { Button } from '../components/Button';
 
 export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error, clearError } = useAuthStore();
 
   const handleLogin = async () => {
@@ -24,83 +26,204 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F8FAFC]">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC', paddingTop: Platform.OS === 'android' ? 8 : 0 }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1"
+        style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
-          className="px-6 py-8"
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {/* Brand Header */}
-          <View className="items-center mb-8">
-            <View className="w-16 h-16 bg-indigo-600 rounded-2xl items-center justify-center mb-3 shadow-lg shadow-indigo-500/25">
-              <Text className="text-white font-extrabold text-2xl tracking-tighter">OK</Text>
+          {/* Brand Logo & Header */}
+          <View style={{ alignItems: 'center', marginBottom: 28 }}>
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 20,
+                backgroundColor: '#10B981',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 14,
+                shadowColor: '#10B981',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.3,
+                shadowRadius: 10,
+                elevation: 6,
+              }}
+            >
+              <Phone size={30} color="#FFFFFF" strokeWidth={2.5} />
             </View>
-            <Text className="text-2xl font-black text-slate-900 tracking-tight">Tele App CRM</Text>
-            <Text className="text-slate-500 text-xs mt-1 text-center font-medium">
-              Enterprise Telecalling & Multi-Branch CRM Platform
+            <Text style={{ fontSize: 26, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>
+              Tell
+            </Text>
+            <Text style={{ fontSize: 13, color: '#64748B', marginTop: 3, fontWeight: '500' }}>
+              High-Velocity Calling & Lead Management
             </Text>
           </View>
 
-          {/* Login Card */}
-          <View className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm mb-6">
-            <Text className="text-slate-900 font-bold text-lg mb-1">Welcome back</Text>
-            <Text className="text-slate-500 text-xs font-medium mb-5">
-              Enter your official email and password to access your branch dashboard
+          {/* Minimal Card Surface */}
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 20,
+              padding: 24,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              shadowColor: '#0F172A',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.06,
+              shadowRadius: 8,
+              elevation: 3,
+              marginBottom: 24,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 4 }}>
+              Sign In to Your Desk
+            </Text>
+            <Text style={{ fontSize: 12.5, color: '#64748B', marginBottom: 20 }}>
+              Enter your agent or manager credentials to start calling
             </Text>
 
+            {/* Soft Red Error Banner */}
             {error ? (
-              <View className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-4">
-                <Text className="text-rose-700 text-xs font-semibold text-center">{error}</Text>
+              <View
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  borderWidth: 1,
+                  borderColor: '#FECACA',
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 18,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <AlertCircle size={16} color="#DC2626" />
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#DC2626', flex: 1 }}>
+                  {error}
+                </Text>
               </View>
             ) : null}
 
-            <Input
-              label="Email Address"
-              placeholder="e.g. manager.pudukkottai@company.com"
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                if (error) clearError();
-              }}
-              keyboardType="email-address"
-              autoComplete="email"
-              autoCapitalize="none"
-            />
-
-            <Input
-              label="Password"
-              placeholder="••••••••"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                if (error) clearError();
-              }}
-              isPassword
-            />
-
-            <View className="mt-2">
-              <Button
-                title={isLoading ? 'Authenticating...' : 'Sign In'}
-                onPress={handleLogin}
-                loading={isLoading}
-                disabled={!email.trim() || !password}
-                variant="primary"
-              />
+            {/* Email Field */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+                Email Address
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  height: 48,
+                  gap: 10,
+                }}
+              >
+                <Mail size={16} color="#94A3B8" />
+                <TextInput
+                  style={{ flex: 1, fontSize: 13.5, color: '#0F172A', padding: 0 }}
+                  placeholder="name@company.com"
+                  placeholderTextColor="#94A3B8"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (error) clearError();
+                  }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
             </View>
+
+            {/* Password Field with Show/Hide Icon */}
+            <View style={{ marginBottom: 22 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+                Password
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  height: 48,
+                  gap: 10,
+                }}
+              >
+                <Lock size={16} color="#94A3B8" />
+                <TextInput
+                  style={{ flex: 1, fontSize: 13.5, color: '#0F172A', padding: 0 }}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#94A3B8"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (error) clearError();
+                  }}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  activeOpacity={0.7}
+                  style={{ padding: 4 }}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} color="#64748B" />
+                  ) : (
+                    <Eye size={18} color="#64748B" />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Sign In CTA Button */}
+            <TouchableOpacity
+              onPress={handleLogin}
+              disabled={isLoading || !email.trim() || !password}
+              activeOpacity={0.8}
+              style={{
+                height: 52,
+                backgroundColor: !email.trim() || !password || isLoading ? '#94A3B8' : '#10B981',
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#10B981',
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: !email.trim() || !password || isLoading ? 0 : 0.25,
+                shadowRadius: 6,
+                elevation: !email.trim() || !password || isLoading ? 0 : 3,
+              }}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+                  Sign In to Workspace ➔
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
 
-          {/* Security Footer */}
-          <View className="items-center">
-            <View className="flex-row items-center gap-1.5">
-              <ShieldCheck size={14} color="#0D9488" />
-              <Text className="text-[12px] text-slate-500 font-medium">
-                Protected by End-to-End Role-Based Branch Isolation
-              </Text>
-            </View>
+          {/* Security & Branch Isolation Badge */}
+          <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+            <ShieldCheck size={15} color="#10B981" />
+            <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>
+              Encrypted Session · Strict Branch Isolation
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

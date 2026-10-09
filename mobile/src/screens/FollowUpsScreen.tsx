@@ -28,9 +28,13 @@ import {
   CheckCircle2,
   Clock,
   RotateCw,
+  Clock3,
+  Calendar,
+  CalendarClock,
+  FileEdit,
 } from 'lucide-react-native';
 
-import { fetchMyLeads } from '../api/leadApi';
+import { fetchMyLeads, disposeLead } from '../api/leadApi';
 import { Lead, RootStackParamList } from '../types';
 import { colors, borderRadius, shadows } from '../theme';
 import { useAuthStore } from '../store/authStore';
@@ -42,7 +46,7 @@ import { getDialerTelUrl, formatDisplayPhone } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-type TabCategory = 'Today' | 'Overdue' | 'Upcoming';
+type TabCategory = 'Overdue' | 'Today' | 'Upcoming';
 
 interface FollowUpItem {
   _id: string;
@@ -57,6 +61,7 @@ interface FollowUpItem {
   category: TabCategory;
   temperature?: 'HOT' | 'WARM' | 'COLD';
   rawDate: Date;
+  lastRemark?: string;
 }
 
 export const FollowUpsScreen: React.FC = () => {
@@ -72,7 +77,7 @@ export const FollowUpsScreen: React.FC = () => {
   const [whatsAppModalVisible, setWhatsAppModalVisible] = useState(false);
   const [whatsAppTarget, setWhatsAppTarget] = useState<{ name: string; phone: string } | null>(null);
 
-  const { logDialedCall } = useLeadHistoryStore();
+  const { logDialedCall, addActivity } = useLeadHistoryStore();
 
   // Direct Call Handler
   const handleDirectCall = (item: FollowUpItem) => {
@@ -97,6 +102,74 @@ export const FollowUpsScreen: React.FC = () => {
       phone: item.phone,
     });
     setWhatsAppModalVisible(true);
+  };
+
+  // Quick Snooze Handler (Snooze +2 Hours or Tomorrow 10 AM)
+  const handleQuickSnooze = (item: FollowUpItem, hoursAhead: number = 2) => {
+    Alert.alert(
+      'Snooze Follow-up',
+      `Reschedule callback for ${item.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: '+2 Hours',
+          onPress: async () => {
+            const nextTime = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+            try {
+              await disposeLead(item._id, {
+                connected: false,
+                stage: 'Follow Up',
+                remark: 'Snoozed by 2 hours',
+                followUpAt: nextTime,
+                durationSeconds: 0,
+              });
+            } catch {}
+            addActivity(item._id, {
+              phone: item.phone,
+              agentName: user?.name || 'Agent',
+              agentId: user?._id,
+              connected: false,
+              stage: 'Follow Up',
+              remark: 'Follow-up snoozed +2 hours',
+              followUpAt: nextTime,
+              durationSeconds: 0,
+            });
+            refetch();
+            toast.success(`Rescheduled ${item.name} for 2 hours later`, 'Snoozed');
+          },
+        },
+        {
+          text: 'Tomorrow 10 AM',
+          onPress: async () => {
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            d.setHours(10, 0, 0, 0);
+            const nextTime = d.toISOString();
+            try {
+              await disposeLead(item._id, {
+                connected: false,
+                stage: 'Follow Up',
+                remark: 'Snoozed to Tomorrow 10 AM',
+                followUpAt: nextTime,
+                durationSeconds: 0,
+              });
+            } catch {}
+            addActivity(item._id, {
+              phone: item.phone,
+              agentName: user?.name || 'Agent',
+              agentId: user?._id,
+              connected: false,
+              stage: 'Follow Up',
+              remark: 'Follow-up snoozed to Tomorrow 10 AM',
+              followUpAt: nextTime,
+              durationSeconds: 0,
+            });
+            refetch();
+            toast.success(`Rescheduled ${item.name} for Tomorrow 10 AM`, 'Snoozed');
+          },
+        },
+      ],
+    );
   };
 
   // Real backend query for follow-ups
@@ -134,6 +207,7 @@ export const FollowUpsScreen: React.FC = () => {
       }
 
       const temp = (l.temperature || (l.tag?.toUpperCase() === 'HOT' ? 'HOT' : l.tag?.toUpperCase() === 'COLD' ? 'COLD' : 'WARM')) as 'HOT' | 'WARM' | 'COLD';
+      const lastNote = l.customProperties?.lastRemark || (l.attemptCount && l.attemptCount > 0 ? 'Requested detailed callback' : 'Initial follow-up scheduled');
 
       list.push({
         _id: l._id,
@@ -148,6 +222,7 @@ export const FollowUpsScreen: React.FC = () => {
         category: cat,
         temperature: temp,
         rawDate: dateObj,
+        lastRemark: lastNote,
       });
     }
 
@@ -179,23 +254,23 @@ export const FollowUpsScreen: React.FC = () => {
             time: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             date: dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' }),
             category: cat,
-            temperature: (act.temperature || 'WARM') as any,
+            temperature: (act.temperature as any) || 'WARM',
             rawDate: dateObj,
+            lastRemark: act.remark || 'Scheduled callback note',
           });
         }
       }
     }
 
-    // Sort by due date soonest first
     return list.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
   }, [realFollowupsData, user]);
 
-  // Counts strictly from real follow-ups
-  const todayCount = combinedItems.filter((i) => i.category === 'Today').length;
-  const overdueCount = combinedItems.filter((i) => i.category === 'Overdue').length;
-  const upcomingCount = combinedItems.filter((i) => i.category === 'Upcoming').length;
+  // Tab counts
+  const overdueCount = useMemo(() => combinedItems.filter((i) => i.category === 'Overdue').length, [combinedItems]);
+  const todayCount = useMemo(() => combinedItems.filter((i) => i.category === 'Today').length, [combinedItems]);
+  const upcomingCount = useMemo(() => combinedItems.filter((i) => i.category === 'Upcoming').length, [combinedItems]);
 
-  // Filtered List
+  // Filtered Items
   const displayedItems = useMemo(() => {
     return combinedItems.filter((item) => {
       if (item.category !== activeTab) return false;
@@ -211,23 +286,44 @@ export const FollowUpsScreen: React.FC = () => {
     });
   }, [combinedItems, activeTab, searchQuery]);
 
-  // Open Lead
+  // Countdown Helper
+  const getCountdownLabel = (rawDate: Date, cat: TabCategory) => {
+    const diffMs = rawDate.getTime() - Date.now();
+    const diffMins = Math.round(diffMs / (60 * 1000));
+
+    if (diffMs < 0) {
+      const pastMins = Math.abs(diffMins);
+      if (pastMins < 60) return `Overdue by ${pastMins}m`;
+      const pastHours = Math.floor(pastMins / 60);
+      return `Overdue by ${pastHours}h ${pastMins % 60}m`;
+    }
+    if (diffMins < 60) {
+      return `Due in ${Math.max(1, diffMins)} mins`;
+    }
+    const hours = Math.floor(diffMins / 60);
+    if (hours < 24) {
+      return `Due in ${hours}h ${diffMins % 60}m`;
+    }
+    const days = Math.floor(hours / 24);
+    return `In ${days} day${days > 1 ? 's' : ''}`;
+  };
+
   const handleOpenLead = (item: FollowUpItem) => {
     const syntheticLead: Lead = {
       _id: item._id,
       campaignId: 'default-camp',
       name: item.name,
       phone: item.phone,
-      source: 'FOLLOW_UP',
+      source: 'OUTREACH',
       stage: item.status,
-      tag: item.temperature || 'WARM',
-      temperature: item.temperature || 'WARM',
+      tag: item.temperature,
+      temperature: item.temperature,
       status: 'OPEN',
       attemptCount: item.attempts,
-      customProperties: { campaign: item.campaignName },
       nextFollowUpAt: item.rawDate.toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      customProperties: { campaign: item.campaignName, lastRemark: item.lastRemark || '' },
     };
     setQuickModalLead(syntheticLead);
   };
@@ -235,105 +331,104 @@ export const FollowUpsScreen: React.FC = () => {
   return (
     <CrmShell
       title="Scheduled Follow-ups"
-      headerIcon={<CalendarDays size={15} color={colors.textSecondary} />}
-      breadcrumb="Workspace"
+      headerIcon={<CalendarClock size={15} color={colors.textSecondary} />}
     >
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Banner Section */}
-        <View style={[styles.bannerRow, !isWide && styles.bannerRowMobile]}>
+        {/* Top Header Summary */}
+        <View style={styles.headerBanner}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.bannerTitle}>
-              {isAgent ? 'My Scheduled Follow-ups' : 'Follow-up Callbacks'}
-            </Text>
+            <Text style={styles.bannerTitle}>Follow-up Callbacks</Text>
             <Text style={styles.bannerSubtitle}>
               {todayCount > 0
-                ? `${todayCount} scheduled callback${todayCount > 1 ? 's' : ''} for today`
-                : 'All follow-up callbacks are up to date.'}
+                ? `${todayCount} scheduled callbacks for today`
+                : 'All follow-up callbacks are organized.'}
             </Text>
           </View>
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {overdueCount > 0 && (
-              <View style={styles.attentionBadge}>
-                <AlertTriangle size={13} color="#B45309" strokeWidth={2.5} />
-                <Text style={styles.attentionText}>{overdueCount} overdue</Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.refreshBtn}
-              onPress={() => {
-                refetch();
-                toast.info('Refreshed scheduled follow-ups');
-              }}
-              activeOpacity={0.7}
-            >
-              <RotateCw size={13} color="#0F172A" />
-              <Text style={styles.refreshBtnText}>Refresh</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.refreshBtn}
+            onPress={() => {
+              refetch();
+              toast.info('Refreshed callbacks');
+            }}
+            activeOpacity={0.7}
+          >
+            <RotateCw size={13} color="#0F172A" />
+            <Text style={styles.refreshBtnText}>Refresh</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Search Bar */}
+        {/* Overdue Attention Banner if any */}
+        {overdueCount > 0 && (
+          <TouchableOpacity
+            style={styles.overdueAlertBanner}
+            onPress={() => setActiveTab('Overdue')}
+            activeOpacity={0.8}
+          >
+            <AlertTriangle size={16} color="#DC2626" strokeWidth={2.5} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.overdueAlertTitle}>
+                {overdueCount} Overdue Callback{overdueCount > 1 ? 's' : ''} Require Immediate Attention!
+              </Text>
+              <Text style={styles.overdueAlertSub}>
+                Tap here to clear and call overdue customers now.
+              </Text>
+            </View>
+            <ArrowUpRight size={14} color="#DC2626" />
+          </TouchableOpacity>
+        )}
+
+        {/* Sticky Search Bar */}
         <View style={styles.searchBarWrap}>
-          <Search size={15} color="#94A3B8" />
+          <Search size={16} color="#64748B" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search scheduled follow-ups..."
+            placeholder="Search scheduled contact by name or number..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <X size={14} color="#94A3B8" />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Filter Tabs: Today | Overdue | Upcoming */}
-        <View style={styles.tabsRow}>
-          {/* Today */}
+        {/* 3 Segmented Tabs: Overdue🔴 / Today🟡 / Upcoming🔵 */}
+        <View style={styles.segmentedTabsRow}>
+          {/* Overdue Tab */}
           <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'Today' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('Today')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabLabel, activeTab === 'Today' && styles.tabLabelActive]}>
-              Today
-            </Text>
-            <View style={[styles.tabBadge, activeTab === 'Today' && styles.tabBadgeActive]}>
-              <Text style={[styles.tabBadgeText, activeTab === 'Today' && styles.tabBadgeTextActive]}>
-                {todayCount}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Overdue */}
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'Overdue' && styles.tabBtnActive]}
+            style={[
+              styles.tabBtn,
+              activeTab === 'Overdue' && styles.tabBtnActiveOverdue,
+            ]}
             onPress={() => setActiveTab('Overdue')}
             activeOpacity={0.7}
           >
-            <Text style={[styles.tabLabel, activeTab === 'Overdue' && styles.tabLabelActive]}>
+            <Text
+              style={[
+                styles.tabLabel,
+                activeTab === 'Overdue' && { color: '#DC2626', fontWeight: '800' },
+              ]}
+            >
               Overdue
             </Text>
             <View
               style={[
                 styles.tabBadge,
-                overdueCount > 0 && { backgroundColor: '#FEE2E2' },
-                activeTab === 'Overdue' && styles.tabBadgeActive,
+                { backgroundColor: overdueCount > 0 ? '#FEE2E2' : '#F1F5F9' },
+                activeTab === 'Overdue' && { backgroundColor: '#DC2626' },
               ]}
             >
               <Text
                 style={[
                   styles.tabBadgeText,
-                  overdueCount > 0 && { color: '#DC2626' },
-                  activeTab === 'Overdue' && styles.tabBadgeTextActive,
+                  { color: overdueCount > 0 ? '#DC2626' : '#64748B' },
+                  activeTab === 'Overdue' && { color: '#FFFFFF' },
                 ]}
               >
                 {overdueCount}
@@ -341,47 +436,103 @@ export const FollowUpsScreen: React.FC = () => {
             </View>
           </TouchableOpacity>
 
-          {/* Upcoming */}
+          {/* Today Tab */}
           <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'Upcoming' && styles.tabBtnActive]}
+            style={[
+              styles.tabBtn,
+              activeTab === 'Today' && styles.tabBtnActiveToday,
+            ]}
+            onPress={() => setActiveTab('Today')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabLabel,
+                activeTab === 'Today' && { color: '#D97706', fontWeight: '800' },
+              ]}
+            >
+              Today
+            </Text>
+            <View
+              style={[
+                styles.tabBadge,
+                { backgroundColor: todayCount > 0 ? '#FEF3C7' : '#F1F5F9' },
+                activeTab === 'Today' && { backgroundColor: '#D97706' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabBadgeText,
+                  { color: todayCount > 0 ? '#D97706' : '#64748B' },
+                  activeTab === 'Today' && { color: '#FFFFFF' },
+                ]}
+              >
+                {todayCount}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Upcoming Tab */}
+          <TouchableOpacity
+            style={[
+              styles.tabBtn,
+              activeTab === 'Upcoming' && styles.tabBtnActiveUpcoming,
+            ]}
             onPress={() => setActiveTab('Upcoming')}
             activeOpacity={0.7}
           >
-            <Text style={[styles.tabLabel, activeTab === 'Upcoming' && styles.tabLabelActive]}>
+            <Text
+              style={[
+                styles.tabLabel,
+                activeTab === 'Upcoming' && { color: '#2563EB', fontWeight: '800' },
+              ]}
+            >
               Upcoming
             </Text>
-            <View style={[styles.tabBadge, activeTab === 'Upcoming' && styles.tabBadgeActive]}>
-              <Text style={[styles.tabBadgeText, activeTab === 'Upcoming' && styles.tabBadgeTextActive]}>
+            <View
+              style={[
+                styles.tabBadge,
+                { backgroundColor: upcomingCount > 0 ? '#EFF6FF' : '#F1F5F9' },
+                activeTab === 'Upcoming' && { backgroundColor: '#2563EB' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabBadgeText,
+                  { color: upcomingCount > 0 ? '#2563EB' : '#64748B' },
+                  activeTab === 'Upcoming' && { color: '#FFFFFF' },
+                ]}
+              >
                 {upcomingCount}
               </Text>
             </View>
           </TouchableOpacity>
         </View>
 
-        {/* Follow-up Cards List */}
+        {/* Cards List */}
         <View style={styles.cardsList}>
           {displayedItems.length === 0 ? (
             <View style={styles.emptyStateCard}>
-              <CheckCircle2 size={36} color="#10B981" />
+              <CheckCircle2 size={38} color="#10B981" />
               <Text style={styles.emptyStateTitle}>
                 {activeTab === 'Today'
-                  ? 'No follow-up callbacks scheduled for today'
+                  ? 'No follow-up callbacks due today! 🎉'
                   : activeTab === 'Overdue'
-                  ? 'No overdue callbacks'
-                  : 'No upcoming follow-ups scheduled'}
+                  ? 'Zero overdue callbacks! Great job. 👍'
+                  : 'No upcoming callbacks scheduled.'}
               </Text>
               <Text style={styles.emptyStateSubtitle}>
                 {activeTab === 'Today'
-                  ? 'You are all caught up! Great job staying on top of your customer follow-ups.'
-                  : 'Callbacks scheduled for future dates will appear here.'}
+                  ? 'You are all caught up with your scheduled calls.'
+                  : 'Future follow-ups will appear here automatically.'}
               </Text>
               <TouchableOpacity
-                style={styles.emptyActionBtn}
+                style={styles.emptyQueueBtn}
                 onPress={() => navigation.navigate('MyLeads')}
                 activeOpacity={0.8}
               >
-                <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={styles.emptyActionBtnText}>Go to Calling Queue</Text>
+                <Phone size={14} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.emptyQueueBtnText}>Go to Calling Queue</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -395,111 +546,135 @@ export const FollowUpsScreen: React.FC = () => {
                 .slice(0, 2) || 'LD';
               const isHot = item.temperature === 'HOT';
               const isCold = item.temperature === 'COLD';
+              const isOverdue = item.category === 'Overdue';
+              const countdownText = getCountdownLabel(item.rawDate, item.category);
 
               return (
                 <View key={item._id} style={styles.followupCard}>
-                  {/* Left Column: Calendar Icon + Time + Date */}
-                  <View style={styles.timeCol}>
-                    <Clock size={16} color={item.category === 'Overdue' ? '#DC2626' : '#2563EB'} />
-                    <Text
-                      style={[
-                        styles.timeText,
-                        item.category === 'Overdue' && { color: '#DC2626' },
-                      ]}
-                    >
-                      {item.time}
-                    </Text>
-                    <Text style={styles.dateText}>{item.date}</Text>
-                  </View>
-
-                  {/* Vertical Divider */}
-                  <View style={styles.verticalDivider} />
-
-                  {/* Avatar */}
-                  <View style={[styles.avatarCircle, { backgroundColor: '#EEF2FF' }]}>
-                    <Text style={[styles.avatarText, { color: '#3730A3' }]}>{initials}</Text>
-                  </View>
-
-                  {/* Center: Name, Subtitle, Badges */}
-                  <View style={styles.infoCol}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <Text style={styles.personName}>{item.name}</Text>
-                      {/* Customer Importance / Temperature Badge */}
-                      <View
-                        style={[
-                          styles.tempBadge,
-                          isHot
-                            ? styles.tempHot
-                            : isCold
-                            ? styles.tempCold
-                            : styles.tempWarm,
-                        ]}
-                      >
-                        {isHot ? (
-                          <Flame size={9} color="#DC2626" fill="#DC2626" />
-                        ) : isCold ? (
-                          <Snowflake size={9} color="#2563EB" />
-                        ) : (
-                          <Sun size={9} color="#D97706" />
-                        )}
-                        <Text
-                          style={[
-                            styles.tempBadgeText,
-                            { color: isHot ? '#DC2626' : isCold ? '#2563EB' : '#D97706' },
-                          ]}
-                        >
-                          {item.temperature || 'Warm'}
-                        </Text>
-                      </View>
+                  {/* Top Row: Avatar + Name & Phone + Countdown Badge */}
+                  <View style={styles.cardHeaderRow}>
+                    <View style={styles.avatarCircle}>
+                      <Text style={styles.avatarText}>{initials}</Text>
                     </View>
 
-                    <Text style={styles.personSubtitle}>
-                      {formatDisplayPhone(item.phone)} · {item.campaignName}
-                    </Text>
-
-                    <View style={styles.metaRow}>
-                      <View style={styles.statusPill}>
-                        <Text style={styles.statusPillText}>{item.status}</Text>
+                    <View style={styles.leadInfoCol}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.customerName} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        {/* Priority Pill */}
+                        <View
+                          style={[
+                            styles.priorityPill,
+                            isHot
+                              ? styles.priorityHot
+                              : isCold
+                              ? styles.priorityCold
+                              : styles.priorityWarm,
+                          ]}
+                        >
+                          {isHot ? (
+                            <Flame size={10} color="#DC2626" fill="#DC2626" />
+                          ) : isCold ? (
+                            <Snowflake size={10} color="#2563EB" />
+                          ) : (
+                            <Sun size={10} color="#D97706" />
+                          )}
+                          <Text
+                            style={[
+                              styles.priorityPillText,
+                              { color: isHot ? '#DC2626' : isCold ? '#2563EB' : '#D97706' },
+                            ]}
+                          >
+                            {item.temperature || 'Warm'}
+                          </Text>
+                        </View>
                       </View>
-                      <Text style={styles.attemptsText}>
-                        {item.attempts} {item.attempts === 1 ? 'attempt' : 'attempts'}
+
+                      {/* Phone Number */}
+                      <Text style={styles.customerPhone}>
+                        {formatDisplayPhone(item.phone)}
+                      </Text>
+                    </View>
+
+                    {/* Countdown Badge Pill */}
+                    <View
+                      style={[
+                        styles.countdownBadge,
+                        isOverdue
+                          ? styles.countdownBadgeOverdue
+                          : item.category === 'Today'
+                          ? styles.countdownBadgeToday
+                          : styles.countdownBadgeUpcoming,
+                      ]}
+                    >
+                      <Clock3
+                        size={11}
+                        color={
+                          isOverdue ? '#DC2626' : item.category === 'Today' ? '#D97706' : '#2563EB'
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.countdownText,
+                          {
+                            color:
+                              isOverdue ? '#DC2626' : item.category === 'Today' ? '#D97706' : '#2563EB',
+                          },
+                        ]}
+                      >
+                        {countdownText}
                       </Text>
                     </View>
                   </View>
 
-                  {/* Right Column: Direct Actions (Call, WhatsApp, Open Lead) */}
-                  <View style={styles.rightCol}>
-                    <View style={styles.cardActionsRow}>
-                      {/* Direct Call Button */}
-                      <TouchableOpacity
-                        style={styles.directCallBtn}
-                        onPress={() => handleDirectCall(item)}
-                        activeOpacity={0.8}
-                        accessibilityLabel="Call Lead"
-                      >
-                        <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
-                        <Text style={styles.directCallBtnText}>Call</Text>
-                      </TouchableOpacity>
+                  {/* Last Remark Preview Line */}
+                  <View style={styles.remarkPreviewBox}>
+                    <Clock size={12} color="#64748B" />
+                    <Text style={styles.remarkPreviewText} numberOfLines={1}>
+                      {item.lastRemark || 'Customer requested callback to discuss details'}
+                    </Text>
+                  </View>
 
-                      {/* Direct WhatsApp Button */}
-                      <TouchableOpacity
-                        style={styles.directWhatsAppBtn}
-                        onPress={() => handleOpenWhatsApp(item)}
-                        activeOpacity={0.8}
-                        accessibilityLabel="WhatsApp Lead"
-                      >
-                        <MessageCircle size={14} color="#047857" strokeWidth={2.5} />
-                      </TouchableOpacity>
+                  {/* Bottom Action Row (Tactile buttons, min 48px height) */}
+                  <View style={styles.actionButtonsRow}>
+                    {/* Call Now Button */}
+                    <TouchableOpacity
+                      style={styles.callNowBtn}
+                      onPress={() => handleDirectCall(item)}
+                      activeOpacity={0.85}
+                    >
+                      <Phone size={15} color="#FFFFFF" strokeWidth={2.5} />
+                      <Text style={styles.callNowBtnText}>Call Now</Text>
+                    </TouchableOpacity>
 
-                      {/* Open Lead Button */}
-                      <TouchableOpacity
-                        style={styles.openLeadBtn}
-                        onPress={() => handleOpenLead(item)}
-                        activeOpacity={0.7}
-                      >
-                        <ArrowUpRight size={14} color="#64748B" />
-                      </TouchableOpacity>
-                    </View>
+                    {/* Snooze Button */}
+                    <TouchableOpacity
+                      style={styles.snoozeBtn}
+                      onPress={() => handleQuickSnooze(item)}
+                      activeOpacity={0.8}
+                    >
+                      <Clock3 size={14} color="#D97706" strokeWidth={2.5} />
+                      <Text style={styles.snoozeBtnText}>Snooze</Text>
+                    </TouchableOpacity>
+
+                    {/* WhatsApp Button */}
+                    <TouchableOpacity
+                      style={styles.iconBtn}
+                      onPress={() => handleOpenWhatsApp(item)}
+                      activeOpacity={0.8}
+                    >
+                      <MessageCircle size={15} color="#15803D" strokeWidth={2.5} />
+                    </TouchableOpacity>
+
+                    {/* Details / Modal Button */}
+                    <TouchableOpacity
+                      style={styles.iconBtn}
+                      onPress={() => handleOpenLead(item)}
+                      activeOpacity={0.8}
+                    >
+                      <FileEdit size={15} color="#4F46E5" strokeWidth={2} />
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
@@ -508,7 +683,7 @@ export const FollowUpsScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* Interactive Lovable Lead Modal */}
+      {/* Embedded Lead Quick Modal */}
       {quickModalLead && (
         <LeadQuickModal
           lead={quickModalLead}
@@ -544,19 +719,13 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
-  bannerRow: {
+  headerBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  bannerRowMobile: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
+    marginBottom: 12,
   },
   bannerTitle: {
     fontSize: 20,
@@ -569,22 +738,6 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
-  attentionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-    gap: 6,
-  },
-  attentionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#B45309',
-  },
   refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -593,7 +746,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
   },
   refreshBtnText: {
@@ -601,78 +754,262 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
+  overdueAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  overdueAlertTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  overdueAlertSub: {
+    fontSize: 11,
+    color: '#B91C1C',
+    marginTop: 1,
+  },
   searchBarWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    height: 40,
+    height: 42,
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 13,
     color: '#0F172A',
     paddingVertical: 0,
   },
-  tabsRow: {
+  segmentedTabsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   tabBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
+    paddingVertical: 8,
+    borderRadius: 10,
     gap: 6,
   },
-  tabBtnActive: {
+  tabBtnActiveOverdue: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1.5,
+  },
+  tabBtnActiveToday: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1.5,
+  },
+  tabBtnActiveUpcoming: {
     backgroundColor: '#EFF6FF',
     borderColor: '#BFDBFE',
+    borderWidth: 1.5,
   },
   tabLabel: {
-    fontSize: 11.5,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#64748B',
   },
-  tabLabelActive: {
-    color: '#2563EB',
-    fontWeight: '700',
-  },
   tabBadge: {
-    backgroundColor: '#F1F5F9',
     paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 10,
-  },
-  tabBadgeActive: {
-    backgroundColor: '#DBEAFE',
+    borderRadius: 8,
   },
   tabBadgeText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  tabBadgeTextActive: {
-    color: '#1D4ED8',
+    fontWeight: '800',
   },
   cardsList: {
+    gap: 12,
+  },
+  followupCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    ...shadows.soft,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 10,
+    marginBottom: 10,
+  },
+  avatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  leadInfoCol: {
+    flex: 1,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  customerPhone: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  priorityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  priorityHot: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  priorityWarm: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  priorityCold: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  priorityPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  countdownBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  countdownBadgeOverdue: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  countdownBadgeToday: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  countdownBadgeUpcoming: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  countdownText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  remarkPreviewBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginBottom: 12,
+  },
+  remarkPreviewText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+    flex: 1,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  callNowBtn: {
+    flex: 1.5,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  callNowBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  snoozeBtn: {
+    flex: 1.1,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 10,
+  },
+  snoozeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  iconBtn: {
+    width: 48,
+    height: 48,
+    minHeight: 48,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyStateCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    padding: 36,
+    borderRadius: 14,
+    padding: 28,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     ...shadows.soft,
@@ -681,170 +1018,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
-    marginTop: 12,
+    marginTop: 10,
     textAlign: 'center',
   },
   emptyStateSubtitle: {
     fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 18,
-    maxWidth: 300,
-  },
-  emptyActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  emptyActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  followupCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 14,
-    ...shadows.soft,
-    gap: 12,
-  },
-  timeCol: {
-    width: 58,
-    alignItems: 'center',
-    gap: 2,
-  },
-  timeText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  dateText: {
-    fontSize: 9.5,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  verticalDivider: {
-    width: 1,
-    height: 44,
-    backgroundColor: '#F1F5F9',
-  },
-  avatarCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  infoCol: {
-    flex: 1,
-    gap: 2,
-  },
-  personName: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  tempBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  tempHot: {
-    backgroundColor: '#FEE2E2',
-  },
-  tempWarm: {
-    backgroundColor: '#FEF3C7',
-  },
-  tempCold: {
-    backgroundColor: '#EFF6FF',
-  },
-  tempBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  personSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     marginTop: 4,
+    maxWidth: 260,
+    lineHeight: 16,
   },
-  statusPill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
-  },
-  statusPillText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  attemptsText: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  rightCol: {
-    alignItems: 'flex-end',
-  },
-  cardActionsRow: {
+  emptyQueueBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 14,
   },
-  directCallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#10B981',
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  directCallBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
+  emptyQueueBtnText: {
+    fontSize: 12,
     fontWeight: '700',
-  },
-  directWhatsAppBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  openLeadBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: '#FFFFFF',
   },
 });

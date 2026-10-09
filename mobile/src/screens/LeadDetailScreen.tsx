@@ -311,47 +311,6 @@ export const LeadDetailScreen: React.FC = () => {
               </View>
             </View>
           </View>
-
-          {/* Quick Outreach Action Buttons */}
-          <View style={styles.actionGrid}>
-            <TouchableOpacity
-              style={[styles.primaryActionBtn, styles.callBtn]}
-              onPress={handlePressCall}
-              activeOpacity={0.8}
-            >
-              <Phone size={18} color={colors.surface} />
-              <Text style={styles.actionBtnText}>
-                {callActive ? 'Calling…' : 'Call Lead'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.primaryActionBtn, styles.whatsappBtn]}
-              onPress={handleDirectWhatsApp}
-              activeOpacity={0.8}
-            >
-              <MessageCircle size={18} color={colors.surface} />
-              <Text style={styles.actionBtnText}>WhatsApp</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.primaryActionBtn, styles.disposeBtn]}
-              onPress={() =>
-                navigation.navigate('Dispose', {
-                  lead: currentLead,
-                  callDurationSeconds: 0,
-                  isCallConnected: true,
-                  detectionMethod: 'MANUAL',
-                  queue,
-                  queueIndex,
-                })
-              }
-              activeOpacity={0.8}
-            >
-              <UserCheck size={18} color={colors.surface} />
-              <Text style={styles.actionBtnText}>Log Call</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Lead Details & Metadata */}
@@ -457,6 +416,45 @@ export const LeadDetailScreen: React.FC = () => {
         </View>
       </ScrollView>
 
+      {/* Sticky Bottom Action Dock (Dial | WhatsApp | Log Call) */}
+      <View style={styles.stickyBottomDock}>
+        <TouchableOpacity
+          style={[styles.dockBtn, styles.dockCallBtn]}
+          onPress={handlePressCall}
+          activeOpacity={0.85}
+        >
+          <Phone size={16} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={styles.dockCallBtnText}>{callActive ? 'Calling…' : 'Call Lead'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.dockBtn, styles.dockWhatsAppBtn]}
+          onPress={handleDirectWhatsApp}
+          activeOpacity={0.85}
+        >
+          <MessageCircle size={16} color="#15803D" strokeWidth={2.5} />
+          <Text style={styles.dockWhatsAppBtnText}>WhatsApp</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.dockBtn, styles.dockDisposeBtn]}
+          onPress={() =>
+            navigation.navigate('Dispose', {
+              lead: currentLead,
+              callDurationSeconds: 0,
+              isCallConnected: true,
+              detectionMethod: 'MANUAL',
+              queue,
+              queueIndex,
+            })
+          }
+          activeOpacity={0.85}
+        >
+          <UserCheck size={16} color="#4F46E5" strokeWidth={2.5} />
+          <Text style={styles.dockDisposeBtnText}>Log Call</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Permission Modal */}
       <CallPermissionModal
         visible={showPermissionModal}
@@ -470,14 +468,16 @@ export const LeadDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
+    paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
     gap: 16,
   },
   heroCard: {
@@ -498,15 +498,15 @@ const styles = StyleSheet.create({
     marginLeft: 14,
   },
   heroName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    color: colors.text,
+    color: '#0F172A',
   },
   heroPhone: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: 16,
+    color: '#0F172A',
     marginTop: 2,
-    fontWeight: '500',
+    fontWeight: '800',
   },
   badgeRow: {
     flexDirection: 'row',
@@ -515,40 +515,75 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   campaignBadge: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: borderRadius.sm,
   },
   campaignBadgeText: {
-    fontSize: 10,
-    color: colors.textQuiet,
+    fontSize: 10.5,
+    color: '#64748B',
     fontWeight: '600',
   },
-  actionGrid: {
+  stickyBottomDock: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     flexDirection: 'row',
     gap: 8,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
+    ...shadows.elevated,
   },
-  primaryActionBtn: {
+  dockBtn: {
     flex: 1,
+    minHeight: 50,
+    borderRadius: 12,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: borderRadius.md,
+    justifyContent: 'center',
     gap: 6,
   },
-  callBtn: {
-    backgroundColor: colors.success,
+  dockCallBtn: {
+    backgroundColor: '#10B981',
+    flex: 1.2,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  whatsappBtn: {
-    backgroundColor: '#25D366',
+  dockCallBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
-  disposeBtn: {
-    backgroundColor: colors.primary,
+  dockWhatsAppBtn: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  dockWhatsAppBtnText: {
+    color: '#15803D',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  dockDisposeBtn: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  dockDisposeBtnText: {
+    color: '#4F46E5',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   actionBtnText: {
     color: colors.surface,

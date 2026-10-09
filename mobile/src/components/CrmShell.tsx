@@ -76,7 +76,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.shellContainer} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.shellContainer} edges={['top']}>
       <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
       <View style={styles.shellLayout}>
         {/* Persistent sidebar for wide screen/web */}
@@ -215,7 +215,8 @@ export const CrmShell: React.FC<CrmShellProps> = ({
 const styles = StyleSheet.create({
   shellContainer: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
+    paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   shellLayout: {
     flex: 1,
@@ -372,5 +373,6 @@ const styles = StyleSheet.create({
   },
   contentWrap: {
     flex: 1,
+    backgroundColor: colors.background,
   },
 });

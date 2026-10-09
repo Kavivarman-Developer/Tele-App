@@ -892,7 +892,7 @@ export const MyLeadsScreen: React.FC = () => {
                         onPress={() => handleDirectCall(item.phone, item.name, item._id, item.status)}
                         activeOpacity={0.8}
                       >
-                        <Phone size={13} color="#047857" strokeWidth={2.5} />
+                        <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
                         <Text style={styles.cardCallBtnText} numberOfLines={1}>Call</Text>
                       </TouchableOpacity>
 
@@ -1135,7 +1135,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   bannerRow: {
     flexDirection: 'row',
@@ -1684,17 +1684,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    backgroundColor: '#10B981',
     borderRadius: 8,
     paddingHorizontal: 4,
     gap: 4,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 2,
   },
   cardCallBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#047857',
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   cardWhatsAppBtn: {
     flex: 1.15,

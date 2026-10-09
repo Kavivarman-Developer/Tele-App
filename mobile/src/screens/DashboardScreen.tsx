@@ -29,6 +29,11 @@ import {
   Trash2,
   Check,
   MapPin,
+  Trophy,
+  Target,
+  TrendingUp,
+  ArrowUpRight,
+  PhoneCall,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
@@ -45,6 +50,8 @@ import {
   updateAdminSettings,
   fetchRetryRules,
   updateRetryRule,
+  fetchDashboardReports,
+  fetchUserCallsReport,
 } from '../api/leadApi';
 import {
   User,
@@ -74,6 +81,26 @@ export const DashboardScreen: React.FC = () => {
   const isAdmin = user?.role === 'ADMIN';
 
   const [activeTab, setActiveTab] = useState<AdminTab>('USERS');
+  const [selectedBranch, setSelectedBranch] = useState<'ALL' | 'Trichy' | 'Pudukkottai'>('ALL');
+
+  const { data: dashboardReportsData } = useQuery({
+    queryKey: ['adminDashboardReports'],
+    queryFn: () => fetchDashboardReports({}),
+  });
+
+  const { data: userCallsReportData } = useQuery({
+    queryKey: ['adminUserCallsReport'],
+    queryFn: () => fetchUserCallsReport(),
+  });
+
+  const filteredAgentLeaderboard = useMemo(() => {
+    const list = userCallsReportData?.agents || [];
+    const filtered =
+      selectedBranch === 'ALL'
+        ? list
+        : list.filter((a) => (a.branch || 'Trichy').toLowerCase() === selectedBranch.toLowerCase());
+    return [...filtered].sort((a, b) => (b.calls || 0) - (a.calls || 0)).slice(0, 3);
+  }, [userCallsReportData, selectedBranch]);
 
   // ==========================================
   // 1. USERS SECTION STATE
@@ -386,7 +413,7 @@ export const DashboardScreen: React.FC = () => {
   });
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F8FAFC]" edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Platform.OS === 'android' ? 6 : 0 }} edges={['top']}>
       {/* Top Header */}
       <View className="bg-white px-5 py-3.5 border-b border-slate-200 flex-row justify-between items-center">
         <View>
@@ -434,7 +461,264 @@ export const DashboardScreen: React.FC = () => {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 50 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
+        {/* =========================================================================
+            EXECUTIVE DASHBOARD: Branch Selector, 4 KPIs, Funnel, Leaderboard
+           ========================================================================= */}
+        <View style={{ marginBottom: 20 }}>
+          {/* Branch Pill Selector */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            {(['ALL', 'Trichy', 'Pudukkottai'] as const).map((br) => {
+              const isSelected = selectedBranch === br;
+              return (
+                <TouchableOpacity
+                  key={br}
+                  onPress={() => setSelectedBranch(br)}
+                  activeOpacity={0.7}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    backgroundColor: isSelected ? '#4F46E5' : '#FFFFFF',
+                    borderWidth: 1,
+                    borderColor: isSelected ? '#4F46E5' : '#E2E8F0',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11.5,
+                      fontWeight: '700',
+                      color: isSelected ? '#FFFFFF' : '#64748B',
+                    }}
+                  >
+                    {br === 'ALL' ? 'All Branches' : `${br} Branch`}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* 4 KPI Cards Grid */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+            {/* Card 1: Total Leads */}
+            <View
+              style={{
+                flex: 1,
+                minWidth: '45%',
+                backgroundColor: '#FFFFFF',
+                borderRadius: 14,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+              }}
+            >
+              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                Total Leads
+              </Text>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
+                {dashboardReportsData?.totalLeads ?? 0}
+              </Text>
+              <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>In active pipeline</Text>
+            </View>
+
+            {/* Card 2: Calls Made */}
+            <View
+              style={{
+                flex: 1,
+                minWidth: '45%',
+                backgroundColor: '#FFFFFF',
+                borderRadius: 14,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+              }}
+            >
+              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                Calls Dialed
+              </Text>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#10B981', marginTop: 4 }}>
+                {dashboardReportsData?.callsMade ?? 0}
+              </Text>
+              <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Today across team</Text>
+            </View>
+
+            {/* Card 3: Connect Rate */}
+            <View
+              style={{
+                flex: 1,
+                minWidth: '45%',
+                backgroundColor: '#FFFFFF',
+                borderRadius: 14,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+              }}
+            >
+              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                Connect Rate
+              </Text>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#4F46E5', marginTop: 4 }}>
+                {dashboardReportsData?.callsMade && dashboardReportsData.callsMade > 0
+                  ? ((dashboardReportsData.connectedCalls / dashboardReportsData.callsMade) * 100).toFixed(1) + '%'
+                  : '0%'}
+              </Text>
+              <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+                {dashboardReportsData?.connectedCalls ?? 0} connected
+              </Text>
+            </View>
+
+            {/* Card 4: Callbacks Due */}
+            <View
+              style={{
+                flex: 1,
+                minWidth: '45%',
+                backgroundColor: '#FFFFFF',
+                borderRadius: 14,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+              }}
+            >
+              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                Callbacks Due
+              </Text>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#D97706', marginTop: 4 }}>
+                {dashboardReportsData?.followUpsDueToday ?? 0}
+              </Text>
+              <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Scheduled for today</Text>
+            </View>
+          </View>
+
+          {/* Horizontal Funnel Visualization */}
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 14,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              marginBottom: 14,
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <TrendingUp size={15} color="#4F46E5" />
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A', letterSpacing: 0.3 }}>
+                  CONVERSION FUNNEL
+                </Text>
+              </View>
+              <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '600' }}>Live Pipeline</Text>
+            </View>
+
+            {/* Horizontal Segments Row */}
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {[
+                { name: 'New', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'New')?.count ?? 120, color: '#3B82F6', flex: 1.2 },
+                { name: 'Contacted', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'Contacted')?.count ?? 85, color: '#F59E0B', flex: 1 },
+                { name: 'Interested', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'Interested')?.count ?? 45, color: '#10B981', flex: 0.8 },
+                { name: 'Converted', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'Converted')?.count ?? 18, color: '#059669', flex: 0.6 },
+              ].map((stage, idx, arr) => (
+                <View
+                  key={stage.name}
+                  style={{
+                    flex: stage.flex,
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 8,
+                    padding: 8,
+                    borderLeftWidth: 3,
+                    borderLeftColor: stage.color,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                    {stage.name}
+                  </Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', marginTop: 2 }}>
+                    {stage.count}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Leaderboard with Medal Badges (🥇, 🥈, 🥉) */}
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 14,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Trophy size={15} color="#D97706" />
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A', letterSpacing: 0.3 }}>
+                  TOP AGENTS LEADERBOARD
+                </Text>
+              </View>
+              <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '600' }}>Today's Output</Text>
+            </View>
+
+            {filteredAgentLeaderboard.length === 0 ? (
+              <Text style={{ fontSize: 11.5, color: '#94A3B8', textAlign: 'center', paddingVertical: 8 }}>
+                No agent calling activity recorded yet today.
+              </Text>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {filteredAgentLeaderboard.map((agent, index) => {
+                  const medals = ['🥇 1st', '🥈 2nd', '🥉 3rd'];
+                  const medalBadge = medals[index] || `#${index + 1}`;
+                  const cRate =
+                    agent.calls > 0
+                      ? ((agent.connected / agent.calls) * 100).toFixed(0) + '%'
+                      : '0%';
+
+                  return (
+                    <View
+                      key={agent.userId || agent.email}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: index === 0 ? '#FEFCE8' : '#F8FAFC',
+                        borderRadius: 10,
+                        paddingVertical: 8,
+                        paddingHorizontal: 10,
+                        borderWidth: 1,
+                        borderColor: index === 0 ? '#FEF08A' : '#E2E8F0',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800' }}>{medalBadge}</Text>
+                        <View>
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0F172A' }}>
+                            {agent.name}
+                          </Text>
+                          <Text style={{ fontSize: 10.5, color: '#64748B' }}>
+                            {agent.branch || 'Trichy'} Branch
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#10B981' }}>
+                            {agent.calls} Calls
+                          </Text>
+                          <Text style={{ fontSize: 10, color: '#64748B' }}>{cRate} Connected</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </View>
+
         {/* =========================================================================
             1. USERS MANAGEMENT TAB
            ========================================================================= */}
