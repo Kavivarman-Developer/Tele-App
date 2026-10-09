@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Alert,
   Modal,
   Linking,
+  AppState,
+  AppStateStatus,
   useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -31,14 +33,16 @@ import {
   Snowflake,
 } from 'lucide-react-native';
 
-import { fetchMyLeads, fetchCampaigns, createWalkInLead } from '../api/leadApi';
-import { Lead, RootStackParamList } from '../types';
+import { fetchMyLeads, fetchCampaigns, createWalkInLead, disposeLead } from '../api/leadApi';
+import { Lead, RootStackParamList, DetectedCallResult, CustomerTemperature } from '../types';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { CrmShell } from '../components/CrmShell';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
+import { NeoPostCallModal } from '../components/NeoPostCallModal';
+import { callService } from '../services/call.service';
 import { getDialerTelUrl, formatDisplayPhone, normalizePhoneDigits } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
 import { downloadOrShareCsv, convertLeadsToCsv } from '../utils/csvDownloader';
@@ -206,6 +210,22 @@ export const MyLeadsScreen: React.FC = () => {
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   const [quickModalLead, setQuickModalLead] = useState<Lead | null>(null);
 
+  // Call Detection State & Refs
+  const isCallingRef = useRef<boolean>(false);
+  const callStartTimeRef = useRef<number | null>(null);
+  const callingLeadRef = useRef<Lead | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  const [postCallData, setPostCallData] = useState<{
+    visible: boolean;
+    lead: Lead | null;
+    callResult: DetectedCallResult | null;
+  }>({
+    visible: false,
+    lead: null,
+    callResult: null,
+  });
+
   // WhatsApp Template Modal State
   const [whatsAppModalData, setWhatsAppModalData] = useState<{
     visible: boolean;
@@ -312,19 +332,7 @@ export const MyLeadsScreen: React.FC = () => {
       });
     }
 
-    // Default items: For agents, personalize so other agents' names are never leaked
-    if (isAgent) {
-      return DEMO_LEADS.map((lead) => ({
-        ...lead,
-        phone: formatDisplayPhone(lead.phone),
-        assignedAgent: `${user?.name || 'You'} (${user?.branch || 'Agent'})`,
-      }));
-    }
-
-    return DEMO_LEADS.map((lead) => ({
-      ...lead,
-      phone: formatDisplayPhone(lead.phone),
-    }));
+    return [];
   }, [leadsData, isAgent, user]);
 
   // Compute status pill counts
@@ -388,7 +396,7 @@ export const MyLeadsScreen: React.FC = () => {
   };
 
   // Handle Direct Call
-  const handleDirectCall = (
+  const handleDirectCall = async (
     phone: string,
     customerName?: string,
     leadId?: string,
@@ -401,7 +409,8 @@ export const MyLeadsScreen: React.FC = () => {
 
     const isSuppressed = leadStatus === 'Not Interested' || leadStatus === 'Closed';
 
-    const executeCall = () => {
+    const executeCall = async () => {
+      // 1. Immediately log dialed call in local history store
       useLeadHistoryStore.getState().logDialedCall({
         leadId: leadId || 'lead-' + Date.now(),
         phone,
@@ -410,9 +419,37 @@ export const MyLeadsScreen: React.FC = () => {
         agentId: user?._id || user?.email,
         branch: user?.branch || 'General',
       });
-      Linking.openURL(getDialerTelUrl(phone)).catch(() => {
+
+      // 2. Resolve Lead object
+      const foundLead = (leadsData?.leads || []).find((l: Lead) => l._id === leadId || l.phone === phone);
+      const activeLead: Lead = foundLead || {
+        _id: leadId || 'lead-' + Date.now(),
+        campaignId: 'default',
+        name: customerName || 'Lead Contact',
+        phone,
+        source: 'DIRECT',
+        stage: leadStatus || 'New',
+        status: 'OPEN',
+        attemptCount: 1,
+        customProperties: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      callingLeadRef.current = activeLead;
+      callStartTimeRef.current = Date.now();
+      isCallingRef.current = true;
+
+      toast.info(`Calling ${customerName || phone}...`, 'Dialing');
+
+      try {
+        await callService.startCall(activeLead);
+      } catch (err) {
+        isCallingRef.current = false;
+        callStartTimeRef.current = null;
+        callingLeadRef.current = null;
         Alert.alert('Call Error', 'Unable to open phone dialer on this device.');
-      });
+      }
     };
 
     if (isSuppressed) {
@@ -427,7 +464,112 @@ export const MyLeadsScreen: React.FC = () => {
       return;
     }
 
-    executeCall();
+    await executeCall();
+  };
+
+  // AppState Listener: Detect returning from dialer in MyLeadsScreen
+  useEffect(() => {
+    const handleAppStateChange = async (nextState: AppStateStatus) => {
+      const prevState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (
+        (prevState === 'background' || prevState === 'inactive') &&
+        nextState === 'active' &&
+        isCallingRef.current &&
+        callStartTimeRef.current !== null &&
+        callingLeadRef.current !== null
+      ) {
+        const startTime = callStartTimeRef.current;
+        const dialedLead = callingLeadRef.current;
+        isCallingRef.current = false;
+        callStartTimeRef.current = null;
+
+        try {
+          const result = await callService.getCallResult(dialedLead.phone, startTime);
+          setPostCallData({
+            visible: true,
+            lead: dialedLead,
+            callResult: result,
+          });
+
+          // Also auto-save call attempt to backend
+          try {
+            await disposeLead(dialedLead._id, {
+              connected: result.connected,
+              durationSeconds: result.durationSeconds,
+              stage: result.connected ? 'Contacted' : 'Not connected',
+              notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
+              tag: dialedLead.tag || 'WARM',
+            });
+            refetch();
+            queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
+            queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
+          } catch (syncErr) {
+            console.log('Background call sync status:', syncErr);
+          }
+        } catch {
+          setPostCallData({
+            visible: true,
+            lead: dialedLead,
+            callResult: { connected: false, durationSeconds: 0 },
+          });
+        }
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, [refetch, queryClient]);
+
+  // Handle Save Disposition from NeoPostCallModal
+  const handleSavePostCallDisposition = async (payload: {
+    connected: boolean;
+    stage: string;
+    tag?: string | null;
+    temperature?: CustomerTemperature;
+    notConnectedReason?: string;
+    remark?: string;
+    followUpAt?: string | null;
+    durationSeconds: number;
+    callNext?: boolean;
+  }) => {
+    const targetLead = postCallData.lead;
+    if (!targetLead) return;
+
+    try {
+      await disposeLead(targetLead._id, {
+        connected: payload.connected,
+        stage: payload.stage,
+        tag: payload.tag || payload.temperature,
+        notConnectedReason: payload.notConnectedReason as any,
+        remark: payload.remark,
+        followUpAt: payload.followUpAt,
+        durationSeconds: payload.durationSeconds,
+      });
+
+      useLeadHistoryStore.getState().addActivity(targetLead._id, {
+        phone: targetLead.phone,
+        customerName: targetLead.name,
+        agentName: user?.name,
+        agentId: user?._id,
+        branch: user?.branch,
+        connected: payload.connected,
+        stage: payload.stage,
+        tag: payload.tag || payload.temperature,
+        remark: payload.remark,
+        followUpAt: payload.followUpAt,
+        durationSeconds: payload.durationSeconds,
+        notConnectedReason: payload.notConnectedReason,
+      });
+
+      toast.success('Call disposition saved!', 'Saved');
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to save disposition', 'Error');
+    }
   };
 
   // Handle Direct WhatsApp
@@ -843,6 +985,25 @@ export const MyLeadsScreen: React.FC = () => {
                     <Text style={styles.emptyResetBtnText}>Reset All Filters</Text>
                   </TouchableOpacity>
                 )}
+                <TouchableOpacity
+                  style={{
+                    marginTop: 12,
+                    backgroundColor: '#2563EB',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingVertical: 9,
+                    paddingHorizontal: 14,
+                    borderRadius: 8,
+                  }}
+                  onPress={() => navigation.navigate('UploadLeads')}
+                  activeOpacity={0.8}
+                >
+                  <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                    Upload Leads CSV
+                  </Text>
+                </TouchableOpacity>
               </View>
             ) : (
               filteredLeads.map((item) => {
@@ -1155,6 +1316,15 @@ export const MyLeadsScreen: React.FC = () => {
         onClose={() => setWhatsAppModalData((prev) => ({ ...prev, visible: false }))}
         customerName={whatsAppModalData.name}
         customerPhone={whatsAppModalData.phone}
+      />
+
+      {/* NeoDove Automatic Post-Call Modal */}
+      <NeoPostCallModal
+        visible={postCallData.visible}
+        lead={postCallData.lead}
+        callResult={postCallData.callResult}
+        onClose={() => setPostCallData((prev) => ({ ...prev, visible: false }))}
+        onSaveDisposition={handleSavePostCallDisposition}
       />
     </CrmShell>
   );

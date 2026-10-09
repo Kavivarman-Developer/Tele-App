@@ -113,26 +113,28 @@ export const CrmShell: React.FC<CrmShellProps> = ({
               )}
 
               <View style={styles.headerTitleGroup}>
-                {headerIcon ? <View style={styles.headerIconBox}>{headerIcon}</View> : null}
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <Text style={styles.headerTitle} numberOfLines={1}>
+                {headerIcon && isWide ? <View style={styles.headerIconBox}>{headerIcon}</View> : null}
+                <View style={{ flex: 1, flexShrink: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
                       {title}
                     </Text>
-                    {user?.branch ? (
-                      <View style={styles.headerBranchBadge}>
-                        <MapPin size={9} color="#0D9488" />
-                        <Text style={styles.headerBranchBadgeText}>{user.branch} Branch</Text>
-                      </View>
-                    ) : user?.role === 'ADMIN' ? (
-                      <View style={styles.headerAdminBadge}>
-                        <Shield size={9} color="#4F46E5" />
-                        <Text style={styles.headerAdminBadgeText}>All Branches</Text>
-                      </View>
-                    ) : null}
+                    {isWide && (
+                      user?.branch ? (
+                        <View style={styles.headerBranchBadge}>
+                          <MapPin size={9} color="#0D9488" />
+                          <Text style={styles.headerBranchBadgeText}>{user.branch} Branch</Text>
+                        </View>
+                      ) : user?.role === 'ADMIN' ? (
+                        <View style={styles.headerAdminBadge}>
+                          <Shield size={9} color="#4F46E5" />
+                          <Text style={styles.headerAdminBadgeText}>All Branches</Text>
+                        </View>
+                      ) : null
+                    )}
                   </View>
                   {subtitle ? (
-                    <Text style={styles.headerSubtitle} numberOfLines={1}>
+                    <Text style={styles.headerSubtitle} numberOfLines={1} ellipsizeMode="tail">
                       {subtitle}
                     </Text>
                   ) : null}
@@ -250,7 +252,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    gap: 12,
+    flexShrink: 1,
+    gap: 10,
+    marginRight: 8,
+    overflow: 'hidden',
   },
   toggleBtn: {
     width: 36,
@@ -261,11 +266,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
+    flexShrink: 0,
   },
   headerTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    flexShrink: 1,
     gap: 8,
+    overflow: 'hidden',
   },
   headerIconBox: {
     width: 28,
@@ -336,6 +345,7 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
     gap: 8,
   },
   periodWrap: {
