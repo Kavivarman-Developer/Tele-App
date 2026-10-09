@@ -148,6 +148,8 @@ export const HomeScreen: React.FC = () => {
   } = useQuery({
     queryKey: ['homeDashboard', period, fromDate],
     queryFn: () => fetchDashboardReports({ from: fromDate }),
+    refetchInterval: 6000,
+    refetchIntervalInBackground: false,
   });
 
   // 2. Per-Agent Calls (Manager & Admin only)
@@ -160,9 +162,11 @@ export const HomeScreen: React.FC = () => {
     queryKey: ['homeUserCalls', period, fromDate],
     queryFn: () => fetchUserCallsReport({ from: fromDate }),
     enabled: isManagerOrAdmin,
+    refetchInterval: 6000,
+    refetchIntervalInBackground: false,
   });
 
-  // 3. Agent's Prioritized Queue
+  // 3. Agent's Prioritized Queue (auto-polls for newly assigned leads from admin/manager)
   const {
     data: myLeadsData,
     isLoading: isMyLeadsLoading,
@@ -171,11 +175,13 @@ export const HomeScreen: React.FC = () => {
   } = useQuery({
     queryKey: ['homeMyLeadsQueue'],
     queryFn: () => fetchMyLeads({ type: 'ALL', limit: 100 }),
+    refetchInterval: 6000,
+    refetchIntervalInBackground: false,
   });
 
   // 4. Subscribe to Zustand Local Activity Store (Guarantees Instant Re-render on call)
   const historyMap = useLeadHistoryStore((s) => s.historyMap);
-  const { getActivitiesForPeriod, logDialedCall } = useLeadHistoryStore();
+  const { getActivitiesForPeriod } = useLeadHistoryStore();
   const periodActivities = useMemo(() => {
     return getActivitiesForPeriod(period, customDate, user?._id || user?.name);
   }, [historyMap, period, customDate, user, getActivitiesForPeriod]);
@@ -264,9 +270,12 @@ export const HomeScreen: React.FC = () => {
   const myAssignedLeadsCount = myLeadsData?.total ?? (myLeadsData?.leads?.length || 0);
 
   // Calls made and connected (combines local session with backend reports)
-  const localCallsCount = periodActivities.length;
-  const localConnectedCount = periodActivities.filter((a) => a.connected).length;
-  const localTotalDuration = periodActivities.reduce((sum, a) => sum + (a.durationSeconds || 0), 0);
+  const realLocalActivities = periodActivities.filter(
+    (a) => a.stage !== 'Call Initiated' && a.stage !== 'Dialing',
+  );
+  const localCallsCount = realLocalActivities.length;
+  const localConnectedCount = realLocalActivities.filter((a) => a.connected).length;
+  const localTotalDuration = realLocalActivities.reduce((sum, a) => sum + (a.durationSeconds || 0), 0);
 
   const callsMade = Math.max(dashboardData?.callsMade ?? 0, localCallsCount);
   const connectedCalls = Math.max(dashboardData?.connectedCalls ?? 0, localConnectedCount);
@@ -345,24 +354,14 @@ export const HomeScreen: React.FC = () => {
       leadItem.stage === 'Lost';
 
     const executeDial = async () => {
-      // 1. Immediately log call attempt locally (target progress increments instantly!)
-      logDialedCall({
-        leadId: leadItem._id,
-        phone: leadItem.phone,
-        customerName: leadItem.name,
-        agentName: user?.name,
-        agentId: user?._id,
-        branch: user?.branch,
-      });
-
-      // 2. Set calling refs for AppState detection
+      // Set calling refs for AppState detection (Call is counted only after it completes!)
       callingLeadRef.current = leadItem;
       callStartTimeRef.current = Date.now();
       isCallingRef.current = true;
 
       toast.info(`Calling ${leadItem.name}...`, 'Dialing');
 
-      // 3. Initiate native dialer
+      // Initiate native dialer
       try {
         await callService.startCall(leadItem);
       } catch (err) {
@@ -410,27 +409,12 @@ export const HomeScreen: React.FC = () => {
           // Read native Android call log (with duration & connection detection)
           const result = await callService.getCallResult(dialedLead.phone, startTime);
 
-          // Open NeoPostCallModal immediately with detected outcome
+          // Open NeoPostCallModal with detected outcome (One clean update occurs when user saves!)
           setPostCallData({
             visible: true,
             lead: dialedLead,
             callResult: result,
           });
-
-          // Also auto-save call attempt to backend so callsMade is guaranteed in DB even if dismissed
-          try {
-            await disposeLead(dialedLead._id, {
-              connected: result.connected,
-              durationSeconds: result.durationSeconds,
-              stage: result.connected ? 'Contacted' : 'Not connected',
-              notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
-              tag: dialedLead.tag || 'WARM',
-            });
-            refetchDashboard();
-            refetchMyLeads();
-          } catch (syncErr) {
-            console.log('Background call sync status:', syncErr);
-          }
         } catch {
           setPostCallData({
             visible: true,

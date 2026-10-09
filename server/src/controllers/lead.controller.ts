@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import { Types } from 'mongoose';
 import { parse } from 'csv-parse/sync';
 import { LeadIngestService, RawLeadRow } from '../services/lead-ingest.service';
 import { LeadService } from '../services/lead.service';
+import { Campaign } from '../models/campaign.model';
 import { ListCampaignLeadsQuery, MyLeadsQuery } from '../validations/lead.validation';
 import { AppError } from '../utils/AppError';
 
@@ -79,6 +81,26 @@ export class LeadController {
         throw new AppError('Authentication required', 401);
       }
 
+      let campaignId = req.params.id;
+      if (
+        !campaignId ||
+        campaignId === 'default' ||
+        campaignId === 'default-campaign' ||
+        !Types.ObjectId.isValid(campaignId)
+      ) {
+        const activeCamp = await Campaign.findOne({ isActive: true });
+        if (activeCamp) {
+          campaignId = activeCamp._id.toString();
+        } else {
+          const anyCamp = await Campaign.findOne();
+          if (anyCamp) {
+            campaignId = anyCamp._id.toString();
+          } else {
+            throw new AppError('No campaign found to register walk-in lead.', 400);
+          }
+        }
+      }
+
       const row: RawLeadRow = {
         name: req.body.name,
         phone: req.body.phone,
@@ -86,7 +108,13 @@ export class LeadController {
         ...(req.body.customProperties || {}),
       };
 
-      const result = await LeadIngestService.ingest(req.params.id, [row], 'WALK_IN');
+      // If user is an AGENT, always assign the walk-in lead directly to them!
+      const targetAgentId =
+        req.user.role === 'AGENT'
+          ? req.user._id.toString()
+          : (req.body.assignedTo || undefined);
+
+      const result = await LeadIngestService.ingest(campaignId, [row], 'WALK_IN', targetAgentId);
 
       if (result.failed.length > 0) {
         throw new AppError(`Lead creation failed: ${result.failed[0].reason}`, 400);

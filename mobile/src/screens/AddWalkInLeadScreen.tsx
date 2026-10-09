@@ -20,7 +20,6 @@ import { fetchCampaigns, createWalkInLead } from '../api/leadApi';
 import { RootStackParamList, Campaign } from '../types';
 import { Input } from '../components/Input';
 import { CrmBadge } from '../components/CrmBadge';
-import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
 import { getDialerTelUrl } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
@@ -32,7 +31,6 @@ export const AddWalkInLeadScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const { logDialedCall } = useLeadHistoryStore();
 
   const [name, setName] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
@@ -71,15 +69,10 @@ export const AddWalkInLeadScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['myLeads'] });
       queryClient.invalidateQueries({ queryKey: ['followUps'] });
       queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
+      queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
+      queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
 
       if (isDialAfterSave && phone.trim()) {
-        logDialedCall({
-          phone: phone.trim(),
-          customerName: name.trim(),
-          agentName: user?.name,
-          agentId: user?._id,
-          branch: user?.branch,
-        });
         toast.info(`Dialing ${name.trim()}...`, 'Calling');
         Linking.openURL(getDialerTelUrl(phone.trim())).catch(() => {
           Alert.alert('Call Error', 'Could not open phone dialer on this device.');

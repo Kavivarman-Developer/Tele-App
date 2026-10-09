@@ -251,26 +251,31 @@ export const MyLeadsScreen: React.FC = () => {
   const { data: leadsData, refetch } = useQuery({
     queryKey: ['myLeadsList'],
     queryFn: () => fetchMyLeads({ limit: 100 }),
+    refetchInterval: 6000,
+    refetchIntervalInBackground: false,
   });
 
   // Mutation to add walk-in lead
   const walkInMutation = useMutation({
     mutationFn: (newLead: { name: string; phone: string; campaignId?: string }) => {
-      const campId = newLead.campaignId || campaignData?.campaigns?.[0]?._id || 'default-campaign';
+      const campId = newLead.campaignId || campaignData?.campaigns?.[0]?._id || 'default';
       return createWalkInLead(campId, {
         name: newLead.name,
         phone: normalizePhoneDigits(newLead.phone),
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
+      queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
+      queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
+      refetch();
       setShowWalkInModal(false);
       setWalkInName('');
       setWalkInPhone('');
-      Alert.alert('Lead Added', 'Walk-in lead was added successfully to your queue.');
+      toast.success(`Walk-in lead "${variables.name}" added to queue!`, 'Lead Added');
     },
     onError: (err: any) => {
-      Alert.alert('Error', err?.response?.data?.message || 'Failed to add walk-in lead.');
+      Alert.alert('Error', err?.response?.data?.message || err?.message || 'Failed to add walk-in lead.');
     },
   });
 
@@ -410,17 +415,7 @@ export const MyLeadsScreen: React.FC = () => {
     const isSuppressed = leadStatus === 'Not Interested' || leadStatus === 'Closed';
 
     const executeCall = async () => {
-      // 1. Immediately log dialed call in local history store
-      useLeadHistoryStore.getState().logDialedCall({
-        leadId: leadId || 'lead-' + Date.now(),
-        phone,
-        customerName: customerName || 'Lead Contact',
-        agentName: user?.name || 'Agent',
-        agentId: user?._id || user?.email,
-        branch: user?.branch || 'General',
-      });
-
-      // 2. Resolve Lead object
+      // 1. Resolve Lead object
       const foundLead = (leadsData?.leads || []).find((l: Lead) => l._id === leadId || l.phone === phone);
       const activeLead: Lead = foundLead || {
         _id: leadId || 'lead-' + Date.now(),
@@ -492,22 +487,6 @@ export const MyLeadsScreen: React.FC = () => {
             lead: dialedLead,
             callResult: result,
           });
-
-          // Also auto-save call attempt to backend
-          try {
-            await disposeLead(dialedLead._id, {
-              connected: result.connected,
-              durationSeconds: result.durationSeconds,
-              stage: result.connected ? 'Contacted' : 'Not connected',
-              notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
-              tag: dialedLead.tag || 'WARM',
-            });
-            refetch();
-            queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
-            queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
-          } catch (syncErr) {
-            console.log('Background call sync status:', syncErr);
-          }
         } catch {
           setPostCallData({
             visible: true,

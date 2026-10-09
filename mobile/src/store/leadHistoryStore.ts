@@ -243,12 +243,12 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       agentName: data.agentName,
       agentId: data.agentId,
       branch: data.branch,
-      connected: true,
-      stage: 'Call Initiated',
+      connected: false,
+      stage: 'Dialing',
       tag: 'WARM',
       temperature: 'WARM',
       durationSeconds: 0,
-      remark: 'Agent initiated direct dialer call',
+      remark: 'Agent opened phone dialer',
     });
   },
 

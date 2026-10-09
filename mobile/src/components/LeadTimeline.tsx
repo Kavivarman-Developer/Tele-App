@@ -33,20 +33,25 @@ export const deduplicateActivities = (list: Activity[]): Activity[] => {
   for (const act of sorted) {
     const actTime = new Date(act.createdAt).getTime();
 
-    // Check if an identical or near-identical activity already exists in result within 30 seconds
+    // Check if an identical or near-identical activity already exists in result within 120 seconds
     const isDuplicate = result.some((existing) => {
       // 1. Exact ID match
       if (existing._id && act._id && existing._id === act._id) return true;
 
-      // 2. Same lead & same stage & created within 30 seconds of each other
+      // 2. Same lead & same stage & created within 120 seconds of each other
       const existingTime = new Date(existing.createdAt).getTime();
       const timeDiff = Math.abs(existingTime - actTime);
 
-      if (timeDiff < 30000) {
+      if (timeDiff < 120000) {
         const sameStage = (existing.stage || '').toLowerCase().trim() === (act.stage || '').toLowerCase().trim();
         const sameConnected = existing.connected === act.connected;
 
         if (sameStage && sameConnected) {
+          return true;
+        }
+
+        // If same connected status and both are calls within 60 seconds
+        if (sameConnected && timeDiff < 60000) {
           return true;
         }
       }

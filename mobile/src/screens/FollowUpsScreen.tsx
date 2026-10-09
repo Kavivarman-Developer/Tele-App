@@ -77,18 +77,10 @@ export const FollowUpsScreen: React.FC = () => {
   const [whatsAppModalVisible, setWhatsAppModalVisible] = useState(false);
   const [whatsAppTarget, setWhatsAppTarget] = useState<{ name: string; phone: string } | null>(null);
 
-  const { logDialedCall, addActivity } = useLeadHistoryStore();
+  const { addActivity } = useLeadHistoryStore();
 
   // Direct Call Handler
   const handleDirectCall = (item: FollowUpItem) => {
-    logDialedCall({
-      leadId: item._id,
-      phone: item.phone,
-      customerName: item.name,
-      agentName: user?.name,
-      agentId: user?._id,
-      branch: user?.branch,
-    });
     toast.info(`Dialing ${item.name}...`, 'Calling');
     Linking.openURL(getDialerTelUrl(item.phone)).catch(() => {
       Alert.alert('Unable to dial', `Could not open phone dialer for ${item.phone}`);

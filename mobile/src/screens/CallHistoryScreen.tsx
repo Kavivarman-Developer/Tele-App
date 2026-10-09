@@ -54,7 +54,7 @@ export const CallHistoryScreen: React.FC = () => {
   const { user } = useAuthStore();
   const isAgent = user?.role === 'AGENT';
 
-  const { getAllActivities, loadHistory, logDialedCall } = useLeadHistoryStore();
+  const { getAllActivities, loadHistory } = useLeadHistoryStore();
 
   // Default to TODAY so the agent only sees today's calls by default
   const [dateFilter, setDateFilter] = useState<DateFilter>('TODAY');
@@ -157,14 +157,6 @@ export const CallHistoryScreen: React.FC = () => {
       Alert.alert('No Number', 'Customer phone number is unavailable.');
       return;
     }
-
-    logDialedCall({
-      phone: act.phone,
-      customerName: act.customerName,
-      agentName: user?.name,
-      agentId: user?._id,
-      branch: user?.branch,
-    });
 
     toast.info(`Dialing ${act.customerName || act.phone}...`, 'Calling');
 

@@ -212,14 +212,6 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
 
   const handleCall = async (item: NotificationFollowUp) => {
     markAsRead(item._id);
-    useLeadHistoryStore.getState().logDialedCall({
-      leadId: item._id,
-      phone: item.phone,
-      customerName: item.name,
-      agentName: user?.name || 'Agent',
-      agentId: user?._id || user?.email,
-      branch: user?.branch || 'General',
-    });
     toast.info(`Initiating call to ${item.name}...`);
     try {
       await callService.startCall({ phone: item.phone, name: item.name } as any);

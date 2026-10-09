@@ -108,7 +108,12 @@ export class CampaignService {
     } else if (requester.role === 'MANAGER') {
       query = { managerId: requester._id };
     } else if (requester.role === 'AGENT') {
-      query = { agentIds: requester._id, isActive: true };
+      const specificCount = await Campaign.countDocuments({ agentIds: requester._id, isActive: true });
+      if (specificCount > 0) {
+        query = { agentIds: requester._id, isActive: true };
+      } else {
+        query = { isActive: true };
+      }
     }
 
     return Campaign.find(query)

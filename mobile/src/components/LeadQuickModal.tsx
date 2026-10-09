@@ -155,14 +155,6 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       lead.status === 'CLOSED';
 
     const triggerCall = () => {
-      useLeadHistoryStore.getState().logDialedCall({
-        leadId: lead._id,
-        phone: lead.phone,
-        customerName: lead.name,
-        agentName: currentUser?.name || 'Agent',
-        agentId: currentUser?._id || currentUser?.email,
-        branch: currentUser?.branch || 'General',
-      });
       Linking.openURL(getDialerTelUrl(lead.phone)).catch(() => {
         Alert.alert('Error', 'Unable to initiate phone call on this device');
       });
@@ -670,21 +662,31 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
 
             {/* Bottom Primary Button */}
             <View style={styles.sheetFooter}>
-              <TouchableOpacity
-                style={[styles.saveNextBtn, isSubmitting && { opacity: 0.7 }]}
-                onPress={handleQuickSave}
-                disabled={isSubmitting}
-                activeOpacity={0.85}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Text style={styles.saveNextBtnText}>Save & Next Lead</Text>
-                    <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.5} />
-                  </>
-                )}
-              </TouchableOpacity>
+              {activeTab === 'HISTORY' ? (
+                <TouchableOpacity
+                  style={[styles.saveNextBtn, { backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' }]}
+                  onPress={onClose}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.saveNextBtnText, { color: '#334155' }]}>Close History</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.saveNextBtn, isSubmitting && { opacity: 0.7 }]}
+                  onPress={handleQuickSave}
+                  disabled={isSubmitting}
+                  activeOpacity={0.85}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.saveNextBtnText}>Save Lead Details</Text>
+                      <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.5} />
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
