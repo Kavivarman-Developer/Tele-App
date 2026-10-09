@@ -20,6 +20,48 @@ import {
 import { Activity } from '../types';
 import { colors } from '../theme';
 
+export const deduplicateActivities = (list: Activity[]): Activity[] => {
+  if (!list || list.length === 0) return [];
+
+  // Sort newest first
+  const sorted = [...list].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  const result: Activity[] = [];
+
+  for (const act of sorted) {
+    const actTime = new Date(act.createdAt).getTime();
+
+    // Check if an identical or near-identical activity already exists in result within 30 seconds
+    const isDuplicate = result.some((existing) => {
+      // 1. Exact ID match
+      if (existing._id && act._id && existing._id === act._id) return true;
+
+      // 2. Same lead & same stage & created within 30 seconds of each other
+      const existingTime = new Date(existing.createdAt).getTime();
+      const timeDiff = Math.abs(existingTime - actTime);
+
+      if (timeDiff < 30000) {
+        const sameStage = (existing.stage || '').toLowerCase().trim() === (act.stage || '').toLowerCase().trim();
+        const sameConnected = existing.connected === act.connected;
+
+        if (sameStage && sameConnected) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    if (!isDuplicate) {
+      result.push(act);
+    }
+  }
+
+  return result;
+};
+
 interface LeadTimelineProps {
   activities: Activity[];
   isLoading?: boolean;
@@ -29,6 +71,8 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
   activities,
   isLoading = false,
 }) => {
+  const cleanActivities = React.useMemo(() => deduplicateActivities(activities), [activities]);
+
   if (isLoading) {
     return (
       <View style={styles.loadingBox}>
@@ -38,7 +82,7 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
     );
   }
 
-  if (activities.length === 0) {
+  if (cleanActivities.length === 0) {
     return (
       <View style={styles.emptyCard}>
         <View style={styles.emptyIconCircle}>
@@ -99,13 +143,13 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
       <View style={styles.summaryBar}>
         <Text style={styles.summaryTitle}>Activity Timeline</Text>
         <Text style={styles.summaryCount}>
-          {activities.length} {activities.length === 1 ? 'call recorded' : 'calls recorded'}
+          {cleanActivities.length} {cleanActivities.length === 1 ? 'call recorded' : 'calls recorded'}
         </Text>
       </View>
 
       {/* Vertical Timeline Items */}
       <View style={styles.timelineList}>
-        {activities.map((act, index) => {
+        {cleanActivities.map((act, index) => {
           const isConnected = act.connected;
           const agent = typeof act.userId === 'object' && act.userId ? act.userId : null;
           const agentName = agent?.name || (typeof act.userId === 'string' ? act.userId : 'Agent');

@@ -40,6 +40,8 @@ import { CrmShell } from '../components/CrmShell';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
 import { getDialerTelUrl, formatDisplayPhone, normalizePhoneDigits } from '../utils/phoneUtils';
+import { toast } from '../store/toastStore';
+import { downloadOrShareCsv, convertLeadsToCsv } from '../utils/csvDownloader';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -360,6 +362,31 @@ export const MyLeadsScreen: React.FC = () => {
     });
   }, [combinedLeads, selectedFilter, selectedCampaign, searchQuery]);
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportLeads = async () => {
+    try {
+      if (filteredLeads.length === 0) {
+        toast.info('No leads found in this view to export', 'Empty Queue');
+        return;
+      }
+      setIsExporting(true);
+      const csvContent = convertLeadsToCsv(filteredLeads);
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `leads_export_${timestamp}.csv`;
+      const res = await downloadOrShareCsv(filename, csvContent);
+      if (res.success) {
+        toast.success(`Exported ${filteredLeads.length} leads to CSV!`, 'Export Ready');
+      } else {
+        toast.error(res.message, 'Export Failed');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not export leads', 'Export Error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Handle Direct Call
   const handleDirectCall = (
     phone: string,
@@ -633,10 +660,15 @@ export const MyLeadsScreen: React.FC = () => {
             {/* Export Icon Button */}
             <TouchableOpacity
               style={styles.exportIconBtn}
-              onPress={() => Alert.alert('Export Leads', 'Exporting leads queue to CSV...')}
+              onPress={handleExportLeads}
+              disabled={isExporting}
               activeOpacity={0.7}
             >
-              <Download size={15} color="#64748B" />
+              {isExporting ? (
+                <ActivityIndicator size="small" color="#10B981" />
+              ) : (
+                <Download size={15} color="#64748B" />
+              )}
             </TouchableOpacity>
           </View>
         </View>

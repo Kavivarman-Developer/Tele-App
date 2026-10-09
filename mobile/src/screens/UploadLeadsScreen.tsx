@@ -33,6 +33,7 @@ import { colors } from '../theme';
 import { CrmShell } from '../components/CrmShell';
 import { toast } from '../store/toastStore';
 import { storage } from '../utils/storage';
+import { downloadOrShareCsv, SAMPLE_LEADS_TEMPLATE_CSV } from '../utils/csvDownloader';
 
 export const UploadLeadsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -223,11 +224,22 @@ export const UploadLeadsScreen: React.FC = () => {
     },
   });
 
-  const handleDownloadTemplate = () => {
-    Alert.alert(
-      'CSV Template Format',
-      'Columns: name, phone, email, city\n\nExample:\nRahul Sharma, +919810000073, rahul@example.com, Mumbai\nPriya Bhat, +919810000049, priya@example.com, Delhi',
-    );
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setIsDownloadingTemplate(true);
+      const res = await downloadOrShareCsv('lead_upload_template.csv', SAMPLE_LEADS_TEMPLATE_CSV);
+      if (res.success) {
+        toast.success(res.message, 'Template Ready');
+      } else {
+        toast.error(res.message, 'Download Failed');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to download template', 'Error');
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
   };
 
   if (isAgent) {
@@ -280,10 +292,17 @@ export const UploadLeadsScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.templateBtn}
             onPress={handleDownloadTemplate}
+            disabled={isDownloadingTemplate}
             activeOpacity={0.7}
           >
-            <Download size={14} color="#0F172A" />
-            <Text style={styles.templateBtnText}>CSV template</Text>
+            {isDownloadingTemplate ? (
+              <ActivityIndicator size="small" color="#0F172A" />
+            ) : (
+              <Download size={14} color="#0F172A" />
+            )}
+            <Text style={styles.templateBtnText}>
+              {isDownloadingTemplate ? 'Downloading…' : 'CSV template'}
+            </Text>
           </TouchableOpacity>
         </View>
 

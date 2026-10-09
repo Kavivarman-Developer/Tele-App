@@ -174,4 +174,47 @@ export class LeadController {
       next(error);
     }
   }
+
+  public static async exportCampaignLeadsCsv(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401);
+      }
+      const csv = await LeadService.exportCampaignLeadsToCsv(req.user, req.params.id);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="campaign-leads-${req.params.id}-${Date.now()}.csv"`,
+      );
+      res.status(200).send(csv);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public static async exportMyLeadsCsv(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401);
+      }
+      const query = req.query as unknown as MyLeadsQuery;
+      const csv = await LeadService.exportMyLeadsToCsv(req.user, query);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="my-leads-${Date.now()}.csv"`,
+      );
+      res.status(200).send(csv);
+    } catch (error) {
+      next(error);
+    }
+  }
 }

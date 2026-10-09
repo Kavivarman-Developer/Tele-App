@@ -196,6 +196,18 @@ export class ActivityService {
     lead.attemptCount += 1;
     await lead.save();
 
+    // Rapid debounce check: if an identical activity was created in the last 4 seconds, return it
+    const recentActivity = await Activity.findOne({
+      leadId: lead._id,
+      userId: requester._id,
+      connected: input.connected,
+      createdAt: { $gte: new Date(Date.now() - 4000) },
+    }).sort({ createdAt: -1 });
+
+    if (recentActivity) {
+      return { activity: recentActivity, lead };
+    }
+
     // Create Activity log
     const activity = await Activity.create({
       leadId: lead._id,
@@ -244,9 +256,33 @@ export class ActivityService {
       ];
     }
 
-    return Activity.find(query)
+    const rawActivities = await Activity.find(query)
       .populate('userId', 'name email role branch')
       .sort({ createdAt: -1 });
+
+    // Deduplicate any legacy or simultaneous duplicate records created within 15 seconds
+    const deduplicated: IActivityDoc[] = [];
+    for (const act of rawActivities) {
+      const actTime = new Date(act.createdAt).getTime();
+      const isDuplicate = deduplicated.some((existing) => {
+        if (existing._id.toString() === act._id.toString()) return true;
+        const existingTime = new Date(existing.createdAt).getTime();
+        if (Math.abs(existingTime - actTime) < 15000) {
+          const sameStage =
+            (existing.stage || '').toLowerCase().trim() === (act.stage || '').toLowerCase().trim();
+          const sameConnected = existing.connected === act.connected;
+          if (sameStage && sameConnected) {
+            return true;
+          }
+        }
+        return false;
+      });
+      if (!isDuplicate) {
+        deduplicated.push(act);
+      }
+    }
+
+    return deduplicated;
   }
 
   public static async getBranchCallStats(branchName?: string) {

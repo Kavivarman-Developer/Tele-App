@@ -44,12 +44,19 @@ campaignLeadsRouter.get(
   LeadController.listCampaignLeads,
 );
 
+campaignLeadsRouter.get(
+  '/export',
+  authorize('ADMIN', 'MANAGER'),
+  LeadController.exportCampaignLeadsCsv,
+);
+
 // Router for /api/leads
 export const leadsRouter = Router();
 
 leadsRouter.use(authenticate);
 
 leadsRouter.get('/my', validate(myLeadsQuerySchema), LeadController.getMyLeads);
+leadsRouter.get('/export', validate(myLeadsQuerySchema), LeadController.exportMyLeadsCsv);
 
 leadsRouter.post(
   '/:id/reassign',

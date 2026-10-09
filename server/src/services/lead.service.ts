@@ -274,4 +274,114 @@ export class LeadService {
       modifiedCount: result.modifiedCount,
     };
   }
+
+  public static async exportCampaignLeadsToCsv(
+    requester: IUserDoc,
+    campaignId: string,
+  ): Promise<string> {
+    const campaign = await Campaign.findById(campaignId);
+    if (!campaign) {
+      throw new AppError('Campaign not found', 404);
+    }
+
+    const filter: Record<string, unknown> = {
+      campaignId: new Types.ObjectId(campaignId),
+    };
+
+    if (requester.role === 'AGENT') {
+      filter.assignedTo = requester._id;
+    }
+
+    const leads = await Lead.find(filter)
+      .populate('assignedTo', 'name email')
+      .sort({ createdAt: -1 });
+
+    const lines: string[] = [
+      'Name,Phone,Email,Stage,Tag,Status,Branch,Assigned Agent,Next Follow-up,Created At',
+    ];
+
+    for (const l of leads) {
+      const agent = l.assignedTo
+        ? (l.assignedTo as any).name || (l.assignedTo as any).email
+        : 'Unassigned';
+      const escape = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+      lines.push(
+        [
+          escape(l.name),
+          escape(l.phone),
+          escape(l.email || ''),
+          escape(l.stage),
+          escape(l.tag || ''),
+          escape(l.status),
+          escape(l.branch || ''),
+          escape(agent),
+          escape(l.nextFollowUpAt ? new Date(l.nextFollowUpAt).toISOString() : ''),
+          escape(new Date(l.createdAt).toISOString()),
+        ].join(','),
+      );
+    }
+
+    return lines.join('\n');
+  }
+
+  public static async exportMyLeadsToCsv(
+    requester: IUserDoc,
+    query: MyLeadsQuery,
+  ): Promise<string> {
+    const filter: Record<string, unknown> = {};
+
+    if (requester.role === 'ADMIN') {
+      if (query.userId) {
+        filter.assignedTo = new Types.ObjectId(query.userId);
+      }
+    } else if (requester.role === 'MANAGER') {
+      if (query.userId) {
+        filter.assignedTo = new Types.ObjectId(query.userId);
+      } else {
+        const managedCampaigns = await Campaign.find({ managerId: requester._id }, '_id');
+        const managedIds = managedCampaigns.map((c) => c._id);
+        filter.campaignId = { $in: managedIds };
+      }
+    } else {
+      filter.assignedTo = requester._id;
+    }
+
+    if (query.campaignId) {
+      filter.campaignId = new Types.ObjectId(query.campaignId);
+    }
+
+    const leads = await Lead.find(filter)
+      .populate('campaignId', 'name')
+      .populate('assignedTo', 'name email')
+      .sort({ createdAt: -1 });
+
+    const lines: string[] = [
+      'Name,Phone,Email,Campaign,Stage,Tag,Status,Branch,Assigned Agent,Next Follow-up,Created At',
+    ];
+
+    for (const l of leads) {
+      const camp = l.campaignId ? (l.campaignId as any).name : 'Outreach';
+      const agent = l.assignedTo
+        ? (l.assignedTo as any).name || (l.assignedTo as any).email
+        : 'Unassigned';
+      const escape = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+      lines.push(
+        [
+          escape(l.name),
+          escape(l.phone),
+          escape(l.email || ''),
+          escape(camp),
+          escape(l.stage),
+          escape(l.tag || ''),
+          escape(l.status),
+          escape(l.branch || ''),
+          escape(agent),
+          escape(l.nextFollowUpAt ? new Date(l.nextFollowUpAt).toISOString() : ''),
+          escape(new Date(l.createdAt).toISOString()),
+        ].join(','),
+      );
+    }
+
+    return lines.join('\n');
+  }
 }

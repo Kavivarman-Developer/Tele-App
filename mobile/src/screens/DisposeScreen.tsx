@@ -272,21 +272,25 @@ export const DisposeScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['followUps'] });
       queryClient.invalidateQueries({ queryKey: ['leadHistory', lead._id] });
 
-      // Record activity in leadHistoryStore for multi-agent audit trail
-      useLeadHistoryStore.getState().addActivity(lead._id, {
-        phone: lead.phone,
-        branch: user?.branch,
-        agentName: user?.name || 'Agent',
-        agentId: user?._id,
-        connected: isConnected,
-        stage: isConnected ? selectedStageName : 'Not connected',
-        tag: customerTemperature,
-        temperature: customerTemperature,
-        remark: remark.trim() || undefined,
-        followUpAt: followUpAt || null,
-        durationSeconds: duration,
-        notConnectedReason: isConnected ? undefined : selectedReason,
-      });
+      // Only record in local leadHistoryStore if backend call fell back locally
+      // This prevents duplicate timeline entries when online
+      const isLocalFallback = !data.activity?._id || String(data.activity._id).startsWith('local-act-');
+      if (isLocalFallback) {
+        useLeadHistoryStore.getState().addActivity(lead._id, {
+          phone: lead.phone,
+          branch: user?.branch,
+          agentName: user?.name || 'Agent',
+          agentId: user?._id,
+          connected: isConnected,
+          stage: isConnected ? selectedStageName : 'Not connected',
+          tag: customerTemperature,
+          temperature: customerTemperature,
+          remark: remark.trim() || undefined,
+          followUpAt: followUpAt || null,
+          durationSeconds: duration,
+          notConnectedReason: isConnected ? undefined : selectedReason,
+        });
+      }
 
       const updatedLead = data.lead;
       if (updatedLead.status === 'CLOSED' || !updatedLead.nextFollowUpAt) {

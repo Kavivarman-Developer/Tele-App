@@ -38,7 +38,7 @@ import { CrmAvatar } from './CrmAvatar';
 import { colors, borderRadius, shadows } from '../theme';
 import { disposeLead, fetchLeadHistory } from '../api/leadApi';
 import { WhatsAppTemplateModal } from './WhatsAppTemplateModal';
-import { LeadTimeline } from './LeadTimeline';
+import { LeadTimeline, deduplicateActivities } from './LeadTimeline';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
 import { CrmDateTimePickerModal } from './CrmDateTimePickerModal';
@@ -130,12 +130,14 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
     if (backendActivities.length > 0) {
       const existingIds = new Set(backendActivities.map((a) => a._id));
       const nonDuplicateLocal = localActivities.filter((a) => !existingIds.has(a._id));
-      return [...backendActivities, ...nonDuplicateLocal].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      return deduplicateActivities(
+        [...backendActivities, ...nonDuplicateLocal].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
       );
     }
 
-    return localActivities;
+    return deduplicateActivities(localActivities);
   }, [backendHistoryData, lead._id, lead.phone, getHistoryForLead]);
 
   const cleanPhone = (lead.phone || '').replace(/\D/g, '');
@@ -224,6 +226,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       const isClosing = selectedStage === 'Not Interested' || selectedStage === 'Closed';
       const isConnected = selectedStage !== 'Not connected';
 
+      let backendSuccess = false;
       // 1. Log to backend
       try {
         await disposeLead(lead._id, {
@@ -236,25 +239,29 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
           durationSeconds: 0,
           answers: [],
         });
+        backendSuccess = true;
       } catch (backendErr) {
         console.log('Backend dispose notice:', backendErr);
       }
 
-      // 2. Add to lead history store so timeline immediately captures this agent's update
-      addActivity(lead._id, {
-        phone: lead.phone,
-        branch: currentUser?.branch,
-        agentName: currentUserName,
-        agentId: currentUser?._id,
-        connected: isConnected,
-        stage: selectedStage === 'Follow-up' ? 'Follow Up' : selectedStage,
-        tag: selectedTemperature,
-        temperature: selectedTemperature,
-        remark: notes.trim() || `Updated status to ${selectedStage} (${selectedTemperature})`,
-        followUpAt: isClosing ? null : (followUpDate || null),
-        durationSeconds: 0,
-        notConnectedReason: isConnected ? undefined : 'DID_NOT_PICK',
-      });
+      // 2. Only add to local lead history store if backend call failed (offline fallback)
+      // This prevents duplicate timeline entries when online
+      if (!backendSuccess) {
+        addActivity(lead._id, {
+          phone: lead.phone,
+          branch: currentUser?.branch,
+          agentName: currentUserName,
+          agentId: currentUser?._id,
+          connected: isConnected,
+          stage: selectedStage === 'Follow-up' ? 'Follow Up' : selectedStage,
+          tag: selectedTemperature,
+          temperature: selectedTemperature,
+          remark: notes.trim() || `Stage set to ${selectedStage} (${selectedTemperature})`,
+          followUpAt: isClosing ? null : (followUpDate || null),
+          durationSeconds: 0,
+          notConnectedReason: isConnected ? undefined : 'DID_NOT_PICK',
+        });
+      }
 
       refetchHistory();
       onLeadUpdated?.();

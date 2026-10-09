@@ -34,8 +34,10 @@ import {
   TrendingUp,
   ArrowUpRight,
   PhoneCall,
+  Download,
 } from 'lucide-react-native';
 
+import { downloadOrShareCsv, SAMPLE_LEADS_TEMPLATE_CSV } from '../utils/csvDownloader';
 import { useAuthStore } from '../store/authStore';
 import {
   fetchUsers,
@@ -1307,11 +1309,26 @@ export const DashboardScreen: React.FC = () => {
            ========================================================================= */}
         {activeTab === 'UPLOAD' && (
           <View>
-            <View className="mb-4">
-              <Text className="text-slate-900 font-bold text-base">Bulk Lead Ingest</Text>
-              <Text className="text-slate-500 text-xs font-medium">
-                Upload CSV file with automatic deduplication and agent assignment
-              </Text>
+            <View className="mb-4 flex-row items-center justify-between">
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text className="text-slate-900 font-bold text-base">Bulk Lead Ingest</Text>
+                <Text className="text-slate-500 text-xs font-medium">
+                  Upload CSV file with automatic deduplication
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={async () => {
+                  const res = await downloadOrShareCsv('lead_upload_template.csv', SAMPLE_LEADS_TEMPLATE_CSV);
+                  if (res.success) {
+                    Alert.alert('Template Ready', res.message);
+                  }
+                }}
+                activeOpacity={0.7}
+                className="flex-row items-center gap-1.5 px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl"
+              >
+                <Download size={13} color="#0F172A" />
+                <Text className="text-xs font-bold text-slate-800">CSV Template</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Step 1: Campaign Selector */}

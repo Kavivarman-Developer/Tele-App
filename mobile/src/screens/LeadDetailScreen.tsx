@@ -41,7 +41,7 @@ import { CrmHeader } from '../components/CrmHeader';
 import { CrmAvatar } from '../components/CrmAvatar';
 import { Badge } from '../components/Badge';
 import { CallPermissionModal } from '../components/CallPermissionModal';
-import { LeadTimeline } from '../components/LeadTimeline';
+import { LeadTimeline, deduplicateActivities } from '../components/LeadTimeline';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
 import { getWhatsAppUrl, getDialerTelUrl, formatDisplayPhone } from '../utils/phoneUtils';
@@ -153,11 +153,13 @@ export const LeadDetailScreen: React.FC = () => {
     if (backend.length > 0) {
       const existingIds = new Set(backend.map((a) => a._id));
       const nonDup = local.filter((a) => !existingIds.has(a._id));
-      return [...backend, ...nonDup].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      return deduplicateActivities(
+        [...backend, ...nonDup].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
       );
     }
-    return local;
+    return deduplicateActivities(local);
   }, [historyData, currentLead._id, getHistoryForLead]);
 
   const initiateCall = async () => {
