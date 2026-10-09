@@ -23,6 +23,7 @@ export interface UserCallsReportData {
   userId: string;
   name: string;
   email: string;
+  branch?: string;
   calls: number;
   connected: number;
   notConnected: number;
@@ -260,6 +261,7 @@ export class ReportService {
           userId: { $toString: '$_id' },
           name: '$user.name',
           email: '$user.email',
+          branch: '$user.branch',
           calls: 1,
           connected: 1,
           notConnected: 1,
@@ -269,6 +271,30 @@ export class ReportService {
       },
       { $sort: { calls: -1 } },
     ]);
+
+    // Also include all active AGENT users across branches even if they made 0 calls in this date filter
+    const agentFilter: Record<string, unknown> = { role: 'AGENT', isActive: true };
+    if (requester.role === 'MANAGER' && requester.branch) {
+      agentFilter.branch = requester.branch;
+    }
+    const allAgents = await (await import('../models/user.model')).User.find(agentFilter, '_id name email branch');
+
+    const existingUserIds = new Set(stats.map((s) => s.userId));
+    for (const ag of allAgents) {
+      if (!existingUserIds.has(ag._id.toString())) {
+        stats.push({
+          userId: ag._id.toString(),
+          name: ag.name,
+          email: ag.email,
+          branch: ag.branch || 'General',
+          calls: 0,
+          connected: 0,
+          notConnected: 0,
+          totalDurationSeconds: 0,
+          avgDurationSeconds: 0,
+        });
+      }
+    }
 
     return stats || [];
   }

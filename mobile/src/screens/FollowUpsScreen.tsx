@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -24,19 +25,24 @@ import {
   Flame,
   Sun,
   Snowflake,
+  CheckCircle2,
+  Clock,
+  RotateCw,
 } from 'lucide-react-native';
 
 import { fetchMyLeads } from '../api/leadApi';
 import { Lead, RootStackParamList } from '../types';
-import { colors } from '../theme';
+import { colors, borderRadius, shadows } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { CrmShell } from '../components/CrmShell';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
 import { getDialerTelUrl, formatDisplayPhone } from '../utils/phoneUtils';
+import { toast } from '../store/toastStore';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-type TabCategory = 'Overdue' | 'Today' | 'Upcoming';
+type TabCategory = 'Today' | 'Overdue' | 'Upcoming';
 
 interface FollowUpItem {
   _id: string;
@@ -45,181 +51,46 @@ interface FollowUpItem {
   campaignName: string;
   attempts: number;
   assignedAgent: string;
-  status: 'Interested' | 'Follow-up';
+  status: string;
   time: string;
   date: string;
   category: TabCategory;
-  temperature?: 'Hot' | 'Warm' | 'Cold';
+  temperature?: 'HOT' | 'WARM' | 'COLD';
+  rawDate: Date;
 }
-
-const DEMO_FOLLOWUPS: FollowUpItem[] = [
-  {
-    _id: '6ac623d96c84a3753e4573f0',
-    name: 'Kavya Menon',
-    phone: '+91 9810000073',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 3,
-    assignedAgent: 'John Agent',
-    status: 'Interested',
-    time: '04:13 AM',
-    date: 'Oct 8',
-    category: 'Today',
-  },
-  {
-    _id: '6ac623d96c84a3753e4573ff',
-    name: 'Priya Verma',
-    phone: '+91 9810000129',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Kavin (Trichy) / John (Pudukk.)',
-    status: 'Interested',
-    time: '11:00 AM',
-    date: 'Tomorrow',
-    category: 'Today',
-    temperature: 'Hot',
-  },
-  {
-    _id: '6ac623d96c84a3753e4573f1',
-    name: 'Anika Mehta',
-    phone: '+91 9810000089',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 1,
-    assignedAgent: 'John Agent',
-    status: 'Follow-up',
-    time: '05:25 AM',
-    date: 'Oct 8',
-    category: 'Today',
-  },
-  {
-    _id: 'fu-4',
-    name: 'Sneha Joshi',
-    phone: '+91 9810000045',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Agent Three',
-    status: 'Follow-up',
-    time: '12:37 PM',
-    date: 'Oct 8',
-    category: 'Today',
-  },
-  {
-    _id: 'fu-5',
-    name: 'Ayaan Patel',
-    phone: '+91 9810000065',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 3,
-    assignedAgent: 'Agent Two',
-    status: 'Interested',
-    time: '06:12 PM',
-    date: 'Oct 8',
-    category: 'Today',
-  },
-  {
-    _id: 'fu-6',
-    name: 'Reyansh Sundar',
-    phone: '+91 9810000011',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 1,
-    assignedAgent: 'John Agent',
-    status: 'Follow-up',
-    time: '07:05 PM',
-    date: 'Oct 8',
-    category: 'Today',
-  },
-  // Overdue items
-  {
-    _id: 'fu-7',
-    name: 'Rohit Verma',
-    phone: '+91 9810000022',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'John Agent',
-    status: 'Follow-up',
-    time: '09:00 AM',
-    date: 'Oct 7',
-    category: 'Overdue',
-  },
-  {
-    _id: 'fu-8',
-    name: 'Meera Sen',
-    phone: '+91 9810000033',
-    campaignName: 'OK Real Estate Outreach',
-    attempts: 1,
-    assignedAgent: 'Agent Two',
-    status: 'Interested',
-    time: '11:30 AM',
-    date: 'Oct 7',
-    category: 'Overdue',
-  },
-  // Upcoming items
-  {
-    _id: 'fu-9',
-    name: 'Deepak Rao',
-    phone: '+91 9810000055',
-    campaignName: 'OK Real Estate Outreach',
-    attempts: 1,
-    assignedAgent: 'Agent Three',
-    status: 'Interested',
-    time: '10:00 AM',
-    date: 'Oct 9',
-    category: 'Upcoming',
-  },
-  {
-    _id: 'fu-10',
-    name: 'Shreya Das',
-    phone: '+91 9810000066',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'John Agent',
-    status: 'Follow-up',
-    time: '02:30 PM',
-    date: 'Oct 9',
-    category: 'Upcoming',
-  },
-  {
-    _id: 'fu-11',
-    name: 'Tarun Nair',
-    phone: '+91 9810000077',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 1,
-    assignedAgent: 'Agent Two',
-    status: 'Interested',
-    time: '04:00 PM',
-    date: 'Oct 10',
-    category: 'Upcoming',
-  },
-  {
-    _id: 'fu-12',
-    name: 'Pooja Hegde',
-    phone: '+91 9810000088',
-    campaignName: 'OK Real Estate Outreach',
-    attempts: 0,
-    assignedAgent: 'Agent Three',
-    status: 'Follow-up',
-    time: '05:30 PM',
-    date: 'Oct 10',
-    category: 'Upcoming',
-  },
-];
 
 export const FollowUpsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuthStore();
   const isAgent = user?.role === 'AGENT';
+  const { width } = useWindowDimensions();
+  const isWide = width >= 860;
+
   const [activeTab, setActiveTab] = useState<TabCategory>('Today');
   const [searchQuery, setSearchQuery] = useState('');
   const [quickModalLead, setQuickModalLead] = useState<Lead | null>(null);
   const [whatsAppModalVisible, setWhatsAppModalVisible] = useState(false);
   const [whatsAppTarget, setWhatsAppTarget] = useState<{ name: string; phone: string } | null>(null);
 
+  const { logDialedCall } = useLeadHistoryStore();
+
   // Direct Call Handler
-  const handleDirectCall = (phone: string) => {
-    Linking.openURL(getDialerTelUrl(phone)).catch(() => {
-      Alert.alert('Unable to dial', `Could not open phone dialer for ${phone}`);
+  const handleDirectCall = (item: FollowUpItem) => {
+    logDialedCall({
+      leadId: item._id,
+      phone: item.phone,
+      customerName: item.name,
+      agentName: user?.name,
+      agentId: user?._id,
+      branch: user?.branch,
+    });
+    toast.info(`Dialing ${item.name}...`, 'Calling');
+    Linking.openURL(getDialerTelUrl(item.phone)).catch(() => {
+      Alert.alert('Unable to dial', `Could not open phone dialer for ${item.phone}`);
     });
   };
 
-  // Direct WhatsApp Handler (opens template selector)
+  // Direct WhatsApp Handler
   const handleOpenWhatsApp = (item: FollowUpItem) => {
     setWhatsAppTarget({
       name: item.name,
@@ -229,85 +100,100 @@ export const FollowUpsScreen: React.FC = () => {
   };
 
   // Real backend query for follow-ups
-  const { data: realFollowupsData, refetch } = useQuery({
+  const { data: realFollowupsData, refetch, isRefetching } = useQuery({
     queryKey: ['followUps'],
     queryFn: () => fetchMyLeads({ type: 'FOLLOW_UP', limit: 100 }),
   });
 
-  // Combine real backend follow-ups with default items (strictly filtered for agents)
+  // Extract real follow-ups from backend leads and local follow-ups
   const combinedItems: FollowUpItem[] = useMemo(() => {
+    const list: FollowUpItem[] = [];
+    const seenIds = new Set<string>();
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfToday = startOfToday + 24 * 60 * 60 * 1000 - 1;
+
+    // 1. From real backend leads
     const realLeads = realFollowupsData?.leads || [];
-    if (realLeads.length > 0) {
-      const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      const endOfToday = startOfToday + 24 * 60 * 60 * 1000 - 1;
+    for (const l of realLeads) {
+      if (!l._id || seenIds.has(l._id)) continue;
+      seenIds.add(l._id);
 
-      const agentScopedLeads = isAgent
-        ? realLeads.filter((l: Lead) => {
-            if (!l.assignedTo) return true;
-            if (typeof l.assignedTo === 'string') {
-              return l.assignedTo === user?._id || l.assignedTo === user?.email;
-            }
-            return (
-              l.assignedTo._id === user?._id ||
-              l.assignedTo.email === user?.email ||
-              l.assignedTo.name?.toLowerCase() === user?.name?.toLowerCase()
-            );
-          })
-        : realLeads;
+      const camp = typeof l.campaign === 'object' && l.campaign ? l.campaign.name : 'Campaign';
+      const dateObj = l.nextFollowUpAt ? new Date(l.nextFollowUpAt) : new Date();
+      const fTime = dateObj.getTime();
 
-      return agentScopedLeads.map((l: Lead) => {
-        const camp = typeof l.campaign === 'object' && l.campaign ? l.campaign.name : 'Demo Sales Campaign';
-        const dateObj = l.nextFollowUpAt ? new Date(l.nextFollowUpAt) : new Date();
-        const fTime = dateObj.getTime();
+      let cat: TabCategory = 'Today';
+      if (fTime < now.getTime()) {
+        cat = 'Overdue';
+      } else if (fTime >= startOfToday && fTime <= endOfToday) {
+        cat = 'Today';
+      } else {
+        cat = 'Upcoming';
+      }
 
-        let cat: TabCategory = 'Today';
-        if (fTime < now.getTime()) {
-          cat = 'Overdue';
-        } else if (fTime >= startOfToday && fTime <= endOfToday) {
-          cat = 'Today';
-        } else {
-          cat = 'Upcoming';
-        }
+      const temp = (l.temperature || (l.tag?.toUpperCase() === 'HOT' ? 'HOT' : l.tag?.toUpperCase() === 'COLD' ? 'COLD' : 'WARM')) as 'HOT' | 'WARM' | 'COLD';
 
-        const agentDisplay = isAgent
-          ? `${user?.name || 'You'} (${user?.branch || 'Agent'})`
-          : l.assignedTo
-          ? typeof l.assignedTo === 'object'
-            ? l.assignedTo.name
-            : 'Assigned Agent'
-          : 'Assigned Agent';
-
-        return {
-          _id: l._id,
-          name: l.name,
-          phone: l.phone.startsWith('+91') ? l.phone : `+91 ${l.phone}`,
-          campaignName: camp,
-          attempts: l.attemptCount || 0,
-          assignedAgent: agentDisplay,
-          status: (l.stage === 'Interested' ? 'Interested' : 'Follow-up') as any,
-          time: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          date: dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' }),
-          category: cat,
-        };
+      list.push({
+        _id: l._id,
+        name: l.name,
+        phone: l.phone,
+        campaignName: camp,
+        attempts: l.attemptCount || 1,
+        assignedAgent: user?.name || 'You',
+        status: l.stage || 'Follow Up',
+        time: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+        category: cat,
+        temperature: temp,
+        rawDate: dateObj,
       });
     }
 
-    // Default items: For agents, personalize so other agents' names are never leaked
-    if (isAgent) {
-      return DEMO_FOLLOWUPS.map((item) => ({
-        ...item,
-        assignedAgent: `${user?.name || 'You'} (${user?.branch || 'Agent'})`,
-      }));
+    // 2. From local activities that scheduled a followUpAt
+    const localActs = useLeadHistoryStore.getState().getAllActivities(user?._id || user?.name);
+    for (const act of localActs) {
+      if (act.followUpAt && act.leadId && !seenIds.has(act.leadId)) {
+        seenIds.add(act.leadId);
+        const dateObj = new Date(act.followUpAt);
+        if (!isNaN(dateObj.getTime())) {
+          const fTime = dateObj.getTime();
+          let cat: TabCategory = 'Today';
+          if (fTime < now.getTime()) {
+            cat = 'Overdue';
+          } else if (fTime >= startOfToday && fTime <= endOfToday) {
+            cat = 'Today';
+          } else {
+            cat = 'Upcoming';
+          }
+
+          list.push({
+            _id: act.leadId,
+            name: act.customerName || 'Lead Contact',
+            phone: act.phone || '',
+            campaignName: 'Assigned Leads',
+            attempts: 1,
+            assignedAgent: user?.name || 'You',
+            status: act.stage || 'Follow Up',
+            time: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            date: dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+            category: cat,
+            temperature: (act.temperature || 'WARM') as any,
+            rawDate: dateObj,
+          });
+        }
+      }
     }
 
-    return DEMO_FOLLOWUPS;
-  }, [realFollowupsData, isAgent, user]);
+    // Sort by due date soonest first
+    return list.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+  }, [realFollowupsData, user]);
 
-  // Counts
-  const overdueCount = combinedItems.filter((i) => i.category === 'Overdue').length || 2;
-  const todayCount = combinedItems.filter((i) => i.category === 'Today').length || 6;
-  const upcomingCount = combinedItems.filter((i) => i.category === 'Upcoming').length || 4;
+  // Counts strictly from real follow-ups
+  const todayCount = combinedItems.filter((i) => i.category === 'Today').length;
+  const overdueCount = combinedItems.filter((i) => i.category === 'Overdue').length;
+  const upcomingCount = combinedItems.filter((i) => i.category === 'Upcoming').length;
 
   // Filtered List
   const displayedItems = useMemo(() => {
@@ -333,12 +219,13 @@ export const FollowUpsScreen: React.FC = () => {
       name: item.name,
       phone: item.phone,
       source: 'FOLLOW_UP',
-      stage: item.status === 'Interested' ? 'Interested' : 'Follow Up',
-      tag: (item.temperature?.toUpperCase() || (item.status === 'Interested' ? 'HOT' : 'WARM')),
-      temperature: (item.temperature?.toUpperCase() || (item.status === 'Interested' ? 'HOT' : 'WARM')) as any,
+      stage: item.status,
+      tag: item.temperature || 'WARM',
+      temperature: item.temperature || 'WARM',
       status: 'OPEN',
       attemptCount: item.attempts,
       customProperties: { campaign: item.campaignName },
+      nextFollowUpAt: item.rawDate.toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -357,22 +244,37 @@ export const FollowUpsScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Banner Section */}
-        <View style={styles.bannerRow}>
-          <View>
+        <View style={[styles.bannerRow, !isWide && styles.bannerRowMobile]}>
+          <View style={{ flex: 1 }}>
             <Text style={styles.bannerTitle}>
-              {isAgent ? 'My Scheduled Follow-ups' : 'Every follow-up, in one place'}
+              {isAgent ? 'My Scheduled Follow-ups' : 'Follow-up Callbacks'}
             </Text>
             <Text style={styles.bannerSubtitle}>
-              {isAgent
-                ? `${todayCount} scheduled callbacks for ${user?.name || 'You'} (${user?.branch || 'General'} Branch)`
-                : `${todayCount} scheduled conversations · Today`}
+              {todayCount > 0
+                ? `${todayCount} scheduled callback${todayCount > 1 ? 's' : ''} for today`
+                : 'All follow-up callbacks are up to date.'}
             </Text>
           </View>
 
-          {/* Attention Badge */}
-          <View style={styles.attentionBadge}>
-            <AlertTriangle size={13} color="#B45309" strokeWidth={2.5} />
-            <Text style={styles.attentionText}>{overdueCount} need attention</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {overdueCount > 0 && (
+              <View style={styles.attentionBadge}>
+                <AlertTriangle size={13} color="#B45309" strokeWidth={2.5} />
+                <Text style={styles.attentionText}>{overdueCount} overdue</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              onPress={() => {
+                refetch();
+                toast.info('Refreshed scheduled follow-ups');
+              }}
+              activeOpacity={0.7}
+            >
+              <RotateCw size={13} color="#0F172A" />
+              <Text style={styles.refreshBtnText}>Refresh</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -381,7 +283,7 @@ export const FollowUpsScreen: React.FC = () => {
           <Search size={15} color="#94A3B8" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search scheduled leads..."
+            placeholder="Search scheduled follow-ups..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -393,24 +295,8 @@ export const FollowUpsScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Filter Tabs: Overdue | Today | Upcoming */}
+        {/* Filter Tabs: Today | Overdue | Upcoming */}
         <View style={styles.tabsRow}>
-          {/* Overdue */}
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'Overdue' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('Overdue')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabLabel, activeTab === 'Overdue' && styles.tabLabelActive]}>
-              Overdue
-            </Text>
-            <View style={[styles.tabBadge, activeTab === 'Overdue' && styles.tabBadgeActive]}>
-              <Text style={[styles.tabBadgeText, activeTab === 'Overdue' && styles.tabBadgeTextActive]}>
-                {overdueCount}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
           {/* Today */}
           <TouchableOpacity
             style={[styles.tabBtn, activeTab === 'Today' && styles.tabBtnActive]}
@@ -423,6 +309,34 @@ export const FollowUpsScreen: React.FC = () => {
             <View style={[styles.tabBadge, activeTab === 'Today' && styles.tabBadgeActive]}>
               <Text style={[styles.tabBadgeText, activeTab === 'Today' && styles.tabBadgeTextActive]}>
                 {todayCount}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Overdue */}
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'Overdue' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('Overdue')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabLabel, activeTab === 'Overdue' && styles.tabLabelActive]}>
+              Overdue
+            </Text>
+            <View
+              style={[
+                styles.tabBadge,
+                overdueCount > 0 && { backgroundColor: '#FEE2E2' },
+                activeTab === 'Overdue' && styles.tabBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabBadgeText,
+                  overdueCount > 0 && { color: '#DC2626' },
+                  activeTab === 'Overdue' && styles.tabBadgeTextActive,
+                ]}
+              >
+                {overdueCount}
               </Text>
             </View>
           </TouchableOpacity>
@@ -444,158 +358,181 @@ export const FollowUpsScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Scheduled Follow-up Cards List (Exact Screenshot 3 structure) */}
+        {/* Follow-up Cards List */}
         <View style={styles.cardsList}>
-          {displayedItems.map((item) => {
-            const initials = item.name
-              .split(' ')
-              .map((w) => w[0])
-              .join('')
-              .toUpperCase()
-              .slice(0, 2);
+          {displayedItems.length === 0 ? (
+            <View style={styles.emptyStateCard}>
+              <CheckCircle2 size={36} color="#10B981" />
+              <Text style={styles.emptyStateTitle}>
+                {activeTab === 'Today'
+                  ? 'No follow-up callbacks scheduled for today'
+                  : activeTab === 'Overdue'
+                  ? 'No overdue callbacks'
+                  : 'No upcoming follow-ups scheduled'}
+              </Text>
+              <Text style={styles.emptyStateSubtitle}>
+                {activeTab === 'Today'
+                  ? 'You are all caught up! Great job staying on top of your customer follow-ups.'
+                  : 'Callbacks scheduled for future dates will appear here.'}
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyActionBtn}
+                onPress={() => navigation.navigate('MyLeads')}
+                activeOpacity={0.8}
+              >
+                <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.emptyActionBtnText}>Go to Calling Queue</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            displayedItems.map((item) => {
+              const initials = item.name
+                .split(' ')
+                .filter(Boolean)
+                .map((w) => w[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2) || 'LD';
+              const isHot = item.temperature === 'HOT';
+              const isCold = item.temperature === 'COLD';
 
-            return (
-              <View key={item._id} style={styles.followupCard}>
-                {/* Left Column: Calendar Icon + Time + Date */}
-                <View style={styles.timeCol}>
-                  <CalendarDays size={18} color="#2563EB" />
-                  <Text style={styles.timeText}>{item.time}</Text>
-                  <Text style={styles.dateText}>{item.date}</Text>
-                </View>
+              return (
+                <View key={item._id} style={styles.followupCard}>
+                  {/* Left Column: Calendar Icon + Time + Date */}
+                  <View style={styles.timeCol}>
+                    <Clock size={16} color={item.category === 'Overdue' ? '#DC2626' : '#2563EB'} />
+                    <Text
+                      style={[
+                        styles.timeText,
+                        item.category === 'Overdue' && { color: '#DC2626' },
+                      ]}
+                    >
+                      {item.time}
+                    </Text>
+                    <Text style={styles.dateText}>{item.date}</Text>
+                  </View>
 
-                {/* Vertical Divider */}
-                <View style={styles.verticalDivider} />
+                  {/* Vertical Divider */}
+                  <View style={styles.verticalDivider} />
 
-                {/* Avatar */}
-                <View style={[styles.avatarCircle, { backgroundColor: '#EEF2FF' }]}>
-                  <Text style={[styles.avatarText, { color: '#3730A3' }]}>{initials}</Text>
-                </View>
+                  {/* Avatar */}
+                  <View style={[styles.avatarCircle, { backgroundColor: '#EEF2FF' }]}>
+                    <Text style={[styles.avatarText, { color: '#3730A3' }]}>{initials}</Text>
+                  </View>
 
-                {/* Center: Name, Subtitle, Badges */}
-                <View style={styles.infoCol}>
-                  <Text style={styles.personName}>{item.name}</Text>
-                  <Text style={styles.personSubtitle}>
-                    {formatDisplayPhone(item.phone)} · {item.campaignName}
-                  </Text>
+                  {/* Center: Name, Subtitle, Badges */}
+                  <View style={styles.infoCol}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Text style={styles.personName}>{item.name}</Text>
+                      {/* Customer Importance / Temperature Badge */}
+                      <View
+                        style={[
+                          styles.tempBadge,
+                          isHot
+                            ? styles.tempHot
+                            : isCold
+                            ? styles.tempCold
+                            : styles.tempWarm,
+                        ]}
+                      >
+                        {isHot ? (
+                          <Flame size={9} color="#DC2626" fill="#DC2626" />
+                        ) : isCold ? (
+                          <Snowflake size={9} color="#2563EB" />
+                        ) : (
+                          <Sun size={9} color="#D97706" />
+                        )}
+                        <Text
+                          style={[
+                            styles.tempBadgeText,
+                            { color: isHot ? '#DC2626' : isCold ? '#2563EB' : '#D97706' },
+                          ]}
+                        >
+                          {item.temperature || 'Warm'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.personSubtitle}>
+                      {formatDisplayPhone(item.phone)} · {item.campaignName}
+                    </Text>
 
                     <View style={styles.metaRow}>
-                      {item.status === 'Interested' ? (
-                        <View style={[styles.statusPill, { backgroundColor: '#ECFDF5' }]}>
-                          <Text style={[styles.statusPillText, { color: '#047857' }]}>Interested</Text>
-                        </View>
-                      ) : (
-                        <View style={[styles.statusPill, { backgroundColor: '#FFFBEB' }]}>
-                          <Text style={[styles.statusPillText, { color: '#B45309' }]}>Follow-up</Text>
-                        </View>
-                      )}
-
-                      {/* Customer Importance / Temperature Badge */}
-                      {item.status === 'Interested' || item.temperature === 'Hot' ? (
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: '#FEF2F2',
-                            borderWidth: 1,
-                            borderColor: '#FECACA',
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            borderRadius: 6,
-                            gap: 3,
-                          }}
-                        >
-                          <Flame size={9} color="#DC2626" fill="#DC2626" />
-                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#DC2626' }}>Hot</Text>
-                        </View>
-                      ) : (
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: '#FFFBEB',
-                            borderWidth: 1,
-                            borderColor: '#FDE68A',
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            borderRadius: 6,
-                            gap: 3,
-                          }}
-                        >
-                          <Sun size={9} color="#D97706" />
-                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#D97706' }}>Warm</Text>
-                        </View>
-                      )}
-
+                      <View style={styles.statusPill}>
+                        <Text style={styles.statusPillText}>{item.status}</Text>
+                      </View>
                       <Text style={styles.attemptsText}>
-                        {item.attempts} attempts · {item.assignedAgent}
+                        {item.attempts} {item.attempts === 1 ? 'attempt' : 'attempts'}
                       </Text>
                     </View>
-                </View>
-
-                {/* Right Column: Scheduled Badge + Direct Actions (Call, WhatsApp, Open Lead) */}
-                <View style={styles.rightCol}>
-                  <View style={styles.scheduledBadge}>
-                    <Text style={styles.scheduledText}>Scheduled</Text>
                   </View>
 
-                  <View style={styles.cardActionsRow}>
-                    {/* Direct Call Button */}
-                    <TouchableOpacity
-                      style={styles.directCallBtn}
-                      onPress={() => handleDirectCall(item.phone)}
-                      activeOpacity={0.7}
-                      accessibilityLabel="Call Lead"
-                    >
-                      <Phone size={12} color="#047857" strokeWidth={2.5} />
-                    </TouchableOpacity>
+                  {/* Right Column: Direct Actions (Call, WhatsApp, Open Lead) */}
+                  <View style={styles.rightCol}>
+                    <View style={styles.cardActionsRow}>
+                      {/* Direct Call Button */}
+                      <TouchableOpacity
+                        style={styles.directCallBtn}
+                        onPress={() => handleDirectCall(item)}
+                        activeOpacity={0.8}
+                        accessibilityLabel="Call Lead"
+                      >
+                        <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                        <Text style={styles.directCallBtnText}>Call</Text>
+                      </TouchableOpacity>
 
-                    {/* Direct WhatsApp Button */}
-                    <TouchableOpacity
-                      style={styles.directWhatsAppBtn}
-                      onPress={() => handleOpenWhatsApp(item)}
-                      activeOpacity={0.7}
-                      accessibilityLabel="WhatsApp Lead"
-                    >
-                      <MessageCircle size={12} color="#16A34A" strokeWidth={2.5} />
-                    </TouchableOpacity>
+                      {/* Direct WhatsApp Button */}
+                      <TouchableOpacity
+                        style={styles.directWhatsAppBtn}
+                        onPress={() => handleOpenWhatsApp(item)}
+                        activeOpacity={0.8}
+                        accessibilityLabel="WhatsApp Lead"
+                      >
+                        <MessageCircle size={14} color="#047857" strokeWidth={2.5} />
+                      </TouchableOpacity>
 
-                    {/* Open Lead Button */}
-                    <TouchableOpacity
-                      style={styles.openLeadBtn}
-                      onPress={() => handleOpenLead(item)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.openLeadText}>Open</Text>
-                      <ArrowUpRight size={11} color="#0F172A" />
-                    </TouchableOpacity>
+                      {/* Open Lead Button */}
+                      <TouchableOpacity
+                        style={styles.openLeadBtn}
+                        onPress={() => handleOpenLead(item)}
+                        activeOpacity={0.7}
+                      >
+                        <ArrowUpRight size={14} color="#64748B" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </View>
       </ScrollView>
 
       {/* Interactive Lovable Lead Modal */}
-      <LeadQuickModal
-        lead={quickModalLead}
-        visible={Boolean(quickModalLead)}
-        onClose={() => setQuickModalLead(null)}
-        onLeadUpdated={() => {
-          refetch();
-        }}
-        onOpenFullDispose={(leadToDispose) => {
-          navigation.navigate('Dispose', { lead: leadToDispose });
-        }}
-      />
+      {quickModalLead && (
+        <LeadQuickModal
+          lead={quickModalLead}
+          visible={Boolean(quickModalLead)}
+          onClose={() => setQuickModalLead(null)}
+          onLeadUpdated={() => {
+            refetch();
+          }}
+          onOpenFullDispose={(leadToDispose) => {
+            setQuickModalLead(null);
+            navigation.navigate('Dispose', { lead: leadToDispose });
+          }}
+        />
+      )}
 
       {/* WhatsApp Template Selector Modal */}
-      <WhatsAppTemplateModal
-        visible={whatsAppModalVisible}
-        onClose={() => setWhatsAppModalVisible(false)}
-        recipientName={whatsAppTarget?.name || ''}
-        recipientPhone={whatsAppTarget?.phone || ''}
-      />
+      {whatsAppModalVisible && (
+        <WhatsAppTemplateModal
+          visible={whatsAppModalVisible}
+          onClose={() => setWhatsAppModalVisible(false)}
+          recipientName={whatsAppTarget?.name || ''}
+          recipientPhone={whatsAppTarget?.phone || ''}
+        />
+      )}
     </CrmShell>
   );
 };
@@ -616,6 +553,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     flexWrap: 'wrap',
     gap: 12,
+  },
+  bannerRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
   },
   bannerTitle: {
     fontSize: 20,
@@ -644,6 +585,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#B45309',
   },
+  refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  refreshBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
   searchBarWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -658,7 +615,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#0F172A',
     paddingVertical: 0,
   },
@@ -683,7 +640,7 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#64748B',
   },
@@ -711,6 +668,45 @@ const styles = StyleSheet.create({
   cardsList: {
     gap: 10,
   },
+  emptyStateCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: borderRadius.lg,
+    padding: 36,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.soft,
+  },
+  emptyStateTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 18,
+    maxWidth: 300,
+  },
+  emptyActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  emptyActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   followupCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -719,43 +715,39 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 12,
     padding: 14,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    ...shadows.soft,
     gap: 12,
   },
   timeCol: {
-    width: 60,
+    width: 58,
     alignItems: 'center',
     gap: 2,
   },
   timeText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#0F172A',
-    marginTop: 4,
+    marginTop: 2,
   },
   dateText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '600',
     color: '#94A3B8',
   },
   verticalDivider: {
     width: 1,
-    height: 48,
+    height: 44,
     backgroundColor: '#F1F5F9',
   },
   avatarCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   infoCol: {
@@ -763,9 +755,30 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   personName: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  tempBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  tempHot: {
+    backgroundColor: '#FEE2E2',
+  },
+  tempWarm: {
+    backgroundColor: '#FEF3C7',
+  },
+  tempCold: {
+    backgroundColor: '#EFF6FF',
+  },
+  tempBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
   },
   personSubtitle: {
     fontSize: 11,
@@ -774,17 +787,19 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginTop: 4,
   },
   statusPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
   },
   statusPillText: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '700',
+    color: '#475569',
   },
   attemptsText: {
     fontSize: 10,
@@ -792,18 +807,6 @@ const styles = StyleSheet.create({
   },
   rightCol: {
     alignItems: 'flex-end',
-    gap: 8,
-  },
-  scheduledBadge: {
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  scheduledText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#B45309',
   },
   cardActionsRow: {
     flexDirection: 'row',
@@ -811,6 +814,20 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   directCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  directCallBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  directWhatsAppBtn: {
     width: 28,
     height: 28,
     borderRadius: 6,
@@ -820,30 +837,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  directWhatsAppBtn: {
+  openLeadBtn: {
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: '#DCFCE7',
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  openLeadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    gap: 3,
-  },
-  openLeadText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

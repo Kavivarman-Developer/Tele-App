@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import { Types, FilterQuery } from 'mongoose';
 import { Activity, IActivityDoc } from '../models/activity.model';
 import { Lead, ILeadDoc } from '../models/lead.model';
 import { Campaign } from '../models/campaign.model';
@@ -27,7 +27,7 @@ export class ActivityService {
     }
 
     // Fallback: If not found by _id, look up by phone if provided or from input
-    const candidatePhone = (input as any).phone || (leadId.replace(/\D/g, '').length >= 7 ? leadId : null);
+    const candidatePhone = (input as { phone?: string }).phone || (leadId.replace(/\D/g, '').length >= 7 ? leadId : null);
     if (!lead && candidatePhone) {
       const cleanPhone = candidatePhone.replace(/\D/g, '').slice(-10);
       lead = await Lead.findOne({ phone: { $regex: cleanPhone } });
@@ -96,8 +96,15 @@ export class ActivityService {
         }
       }
 
-      // Check if the stage closes the lead
-      if (stageDoc.isClosed) {
+      // Check if the stage closes the lead (isClosed flag, or Not Interested / Lost / Closed stage names)
+      const stageLower = (stageDoc.name || '').trim().toLowerCase();
+      const isClosingStage =
+        stageDoc.isClosed ||
+        stageLower === 'not interested' ||
+        stageLower === 'lost' ||
+        stageLower === 'closed';
+
+      if (isClosingStage) {
         lead.status = 'CLOSED';
         lead.nextFollowUpAt = null;
       } else {
@@ -192,8 +199,8 @@ export class ActivityService {
     // Create Activity log
     const activity = await Activity.create({
       leadId: lead._id,
-      phone: lead.phone || (input as any).phone || null,
-      branch: (requester as any).branch || (lead as any).branch || null,
+      phone: lead.phone || (input as { phone?: string }).phone || null,
+      branch: (requester as { branch?: string }).branch || (lead as { branch?: string }).branch || null,
       campaignId: lead.campaignId,
       userId: requester._id,
       type: 'CALL',
@@ -223,7 +230,7 @@ export class ActivityService {
       lead = await Lead.findOne({ phone: { $regex: cleanPhone } });
     }
 
-    const query: any = {};
+    const query: FilterQuery<IActivityDoc> = {};
     if (lead) {
       query.$or = [
         { leadId: lead._id },
@@ -243,7 +250,7 @@ export class ActivityService {
   }
 
   public static async getBranchCallStats(branchName?: string) {
-    const match: any = {};
+    const match: Record<string, unknown> = {};
     if (branchName && branchName !== 'ALL') {
       match.branch = branchName;
     }

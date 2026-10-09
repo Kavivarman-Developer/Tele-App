@@ -176,14 +176,36 @@ export const LeadDetailScreen: React.FC = () => {
   };
 
   const handlePressCall = async () => {
-    if (Platform.OS === 'android' && !skipPermissionCheckRef.current) {
-      const hasPerm = await callService.checkPermissions();
-      if (!hasPerm) {
-        setShowPermissionModal(true);
-        return;
+    const isSuppressed =
+      currentLead.stage === 'Not Interested' ||
+      currentLead.stage === 'Closed' ||
+      currentLead.stage === 'Lost' ||
+      currentLead.status === 'CLOSED';
+
+    const proceedCall = async () => {
+      if (Platform.OS === 'android' && !skipPermissionCheckRef.current) {
+        const hasPerm = await callService.checkPermissions();
+        if (!hasPerm) {
+          setShowPermissionModal(true);
+          return;
+        }
       }
+      await initiateCall();
+    };
+
+    if (isSuppressed) {
+      Alert.alert(
+        '⚠️ Customer Not Interested',
+        `${currentLead.name} was marked as "${currentLead.stage || 'Not Interested'}". Calling again may cause customer irritation.\n\nAre you sure you want to dial anyway?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Call Anyway', style: 'destructive', onPress: proceedCall },
+        ],
+      );
+      return;
     }
-    await initiateCall();
+
+    await proceedCall();
   };
 
   const handleGrantPermissions = async () => {

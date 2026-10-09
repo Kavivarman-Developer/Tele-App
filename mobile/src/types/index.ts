@@ -254,6 +254,7 @@ export interface UserCallStats {
   userId: string;
   name: string;
   email: string;
+  branch?: string;
   calls: number;
   connected: number;
   notConnected: number;

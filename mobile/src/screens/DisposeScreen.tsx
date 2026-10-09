@@ -158,13 +158,17 @@ export const DisposeScreen: React.FC = () => {
     { name: 'New', isClosed: false, tags: [], order: 0 },
     { name: 'Interested', isClosed: false, tags: ['hot', 'warm', 'cold'], order: 1 },
     { name: 'Follow Up', isClosed: false, tags: [], order: 2 },
-    { name: 'Not Interested', isClosed: false, tags: [], order: 3 },
+    { name: 'Not Interested', isClosed: true, tags: [], order: 3 },
     { name: 'Converted', isClosed: true, tags: [], order: 4 },
     { name: 'Lost', isClosed: true, tags: [], order: 5 },
   ];
 
   const currentStage = stages.find((s) => s.name === selectedStageName);
-  const isStageClosed = currentStage?.isClosed ?? false;
+  const isStageClosed =
+    (currentStage?.isClosed ?? false) ||
+    selectedStageName === 'Not Interested' ||
+    selectedStageName === 'Lost' ||
+    selectedStageName === 'Closed';
   const availableTags = currentStage?.tags ?? [];
 
   // Query: Retry Rules

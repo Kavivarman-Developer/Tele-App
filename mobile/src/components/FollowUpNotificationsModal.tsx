@@ -24,8 +24,8 @@ import {
   Search,
   ExternalLink,
   CheckCircle2,
-  AlertCircle,
   CheckCheck,
+  Sparkles,
 } from 'lucide-react-native';
 
 import { fetchMyLeads } from '../api/leadApi';
@@ -37,6 +37,7 @@ import { Lead, Activity } from '../types';
 import { WhatsAppTemplateModal } from './WhatsAppTemplateModal';
 import { LeadQuickModal } from './LeadQuickModal';
 import { toast } from '../store/toastStore';
+import { storage } from '../utils/storage';
 import { colors, borderRadius, shadows } from '../theme';
 
 interface NotificationFollowUp {
@@ -52,61 +53,6 @@ interface NotificationFollowUp {
   agentName?: string;
   attempts: number;
 }
-
-const DEFAULT_SAMPLE_REMINDERS: NotificationFollowUp[] = [
-  {
-    _id: '6ac623d96c84a3753e4573ff',
-    name: 'Priya Verma',
-    phone: '+91 9810000129',
-    stage: 'Follow Up',
-    temperature: 'HOT',
-    timeLabel: 'Today at 11:00 AM',
-    isToday: true,
-    isOverdue: true,
-    branch: 'Trichy / Pudukkottai',
-    agentName: 'Kavin & John',
-    attempts: 2,
-  },
-  {
-    _id: '6ac623d96c84a3753e4573f0',
-    name: 'Kavya Menon',
-    phone: '+91 9810000073',
-    stage: 'Interested',
-    temperature: 'WARM',
-    timeLabel: 'Today at 04:30 PM',
-    isToday: true,
-    isOverdue: false,
-    branch: 'Trichy',
-    agentName: 'Assigned Agent',
-    attempts: 3,
-  },
-  {
-    _id: '6ac623d96c84a3753e4573cd',
-    name: 'Rohan Mehta',
-    phone: '+91 9810000081',
-    stage: 'Follow Up',
-    temperature: 'HOT',
-    timeLabel: 'Tomorrow at 10:00 AM',
-    isToday: false,
-    isOverdue: false,
-    branch: 'Pudukkottai',
-    agentName: 'John Agent',
-    attempts: 1,
-  },
-  {
-    _id: '6ac623d96c84a3753e4573f1',
-    name: 'Anika Mehta',
-    phone: '+91 9810000089',
-    stage: 'Follow Up',
-    temperature: 'COLD',
-    timeLabel: 'Tomorrow at 03:00 PM',
-    isToday: false,
-    isOverdue: false,
-    branch: 'Trichy',
-    agentName: 'Kavin',
-    attempts: 1,
-  },
-];
 
 interface FollowUpNotificationsModalProps {
   visible: boolean;
@@ -127,21 +73,57 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
   const [quickLead, setQuickLead] = useState<Lead | null>(null);
   const [whatsAppTarget, setWhatsAppTarget] = useState<{ name: string; phone: string } | null>(null);
 
+  const [assignedNotif, setAssignedNotif] = useState<{
+    id: string;
+    count: number;
+    assignedBy: string;
+    campaignName: string;
+    timestamp: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    const loadAssigned = async () => {
+      try {
+        const raw = await storage.getItem('tele_crm_assigned_lead_notifications');
+        if (raw) {
+          const list = JSON.parse(raw);
+          const relevant = list.find((item: any) => {
+            if (!item.targetAgentId || item.targetAgentId === 'null') return true;
+            return (
+              item.targetAgentId === user?._id ||
+              item.targetAgentName?.toLowerCase() === user?.name?.toLowerCase() ||
+              item.targetAgentId === user?.email
+            );
+          });
+          setAssignedNotif(relevant || null);
+        }
+      } catch {}
+    };
+    loadAssigned();
+  }, [visible, user]);
+
   // Fetch real follow-ups from backend if available
   const { data: myLeadsData, refetch } = useQuery({
     queryKey: ['notificationsFollowUps'],
-    queryFn: () => fetchMyLeads({ type: 'FOLLOW_UP', limit: 30 }),
+    queryFn: () => fetchMyLeads({ type: 'FOLLOW_UP', limit: 50 }),
     enabled: visible,
   });
 
-  // Transform backend leads into Notification items
-  const backendFollowUps = useMemo<NotificationFollowUp[]>(() => {
-    if (!myLeadsData?.leads || myLeadsData.leads.length === 0) {
-      return [];
-    }
-
+  // Transform backend leads & local follow-up activities into Notification items
+  const allReminders = useMemo<NotificationFollowUp[]>(() => {
+    const list: NotificationFollowUp[] = [];
+    const seenIds = new Set<string>();
     const now = new Date();
-    return myLeadsData.leads.map((l) => {
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfToday = startOfToday + 24 * 60 * 60 * 1000 - 1;
+
+    // 1. From backend leads
+    const realLeads = myLeadsData?.leads || [];
+    for (const l of realLeads) {
+      if (!l._id || seenIds.has(l._id)) continue;
+      seenIds.add(l._id);
+
       let timeLabel = 'Callback scheduled';
       let isToday = false;
       let isOverdue = false;
@@ -149,7 +131,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
       if (l.nextFollowUpAt) {
         const d = new Date(l.nextFollowUpAt);
         if (!isNaN(d.getTime())) {
-          isToday = d.toDateString() === now.toDateString();
+          isToday = d.getTime() >= startOfToday && d.getTime() <= endOfToday;
           isOverdue = d.getTime() < now.getTime();
           timeLabel = `${isToday ? 'Today' : d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
         }
@@ -157,7 +139,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
 
       const temp = (l.temperature || (l.tag?.toUpperCase() === 'HOT' ? 'HOT' : l.tag?.toUpperCase() === 'COLD' ? 'COLD' : 'WARM')) as 'HOT' | 'WARM' | 'COLD';
 
-      return {
+      list.push({
         _id: l._id,
         name: l.name,
         phone: l.phone,
@@ -169,22 +151,43 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
         branch: l.branch || user?.branch || undefined,
         agentName: typeof l.assignedTo === 'object' && l.assignedTo ? (l.assignedTo as any).name : user?.name,
         attempts: l.attemptCount || 1,
-      };
-    });
-  }, [myLeadsData, user]);
-
-  // Combine with sample items if backend returned few/no items
-  const allReminders = useMemo(() => {
-    if (backendFollowUps.length > 0) {
-      return backendFollowUps;
+      });
     }
-    // Filter sample items if agent is logged in to match agent's branch/context
-    return DEFAULT_SAMPLE_REMINDERS;
-  }, [backendFollowUps]);
+
+    // 2. From local activities that have followUpAt set
+    const userActivities = useLeadHistoryStore.getState().getAllActivities(user?._id || user?.name);
+    for (const act of userActivities) {
+      if (act.followUpAt && act.leadId && !seenIds.has(act.leadId)) {
+        seenIds.add(act.leadId);
+        const d = new Date(act.followUpAt);
+        if (!isNaN(d.getTime())) {
+          const isToday = d.getTime() >= startOfToday && d.getTime() <= endOfToday;
+          const isOverdue = d.getTime() < now.getTime();
+          const timeLabel = `${isToday ? 'Today' : d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+          list.push({
+            _id: act.leadId,
+            name: act.customerName || 'Lead Contact',
+            phone: act.phone || '',
+            stage: act.stage || 'Follow Up',
+            temperature: (act.temperature || 'WARM') as any,
+            timeLabel,
+            isToday,
+            isOverdue,
+            branch: act.branch || user?.branch || undefined,
+            agentName: user?.name,
+            attempts: 1,
+          });
+        }
+      }
+    }
+
+    return list;
+  }, [myLeadsData, user]);
 
   // Sync reminder items with notification store
   useEffect(() => {
-    if (visible && allReminders.length > 0) {
+    if (visible) {
       setTotalRemindersCount(allReminders.length, allReminders.map((r) => r._id));
     }
   }, [visible, allReminders, setTotalRemindersCount]);
@@ -277,7 +280,7 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
                 )}
               </View>
               <View>
-                <Text style={styles.headerTitle}>Follow-up Notifications</Text>
+                <Text style={styles.headerTitle}>Reminders & Callbacks</Text>
                 <Text style={styles.headerSubtitle}>
                   {unreadCount > 0
                     ? `${unreadCount} callback${unreadCount > 1 ? 's' : ''} require attention`
@@ -374,6 +377,31 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
             style={styles.scrollArea}
             contentContainerStyle={{ paddingBottom: 16 }}
           >
+            {/* New Leads Notification Box */}
+            {assignedNotif && (
+              <View style={styles.assignedLeadsBox}>
+                <View style={styles.assignedLeadsIconBox}>
+                  <Sparkles size={18} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.assignedLeadsTitle}>New Leads Assigned!</Text>
+                  <Text style={styles.assignedLeadsSubtitle}>
+                    {assignedNotif.assignedBy || 'Admin'} assigned {assignedNotif.count} new leads in {assignedNotif.campaignName || 'Campaign'}.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.assignedLeadsActionBtn}
+                  onPress={() => {
+                    onClose();
+                    navigation.navigate('MyLeads');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.assignedLeadsActionBtnText}>View Leads</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {filteredList.length === 0 ? (
               <View style={styles.emptyState}>
                 <CheckCircle2 size={36} color="#10B981" />
@@ -799,7 +827,7 @@ const styles = StyleSheet.create({
   timePillText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#1D4ED8',
+    color: '#2563EB',
   },
   timePillTextOverdue: {
     color: '#DC2626',
@@ -807,26 +835,26 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     marginTop: 6,
     marginBottom: 10,
   },
   stageTag: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '600',
     color: '#475569',
   },
   branchText: {
-    fontSize: 10.5,
+    fontSize: 11,
     color: '#94A3B8',
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    paddingTop: 10,
   },
   callActionBtn: {
     flex: 1,
@@ -834,9 +862,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: '#059669',
+    backgroundColor: '#10B981',
     paddingVertical: 7,
-    borderRadius: borderRadius.sm,
+    borderRadius: 8,
   },
   callActionBtnText: {
     color: '#FFFFFF',
@@ -849,14 +877,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#A7F3D0',
     paddingVertical: 7,
-    borderRadius: borderRadius.sm,
+    borderRadius: 8,
   },
   whatsAppActionBtnText: {
-    color: '#15803D',
+    color: '#047857',
     fontSize: 11.5,
     fontWeight: '700',
   },
@@ -870,7 +898,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#BFDBFE',
     paddingVertical: 7,
-    borderRadius: borderRadius.sm,
+    borderRadius: 8,
   },
   updateActionBtnText: {
     color: '#1D4ED8',
@@ -878,23 +906,62 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalFooter: {
-    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    paddingTop: 12,
   },
   viewAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
     backgroundColor: '#2563EB',
     paddingVertical: 10,
-    borderRadius: borderRadius.md,
+    borderRadius: 10,
   },
   viewAllBtnText: {
     color: '#FFFFFF',
     fontSize: 12.5,
+    fontWeight: '700',
+  },
+  assignedLeadsBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  assignedLeadsIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#DBEAFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  assignedLeadsTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  assignedLeadsSubtitle: {
+    fontSize: 11,
+    color: '#3B82F6',
+    marginTop: 1,
+  },
+  assignedLeadsActionBtn: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  assignedLeadsActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
     fontWeight: '700',
   },
 });

@@ -25,6 +25,9 @@ import {
   Snowflake,
   History,
   FileEdit,
+  ShieldAlert,
+  Ban,
+  CheckCircle2,
 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 
@@ -54,6 +57,14 @@ const STAGE_OPTIONS = [
   'Not connected',
   'Not Interested',
   'Closed',
+];
+
+const LOST_REASONS = [
+  { label: 'Price High / Budget', code: 'PRICE_HIGH', emoji: '💰' },
+  { label: 'Bought Elsewhere', code: 'COMPETITOR', emoji: '🏢' },
+  { label: 'Not Interested / Not Needed', code: 'NOT_NEEDED', emoji: '❌' },
+  { label: 'Wrong Number / Invalid', code: 'WRONG_NUMBER', emoji: '📵' },
+  { label: 'Do Not Call (DND)', code: 'DND', emoji: '⛔' },
 ];
 
 type ModalTab = 'DISPOSITION' | 'HISTORY';
@@ -134,17 +145,40 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       : 'Demo Sales Campaign';
 
   const handleCall = () => {
-    useLeadHistoryStore.getState().logDialedCall({
-      leadId: lead._id,
-      phone: lead.phone,
-      customerName: lead.name,
-      agentName: currentUser?.name || 'Agent',
-      agentId: currentUser?._id || currentUser?.email,
-      branch: currentUser?.branch || 'General',
-    });
-    Linking.openURL(getDialerTelUrl(lead.phone)).catch(() => {
-      Alert.alert('Error', 'Unable to initiate phone call on this device');
-    });
+    const isSuppressed =
+      lead.stage === 'Not Interested' ||
+      lead.stage === 'Closed' ||
+      selectedStage === 'Not Interested' ||
+      selectedStage === 'Closed' ||
+      lead.status === 'CLOSED';
+
+    const triggerCall = () => {
+      useLeadHistoryStore.getState().logDialedCall({
+        leadId: lead._id,
+        phone: lead.phone,
+        customerName: lead.name,
+        agentName: currentUser?.name || 'Agent',
+        agentId: currentUser?._id || currentUser?.email,
+        branch: currentUser?.branch || 'General',
+      });
+      Linking.openURL(getDialerTelUrl(lead.phone)).catch(() => {
+        Alert.alert('Error', 'Unable to initiate phone call on this device');
+      });
+    };
+
+    if (isSuppressed) {
+      Alert.alert(
+        '⚠️ Customer Not Interested',
+        `This customer previously stated they are Not Interested. Calling again might cause customer irritation or complaints.\n\nAre you sure you want to dial anyway?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Call Anyway', style: 'destructive', onPress: triggerCall },
+        ],
+      );
+      return;
+    }
+
+    triggerCall();
   };
 
   const handleWhatsApp = () => {
@@ -188,6 +222,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
   const handleQuickSave = async () => {
     try {
       setIsSubmitting(true);
+      const isClosing = selectedStage === 'Not Interested' || selectedStage === 'Closed';
       const isConnected = selectedStage !== 'Not connected';
 
       // 1. Log to backend if connected
@@ -198,7 +233,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
           stage: selectedStage === 'Follow-up' ? 'Follow Up' : selectedStage,
           tag: selectedTemperature,
           remark: notes.trim() || `Stage set to ${selectedStage} (${selectedTemperature})`,
-          followUpAt: followUpDate ? new Date(followUpDate).toISOString() : undefined,
+          followUpAt: isClosing ? undefined : (followUpDate ? new Date(followUpDate).toISOString() : undefined),
           durationSeconds: 0,
           answers: [],
         });
@@ -218,7 +253,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
         tag: selectedTemperature,
         temperature: selectedTemperature,
         remark: notes.trim() || `Updated status to ${selectedStage} (${selectedTemperature})`,
-        followUpAt: followUpDate || null,
+        followUpAt: isClosing ? null : (followUpDate || null),
         durationSeconds: 0,
         notConnectedReason: isConnected ? undefined : 'DID_NOT_PICK',
       });
@@ -226,12 +261,19 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       refetchHistory();
       onLeadUpdated?.();
 
-      toast.success(
-        `${lead.name} updated to ${selectedStage} (${selectedTemperature})${
-          followUpDate ? ` · Next: ${formatScheduledDate(followUpDate)}` : ''
-        }`,
-        'Lead Updated',
-      );
+      if (isClosing) {
+        toast.success(
+          `${lead.name} marked as ${selectedStage} · Archived from active queue`,
+          'Lead Closed & Suppressed',
+        );
+      } else {
+        toast.success(
+          `${lead.name} updated to ${selectedStage} (${selectedTemperature})${
+            followUpDate ? ` · Next: ${formatScheduledDate(followUpDate)}` : ''
+          }`,
+          'Lead Updated',
+        );
+      }
       onClose();
     } catch (err: any) {
       Alert.alert('Update Failed', err?.message || 'Could not update lead');
@@ -438,14 +480,30 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                         return (
                           <TouchableOpacity
                             key={stg}
-                            style={[styles.stageChip, isSelected && styles.stageChipSelected]}
-                            onPress={() => setSelectedStage(stg)}
+                            style={[
+                              styles.stageChip,
+                              isSelected && styles.stageChipSelected,
+                              (stg === 'Not Interested' || stg === 'Closed') &&
+                                isSelected && {
+                                  backgroundColor: '#FEE2E2',
+                                  borderColor: '#EF4444',
+                                },
+                            ]}
+                            onPress={() => {
+                              setSelectedStage(stg);
+                              if (stg === 'Not Interested' || stg === 'Closed') {
+                                setSelectedTemperature('COLD');
+                                setFollowUpDate('');
+                              }
+                            }}
                             activeOpacity={0.7}
                           >
                             <Text
                               style={[
                                 styles.stageChipText,
                                 isSelected && styles.stageChipTextSelected,
+                                (stg === 'Not Interested' || stg === 'Closed') &&
+                                  isSelected && { color: '#B91C1C' },
                               ]}
                             >
                               {stg}
@@ -471,93 +529,146 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                     />
                   </View>
 
-                  {/* Quick Follow-up Presets (Tomorrow & Fast Scheduler) */}
-                  <View style={styles.formField}>
-                    <View style={styles.labelWithIcon}>
-                      <Calendar size={13} color="#2563EB" />
-                      <Text style={styles.fieldLabel}>Schedule Follow-up</Text>
-                    </View>
-
-                    <View style={styles.quickDateRow}>
-                      <TouchableOpacity
-                        style={styles.quickDateBtn}
-                        onPress={() => setQuickFollowUp(24, 10)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.quickDateText}>Tomorrow 10 AM</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.quickDateBtn}
-                        onPress={() => setQuickFollowUp(24, 15)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.quickDateText}>Tomorrow 3 PM</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.quickDateBtn}
-                        onPress={() => setQuickFollowUp(24, 18)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.quickDateText}>Tomorrow 6 PM</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.quickDateBtn}
-                        onPress={() => setQuickFollowUp(3)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.quickDateText}>Today +3h</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.quickDateBtn}
-                        onPress={() => setQuickFollowUp(48, 10)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.quickDateText}>In 2 Days</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Interactive Custom Date & Time Picker Button */}
-                    <TouchableOpacity
-                      style={styles.customDatePickerBtn}
-                      onPress={() => setShowCustomDatePicker(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Calendar size={14} color="#2563EB" />
-                      <Text style={styles.customDatePickerBtnText}>
-                        Pick Custom Date & Time...
-                      </Text>
-                    </TouchableOpacity>
-
-                    {followUpDate ? (
-                      <View style={styles.scheduledBanner}>
-                        <Clock size={14} color="#0D9488" />
+                  {/* CONDITIONAL: If Not Interested or Closed, Show DND & Lost Reason Safeguard; Else Show Schedule Follow-up */}
+                  {selectedStage === 'Not Interested' || selectedStage === 'Closed' ? (
+                    <View style={styles.suppressionCard}>
+                      <View style={styles.suppressionHeader}>
+                        <View style={styles.suppressionIconBadge}>
+                          <Ban size={15} color="#DC2626" />
+                        </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.scheduledBannerLabel}>Scheduled Callback:</Text>
-                          <Text style={styles.scheduledBannerText}>
-                            {formatScheduledDate(followUpDate)}
+                          <Text style={styles.suppressionTitle}>Lead Suppression & DND Safeguard</Text>
+                          <Text style={styles.suppressionDesc}>
+                            This customer will be marked as Closed and immediately removed from your active calling queue and reminders so you won't accidentally call them again.
                           </Text>
                         </View>
+                      </View>
+
+                      <Text style={styles.lostReasonsTitle}>Select Reason (1-Tap):</Text>
+                      <View style={styles.lostReasonsWrap}>
+                        {LOST_REASONS.map((r) => {
+                          const isReasonActive = notes.includes(r.label);
+                          return (
+                            <TouchableOpacity
+                              key={r.code}
+                              style={[
+                                styles.lostReasonChip,
+                                isReasonActive && styles.lostReasonChipActive,
+                              ]}
+                              onPress={() => {
+                                setSelectedTemperature('COLD');
+                                setFollowUpDate('');
+                                setNotes((prev) =>
+                                  prev && !prev.includes(r.label)
+                                    ? `${prev.trim()} · Reason: ${r.label}`
+                                    : r.label,
+                                );
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.lostReasonEmoji}>{r.emoji}</Text>
+                              <Text
+                                style={[
+                                  styles.lostReasonText,
+                                  isReasonActive && styles.lostReasonTextActive,
+                                ]}
+                              >
+                                {r.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : (
+                    /* Regular Quick Follow-up Presets (Tomorrow & Fast Scheduler) */
+                    <View style={styles.formField}>
+                      <View style={styles.labelWithIcon}>
+                        <Calendar size={13} color="#2563EB" />
+                        <Text style={styles.fieldLabel}>Schedule Follow-up</Text>
+                      </View>
+
+                      <View style={styles.quickDateRow}>
                         <TouchableOpacity
-                          onPress={() => setShowCustomDatePicker(true)}
-                          style={styles.changeDateBtn}
+                          style={styles.quickDateBtn}
+                          onPress={() => setQuickFollowUp(24, 10)}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.changeDateText}>Change</Text>
+                          <Text style={styles.quickDateText}>Tomorrow 10 AM</Text>
                         </TouchableOpacity>
+
                         <TouchableOpacity
-                          onPress={() => setFollowUpDate('')}
-                          style={styles.clearFollowUpBtn}
+                          style={styles.quickDateBtn}
+                          onPress={() => setQuickFollowUp(24, 15)}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.clearFollowUpText}>Clear</Text>
+                          <Text style={styles.quickDateText}>Tomorrow 3 PM</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.quickDateBtn}
+                          onPress={() => setQuickFollowUp(24, 18)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.quickDateText}>Tomorrow 6 PM</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.quickDateBtn}
+                          onPress={() => setQuickFollowUp(3)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.quickDateText}>Today +3h</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.quickDateBtn}
+                          onPress={() => setQuickFollowUp(48, 10)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.quickDateText}>In 2 Days</Text>
                         </TouchableOpacity>
                       </View>
-                    ) : null}
-                  </View>
+
+                      {/* Interactive Custom Date & Time Picker Button */}
+                      <TouchableOpacity
+                        style={styles.customDatePickerBtn}
+                        onPress={() => setShowCustomDatePicker(true)}
+                        activeOpacity={0.8}
+                      >
+                        <Calendar size={14} color="#2563EB" />
+                        <Text style={styles.customDatePickerBtnText}>
+                          Pick Custom Date & Time...
+                        </Text>
+                      </TouchableOpacity>
+
+                      {followUpDate ? (
+                        <View style={styles.scheduledBanner}>
+                          <Clock size={14} color="#0D9488" />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.scheduledBannerLabel}>Scheduled Callback:</Text>
+                            <Text style={styles.scheduledBannerText}>
+                              {formatScheduledDate(followUpDate)}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => setShowCustomDatePicker(true)}
+                            style={styles.changeDateBtn}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.changeDateText}>Change</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => setFollowUpDate('')}
+                            style={styles.clearFollowUpBtn}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.clearFollowUpText}>Clear</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
+                    </View>
+                  )}
 
                   {/* Full Disposition Form Link */}
                   {onOpenFullDispose ? (
@@ -1006,6 +1117,79 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  suppressionCard: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  suppressionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 10,
+  },
+  suppressionIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  suppressionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  suppressionDesc: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#7F1D1D',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  lostReasonsTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#991B1B',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  lostReasonsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  lostReasonChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 7,
+  },
+  lostReasonChipActive: {
+    backgroundColor: '#DC2626',
+    borderColor: '#B91C1C',
+  },
+  lostReasonEmoji: {
+    fontSize: 12,
+  },
+  lostReasonText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  lostReasonTextActive: {
     color: '#FFFFFF',
   },
 });

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { storage } from '../utils/storage';
 
-const NOTIFICATIONS_STORAGE_KEY = 'tele_crm_read_notifications_v1';
+const NOTIFICATIONS_STORAGE_KEY = 'tele_crm_read_notifications_v2';
 
 interface NotificationStore {
   readIds: string[];
@@ -17,7 +17,7 @@ interface NotificationStore {
 
 export const useNotificationStore = create<NotificationStore>((set, get) => ({
   readIds: [],
-  unreadCount: 4, // Initial unread count matching default reminders
+  unreadCount: 0,
   isLoaded: false,
 
   loadNotifications: async () => {
@@ -25,10 +25,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
       const stored = await storage.getItem(NOTIFICATIONS_STORAGE_KEY);
       if (stored) {
         const parsed: string[] = JSON.parse(stored);
-        set((state) => {
-          const newUnread = Math.max(0, 4 - parsed.length);
-          return { readIds: parsed, unreadCount: newUnread, isLoaded: true };
-        });
+        set({ readIds: parsed, isLoaded: true });
       } else {
         set({ isLoaded: true });
       }
@@ -60,7 +57,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
   },
 
   resetAll: () => {
-    set({ readIds: [], unreadCount: 4 });
+    set({ readIds: [], unreadCount: 0 });
     storage.removeItem(NOTIFICATIONS_STORAGE_KEY).catch(() => {});
   },
 

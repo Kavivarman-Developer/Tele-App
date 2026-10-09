@@ -50,7 +50,7 @@ interface ScreenshotLead {
   campaignName: string;
   attempts: number;
   assignedAgent: string;
-  status: 'New' | 'Interested' | 'Follow-up' | 'Not connected';
+  status: 'New' | 'Interested' | 'Follow-up' | 'Not connected' | 'Not Interested';
   priority: 'High' | 'Medium' | 'Low';
   lastContact: string;
 }
@@ -199,7 +199,7 @@ export const MyLeadsScreen: React.FC = () => {
   const isWide = width >= 860;
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<'All' | 'New' | 'Interested' | 'Follow-up' | 'Not connected'>('All');
+  const [selectedFilter, setSelectedFilter] = useState<'All' | 'New' | 'Interested' | 'Follow-up' | 'Not connected' | 'Not Interested'>('All');
   const [selectedCampaign, setSelectedCampaign] = useState<string>('All campaigns');
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   const [quickModalLead, setQuickModalLead] = useState<Lead | null>(null);
@@ -277,6 +277,10 @@ export const MyLeadsScreen: React.FC = () => {
             ? 'New'
             : l.stage === 'Interested'
             ? 'Interested'
+            : l.stage === 'Not Interested' || l.stage === 'Closed' || l.stage === 'Lost' || l.status === 'CLOSED'
+            ? 'Not Interested'
+            : l.stage === 'Not connected'
+            ? 'Not connected'
             : l.stage === 'Contacted'
             ? 'Interested'
             : 'Follow-up';
@@ -323,12 +327,13 @@ export const MyLeadsScreen: React.FC = () => {
 
   // Compute status pill counts
   const counts = useMemo(() => {
-    const all = combinedLeads.length >= 50 ? combinedLeads.length : 50;
-    const n = combinedLeads.filter((l) => l.status === 'New').length || 13;
-    const interested = combinedLeads.filter((l) => l.status === 'Interested').length || 7;
-    const followup = combinedLeads.filter((l) => l.status === 'Follow-up').length || 30;
-    const notConn = combinedLeads.filter((l) => l.status === 'Not connected').length || 0;
-    return { all, new: n, interested, followup, notConnected: notConn };
+    const all = combinedLeads.length;
+    const n = combinedLeads.filter((l) => l.status === 'New').length;
+    const interested = combinedLeads.filter((l) => l.status === 'Interested').length;
+    const followup = combinedLeads.filter((l) => l.status === 'Follow-up').length;
+    const notConn = combinedLeads.filter((l) => l.status === 'Not connected').length;
+    const notInterested = combinedLeads.filter((l) => l.status === 'Not Interested').length;
+    return { all, new: n, interested, followup, notConnected: notConn, notInterested };
   }, [combinedLeads]);
 
   // Filtered Leads
@@ -356,22 +361,46 @@ export const MyLeadsScreen: React.FC = () => {
   }, [combinedLeads, selectedFilter, selectedCampaign, searchQuery]);
 
   // Handle Direct Call
-  const handleDirectCall = (phone: string, customerName?: string, leadId?: string) => {
+  const handleDirectCall = (
+    phone: string,
+    customerName?: string,
+    leadId?: string,
+    leadStatus?: string,
+  ) => {
     if (!phone.trim()) {
       Alert.alert('Invalid Number', 'Unable to initiate call.');
       return;
     }
-    useLeadHistoryStore.getState().logDialedCall({
-      leadId: leadId || 'lead-' + Date.now(),
-      phone,
-      customerName: customerName || 'Lead Contact',
-      agentName: user?.name || 'Agent',
-      agentId: user?._id || user?.email,
-      branch: user?.branch || 'General',
-    });
-    Linking.openURL(getDialerTelUrl(phone)).catch(() => {
-      Alert.alert('Call Error', 'Unable to open phone dialer on this device.');
-    });
+
+    const isSuppressed = leadStatus === 'Not Interested' || leadStatus === 'Closed';
+
+    const executeCall = () => {
+      useLeadHistoryStore.getState().logDialedCall({
+        leadId: leadId || 'lead-' + Date.now(),
+        phone,
+        customerName: customerName || 'Lead Contact',
+        agentName: user?.name || 'Agent',
+        agentId: user?._id || user?.email,
+        branch: user?.branch || 'General',
+      });
+      Linking.openURL(getDialerTelUrl(phone)).catch(() => {
+        Alert.alert('Call Error', 'Unable to open phone dialer on this device.');
+      });
+    };
+
+    if (isSuppressed) {
+      Alert.alert(
+        '⚠️ Customer Not Interested',
+        `${customerName || 'This customer'} was marked as "Not Interested". Calling again may cause customer irritation.\n\nAre you sure you want to dial anyway?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Call Anyway', style: 'destructive', onPress: executeCall },
+        ],
+      );
+      return;
+    }
+
+    executeCall();
   };
 
   // Handle Direct WhatsApp
@@ -391,10 +420,17 @@ export const MyLeadsScreen: React.FC = () => {
       name: item.name,
       phone: item.phone,
       source: 'WALK_IN',
-      stage: item.status === 'Interested' ? 'Interested' : item.status === 'New' ? 'New' : 'Follow Up',
+      stage:
+        item.status === 'Interested'
+          ? 'Interested'
+          : item.status === 'New'
+          ? 'New'
+          : item.status === 'Not Interested'
+          ? 'Not Interested'
+          : 'Follow Up',
       tag: item.priority === 'High' ? 'HOT' : item.priority === 'Medium' ? 'WARM' : 'COLD',
       temperature: (item.priority === 'High' ? 'HOT' : item.priority === 'Medium' ? 'WARM' : 'COLD') as any,
-      status: 'OPEN',
+      status: item.status === 'Not Interested' ? 'CLOSED' : 'OPEN',
       attemptCount: item.attempts,
       customProperties: { campaign: item.campaignName, priority: item.priority },
       createdAt: new Date().toISOString(),
@@ -431,6 +467,19 @@ export const MyLeadsScreen: React.FC = () => {
         return (
           <View style={[styles.statusPill, { backgroundColor: '#EFF6FF' }]}>
             <Text style={[styles.statusPillText, { color: '#1D4ED8' }]}>New</Text>
+          </View>
+        );
+      case 'Not Interested':
+        return (
+          <View
+            style={[
+              styles.statusPill,
+              { backgroundColor: '#FEE2E2', borderColor: '#FECACA', borderWidth: 1 },
+            ]}
+          >
+            <Text style={[styles.statusPillText, { color: '#B91C1C', fontWeight: '700' }]}>
+              Not Interested
+            </Text>
           </View>
         );
       case 'Not connected':
@@ -702,6 +751,41 @@ export const MyLeadsScreen: React.FC = () => {
               </Text>
             </View>
           </TouchableOpacity>
+
+          {/* Not Interested / Suppressed */}
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              selectedFilter === 'Not Interested' && styles.filterPillActive,
+              selectedFilter === 'Not Interested' && { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
+            ]}
+            onPress={() => setSelectedFilter('Not Interested')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.filterPillLabel,
+                selectedFilter === 'Not Interested' && { color: '#B91C1C', fontWeight: '800' },
+              ]}
+            >
+              Not Interested
+            </Text>
+            <View
+              style={[
+                styles.filterCountBadge,
+                selectedFilter === 'Not Interested' && { backgroundColor: '#DC2626' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterCountText,
+                  selectedFilter === 'Not Interested' && { color: '#FFFFFF' },
+                ]}
+              >
+                {counts.notInterested}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* Leads Display: Clean Mobile Cards for Mobile, Spacious Table for Wide Desktop */}
@@ -751,7 +835,7 @@ export const MyLeadsScreen: React.FC = () => {
                           {item.name}
                         </Text>
                         <TouchableOpacity
-                          onPress={() => handleDirectCall(item.phone, item.name, item._id)}
+                          onPress={() => handleDirectCall(item.phone, item.name, item._id, item.status)}
                           activeOpacity={0.7}
                           style={styles.cardPhoneTouch}
                         >
@@ -805,7 +889,7 @@ export const MyLeadsScreen: React.FC = () => {
                       {/* Call Button */}
                       <TouchableOpacity
                         style={styles.cardCallBtn}
-                        onPress={() => handleDirectCall(item.phone, item.name, item._id)}
+                        onPress={() => handleDirectCall(item.phone, item.name, item._id, item.status)}
                         activeOpacity={0.8}
                       >
                         <Phone size={13} color="#047857" strokeWidth={2.5} />
@@ -918,7 +1002,7 @@ export const MyLeadsScreen: React.FC = () => {
                       <View style={[styles.tdCell, { width: 140, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }]}>
                         <TouchableOpacity
                           style={styles.directCallBtn}
-                          onPress={() => handleDirectCall(item.phone, item.name, item._id)}
+                          onPress={() => handleDirectCall(item.phone, item.name, item._id, item.status)}
                           activeOpacity={0.7}
                           accessibilityLabel="Call Lead"
                         >

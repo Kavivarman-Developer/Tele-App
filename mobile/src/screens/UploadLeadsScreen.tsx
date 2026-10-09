@@ -29,6 +29,8 @@ import { fetchCampaigns, fetchUsers, uploadLeadsCsv } from '../api/leadApi';
 import { Campaign, User as UserType } from '../types';
 import { colors } from '../theme';
 import { CrmShell } from '../components/CrmShell';
+import { toast } from '../store/toastStore';
+import { storage } from '../utils/storage';
 
 export const UploadLeadsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -43,8 +45,9 @@ export const UploadLeadsScreen: React.FC = () => {
   // Assignment selection: null means "Auto distribute"
   const [selectedAgent, setSelectedAgent] = useState<{ id: string | null; name: string }>({
     id: null,
-    name: 'Auto distribute',
+    name: 'Auto distribute (Round Robin)',
   });
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
 
   const [pickedFile, setPickedFile] = useState<{
     name: string;
@@ -67,6 +70,13 @@ export const UploadLeadsScreen: React.FC = () => {
   });
   const campaignsList: Campaign[] = campaignsData?.campaigns || [];
 
+  React.useEffect(() => {
+    if (campaignsList.length > 0 && (!selectedCampaignId || selectedCampaignId.startsWith('camp-'))) {
+      setSelectedCampaignId(campaignsList[0]._id);
+      setSelectedCampaignName(campaignsList[0].name);
+    }
+  }, [campaignsList, selectedCampaignId]);
+
   const { data: usersData } = useQuery({
     queryKey: ['adminUsers'],
     queryFn: () => fetchUsers(),
@@ -77,14 +87,25 @@ export const UploadLeadsScreen: React.FC = () => {
   );
 
   const defaultAgents = [
-    { id: 'user-3', name: 'Agent Three' },
-    { id: 'user-2', name: 'Agent Two' },
-    { id: 'user-1', name: 'John Agent' },
+    { id: '6ac74f3279bb9292ad180d49', name: 'Kavin', branch: 'Trichy' },
+    { id: '6ac61d2a7bd428cb381d0e2c', name: 'John Agent', branch: 'General' },
+    { id: '6ac62130f01e376b529ebfa1', name: 'Agent Two', branch: 'General' },
+    { id: '6ac623d96c84a3753e457376', name: 'Agent Three', branch: 'General' },
   ];
 
-  const agentOptions = agentsList.length > 0
-    ? agentsList.map((a) => ({ id: a._id, name: a.name }))
-    : defaultAgents;
+  const agentOptions = React.useMemo(() => {
+    const list = agentsList.length > 0 ? agentsList : defaultAgents;
+    const seen = new Set<string>();
+    const unique: Array<{ id: string; name: string; branch?: string }> = [];
+    for (const a of list) {
+      const key = a.name.toLowerCase().trim();
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push({ id: (a as any).id || (a as any)._id, name: a.name, branch: (a as any).branch });
+      }
+    }
+    return unique;
+  }, [agentsList]);
 
   // Handle Document Picker
   const handlePickDocument = async () => {
@@ -145,22 +166,58 @@ export const UploadLeadsScreen: React.FC = () => {
 
       return uploadLeadsCsv(activeCampId, formData);
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
       queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['homeUserCalls'] });
+      const createdCount = data.created ?? 10;
       setUploadResult({
-        created: data.created ?? 12,
+        created: createdCount,
         merged: data.merged ?? 0,
         skipped: data.skipped ?? 0,
       });
-      Alert.alert(
-        'Upload Complete',
-        `Successfully imported ${data.created ?? 12} leads into ${selectedCampaignName}!`,
+
+      // Show high-priority toast
+      toast.success(
+        `Successfully imported ${createdCount} leads into ${selectedCampaignName}!`,
+        'CSV Uploaded',
+        5000,
       );
+
+      // Record agent assignment notification so agent's dashboard shows notification
+      try {
+        const notif = {
+          id: 'assign-' + Date.now(),
+          targetAgentId: selectedAgent.id,
+          targetAgentName: selectedAgent.name,
+          campaignName: selectedCampaignName,
+          count: createdCount,
+          assignedBy: user?.name || 'Admin',
+          assignedRole: user?.role || 'ADMIN',
+          timestamp: new Date().toISOString(),
+          read: false,
+        };
+        const raw = await storage.getItem('tele_crm_assigned_lead_notifications');
+        const list = raw ? JSON.parse(raw) : [];
+        list.unshift(notif);
+        await storage.setItem('tele_crm_assigned_lead_notifications', JSON.stringify(list.slice(0, 30)));
+      } catch (err) {
+        console.warn('Failed to save assignment notification', err);
+      }
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'Upload Complete',
+          `Successfully imported ${createdCount} leads into ${selectedCampaignName}!`,
+        );
+      }
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.message || err?.message || 'Upload failed';
-      Alert.alert('Upload Error', msg);
+      toast.error(msg, 'Upload Failed', 5000);
+      if (Platform.OS !== 'web') {
+        Alert.alert('Upload Error', msg);
+      }
     },
   });
 
@@ -247,7 +304,10 @@ export const UploadLeadsScreen: React.FC = () => {
               <Text style={styles.fieldLabel}>Campaign</Text>
               <TouchableOpacity
                 style={styles.dropdownTrigger}
-                onPress={() => setShowCampaignDropdown(!showCampaignDropdown)}
+                onPress={() => {
+                  setShowCampaignDropdown(!showCampaignDropdown);
+                  setShowAgentDropdown(false);
+                }}
                 activeOpacity={0.7}
               >
                 <Text style={styles.dropdownValueText}>{selectedCampaignName}</Text>
@@ -256,7 +316,7 @@ export const UploadLeadsScreen: React.FC = () => {
 
               {showCampaignDropdown && (
                 <View style={styles.dropdownPopover}>
-                  {['Demo Sales Campaign', 'OK Real Estate Outreach', 'Q4 Product Outreach'].map((camp) => (
+                  {(campaignsList.length > 0 ? campaignsList.map((c) => c.name) : ['Demo Sales Campaign', 'Q4 Real Estate Outreach']).map((camp) => (
                     <TouchableOpacity
                       key={camp}
                       style={styles.popoverItem}
@@ -295,59 +355,75 @@ export const UploadLeadsScreen: React.FC = () => {
                 </View>
               </View>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.agentPillsRow}
+              <Text style={styles.fieldLabel}>Assigned Agent</Text>
+              <TouchableOpacity
+                style={styles.dropdownTrigger}
+                onPress={() => {
+                  setShowAgentDropdown(!showAgentDropdown);
+                  setShowCampaignDropdown(false);
+                }}
+                activeOpacity={0.7}
               >
-                {/* Auto distribute */}
-                <TouchableOpacity
-                  style={[
-                    styles.agentPill,
-                    selectedAgent.id === null && styles.agentPillActive,
-                  ]}
-                  onPress={() => setSelectedAgent({ id: null, name: 'Auto distribute' })}
-                  activeOpacity={0.7}
-                >
-                  <Users
-                    size={13}
-                    color={selectedAgent.id === null ? '#2563EB' : '#64748B'}
-                  />
-                  <Text
-                    style={[
-                      styles.agentPillText,
-                      selectedAgent.id === null && styles.agentPillTextActive,
-                    ]}
-                  >
-                    Auto distribute
-                  </Text>
-                  {selectedAgent.id === null && <Check size={12} color="#2563EB" />}
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <Users size={16} color="#2563EB" />
+                  <Text style={styles.dropdownValueText}>{selectedAgent.name}</Text>
+                </View>
+                <ChevronDown size={16} color="#64748B" />
+              </TouchableOpacity>
 
-                {/* Specific Agents */}
-                {agentOptions.map((agent) => {
-                  const isSelected = selectedAgent.id === agent.id;
-                  return (
-                    <TouchableOpacity
-                      key={agent.id}
-                      style={[styles.agentPill, isSelected && styles.agentPillActive]}
-                      onPress={() => setSelectedAgent({ id: agent.id, name: agent.name })}
-                      activeOpacity={0.7}
-                    >
-                      <Users size={13} color={isSelected ? '#2563EB' : '#64748B'} />
+              {showAgentDropdown && (
+                <View style={styles.dropdownPopover}>
+                  {/* Auto distribute */}
+                  <TouchableOpacity
+                    style={styles.popoverItem}
+                    onPress={() => {
+                      setSelectedAgent({ id: null, name: 'Auto distribute (Round Robin)' });
+                      setShowAgentDropdown(false);
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <Users size={15} color="#2563EB" />
                       <Text
                         style={[
-                          styles.agentPillText,
-                          isSelected && styles.agentPillTextActive,
+                          styles.popoverItemText,
+                          selectedAgent.id === null && styles.popoverItemTextActive,
                         ]}
                       >
-                        {agent.name}
+                        Auto distribute (Round Robin)
                       </Text>
-                      {isSelected && <Check size={12} color="#2563EB" />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                    </View>
+                    {selectedAgent.id === null && <Check size={14} color="#2563EB" strokeWidth={2.5} />}
+                  </TouchableOpacity>
+
+                  {/* Individual Agents */}
+                  {agentOptions.map((agent) => {
+                    const isSelected = selectedAgent.id === agent.id;
+                    return (
+                      <TouchableOpacity
+                        key={agent.id}
+                        style={styles.popoverItem}
+                        onPress={() => {
+                          setSelectedAgent({ id: agent.id, name: agent.name });
+                          setShowAgentDropdown(false);
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                          <Users size={15} color="#64748B" />
+                          <Text
+                            style={[
+                              styles.popoverItemText,
+                              isSelected && styles.popoverItemTextActive,
+                            ]}
+                          >
+                            {agent.name} {agent.branch ? `(${agent.branch})` : ''}
+                          </Text>
+                        </View>
+                        {isSelected && <Check size={14} color="#2563EB" strokeWidth={2.5} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </View>
 
             {/* Step 3: Upload your CSV */}
@@ -574,16 +650,23 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 8,
     marginTop: 4,
-    paddingVertical: 6,
+    paddingVertical: 4,
+    maxHeight: 220,
+    zIndex: 100,
+    elevation: 4,
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
   },
   popoverItem: {
-    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
     paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
   },
   popoverItemText: {
     fontSize: 12,

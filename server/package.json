@@ -10,6 +10,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "seed": "ts-node-dev --transpile-only src/scripts/seed.ts",
     "seed:demo": "ts-node-dev --transpile-only src/scripts/seed-demo.ts",
+    "clean:leads": "ts-node-dev --transpile-only src/scripts/clean-leads.ts",
     "test": "ts-node-dev --transpile-only tests/retry-calculator.test.ts"
   },
   "dependencies": {
@@ -18,6 +19,7 @@
     "csv-parse": "^5.5.6",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",

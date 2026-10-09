@@ -34,6 +34,16 @@ export class NotificationService {
         finalStatus = status;
       }
 
+      if (finalStatus === 'granted' && Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Telecalling Reminders',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#2563EB',
+          sound: 'default',
+        });
+      }
+
       return finalStatus === 'granted';
     } catch (error) {
       console.warn('[NotificationService] Error requesting permissions:', error);

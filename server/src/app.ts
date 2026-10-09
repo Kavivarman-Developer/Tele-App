@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import apiRoutes from './routes';
 import { errorHandler } from './middleware/errorHandler';
+import { apiLimiter } from './middleware/rateLimiter';
 import { AppError } from './utils/AppError';
 
 const app: Application = express();
@@ -17,6 +18,9 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
+
+// Apply API rate limiter to protect against abuse and DDOS
+app.use('/api', apiLimiter);
 
 // API Routes (supports both /api and /api/api to handle any duplicate prefixes gracefully)
 app.use('/api/api', apiRoutes);

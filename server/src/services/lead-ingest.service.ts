@@ -113,11 +113,20 @@ export class LeadIngestService {
             existingLead.email = email;
           }
 
-          // Reopen if closed
+          // Reopen if closed, UNLESS customer is suppressed / Not Interested / Lost / DND
           if (existingLead.status === 'CLOSED') {
-            existingLead.status = 'OPEN';
-            existingLead.stage = initialStage.name;
-            existingLead.tag = null;
+            const currentStageLower = (existingLead.stage || '').toLowerCase();
+            const isSuppressed =
+              currentStageLower === 'not interested' ||
+              currentStageLower === 'lost' ||
+              currentStageLower === 'closed' ||
+              (existingLead.tag && existingLead.tag.toUpperCase() === 'DND');
+
+            if (!isSuppressed) {
+              existingLead.status = 'OPEN';
+              existingLead.stage = initialStage.name;
+              existingLead.tag = null;
+            }
           }
 
           await existingLead.save();
