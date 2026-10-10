@@ -179,7 +179,7 @@ export const CallHistoryScreen: React.FC = () => {
   const handleOpenLead = (act: Activity) => {
     const syntheticLead: Lead = {
       _id: act.leadId || `lead-${Date.now()}`,
-      campaignId: act.campaignId || 'camp-1',
+      campaignId: act.campaignId || '',
       name: act.customerName || 'Customer',
       phone: act.phone || '',
       source: 'DIRECT_CALL',

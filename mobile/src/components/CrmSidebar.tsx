@@ -58,16 +58,41 @@ export const CrmSidebarContent: React.FC<{
   const { currentRoute, setCurrentRoute, toggleCollapse } = useSidebarStore();
   const { user } = useAuthStore();
   const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   const handleNav = (route: string, action?: () => void) => {
     if (action) {
-      action();
       onNavigate?.();
+      setTimeout(() => {
+        action();
+      }, 100);
       return;
     }
+
     setCurrentRoute(route);
     onNavigate?.();
-    navigation.navigate(route);
+
+    setTimeout(() => {
+      try {
+        const TAB_ROUTES = ['Home', 'MyLeads', 'FollowUps', 'CampaignsHub', 'Profile'];
+        if (isManagerOrAdmin) {
+          TAB_ROUTES.push('Dashboard');
+        }
+
+        if (TAB_ROUTES.includes(route)) {
+          navigation.navigate('Main', { screen: route });
+        } else {
+          navigation.navigate(route);
+        }
+      } catch (err) {
+        console.warn('Sidebar navigation warning:', err);
+        try {
+          navigation.navigate(route);
+        } catch (innerErr) {
+          console.error('Sidebar navigation error:', innerErr);
+        }
+      }
+    }, 120);
   };
 
   const roleLabel = user?.branch
@@ -81,7 +106,8 @@ export const CrmSidebarContent: React.FC<{
   const WORKSPACE_ITEMS: NavItemConfig[] = [
     { name: 'Dashboard', route: 'Home', label: 'Dashboard', icon: LayoutGrid },
     { name: 'MyLeads', route: 'MyLeads', label: 'My Leads', icon: Users },
-    { name: 'MyTasks', route: 'FollowUps', label: 'My Tasks', icon: CalendarCheck2 },
+    { name: 'CallHistory', route: 'CallHistory', label: 'Call History', icon: History },
+    { name: 'MyTasks', route: 'FollowUps', label: 'My Tasks', icon: CalendarCheck2, badge: unreadCount > 0 ? unreadCount : undefined },
     { name: 'MyReport', route: 'Dashboard', label: 'My Report', icon: BarChart2 },
     {
       name: 'GeoTagging',
@@ -90,6 +116,20 @@ export const CrmSidebarContent: React.FC<{
       icon: MapPin,
       action: () => Alert.alert('Geo Tagging', 'GPS location tracking active for field visits and call verification.'),
     },
+  ];
+
+  const MANAGEMENT_ITEMS: NavItemConfig[] = [
+    { name: 'Settings', route: 'Settings', label: 'Settings', icon: Settings2 },
+    ...(isManagerOrAdmin
+      ? [
+          { name: 'Campaigns', route: 'Campaigns', label: 'Campaigns', icon: Megaphone },
+          { name: 'Team', route: 'Team', label: 'Team Members', icon: Users },
+          { name: 'UploadLeads', route: 'UploadLeads', label: 'Upload Leads CSV', icon: Upload },
+          { name: 'RetryRules', route: 'RetryRules', label: 'Retry Rules', icon: RotateCw },
+        ]
+      : [
+          { name: 'CampaignSelect', route: 'CampaignSelect', label: 'Campaign Selector', icon: Megaphone },
+        ]),
   ];
 
   const SECONDARY_ITEMS: NavItemConfig[] = [
@@ -112,7 +152,7 @@ export const CrmSidebarContent: React.FC<{
       label: 'Notifications',
       icon: Bell,
       badge: unreadCount > 0 ? unreadCount : undefined,
-      action: () => navigation.navigate('FollowUps'),
+      action: () => handleNav('FollowUps'),
     },
   ];
 
@@ -217,7 +257,7 @@ export const CrmSidebarContent: React.FC<{
             >
               <Icon
                 size={18}
-                color={isActive ? '#4F46E5' : '#64748B'}
+                color={isActive ? '#0F9D58' : '#64748B'}
                 strokeWidth={isActive ? 2.5 : 2}
               />
               {!collapsed && (
@@ -236,8 +276,41 @@ export const CrmSidebarContent: React.FC<{
           );
         })}
 
-        {/* Section 2: Account & Settings */}
+        {/* Section 2: Management & Configuration */}
         <View style={styles.divider} />
+        {!collapsed && <Text style={styles.sectionHeading}>MANAGEMENT</Text>}
+        {MANAGEMENT_ITEMS.map((item) => {
+          const isActive = currentRoute === item.route;
+          const Icon = item.icon;
+
+          return (
+            <TouchableOpacity
+              key={item.name}
+              style={[
+                styles.navBtn,
+                collapsed && styles.navBtnCollapsed,
+                isActive && styles.navBtnActive,
+              ]}
+              onPress={() => handleNav(item.route, item.action)}
+              activeOpacity={0.75}
+            >
+              <Icon
+                size={18}
+                color={isActive ? '#0F9D58' : '#64748B'}
+                strokeWidth={isActive ? 2.5 : 2}
+              />
+              {!collapsed && (
+                <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                  {item.label}
+                </Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* Section 3: Account & Settings */}
+        <View style={styles.divider} />
+        {!collapsed && <Text style={styles.sectionHeading}>PREFERENCES</Text>}
         {SECONDARY_ITEMS.map((item) => {
           const isActive = currentRoute === item.route;
           const Icon = item.icon;
@@ -255,7 +328,7 @@ export const CrmSidebarContent: React.FC<{
             >
               <Icon
                 size={18}
-                color={isActive ? '#5B2C82' : '#64748B'}
+                color={isActive ? '#0F9D58' : '#64748B'}
                 strokeWidth={isActive ? 2.5 : 2}
               />
               {!collapsed && (

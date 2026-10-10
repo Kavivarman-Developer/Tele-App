@@ -153,36 +153,9 @@ export const SettingsScreen: React.FC = () => {
     ]);
   };
 
-  if (isAgent) {
-    return (
-      <CrmShell
-        title="Settings"
-        headerIcon={<Settings2 size={15} color={colors.textSecondary} />}
-        breadcrumb="Workspace"
-      >
-        <View style={styles.restrictedContainer}>
-          <View style={styles.restrictedIconBox}>
-            <ShieldAlert size={40} color="#E11D48" />
-          </View>
-          <Text style={styles.restrictedTitle}>Agent Calling Workspace</Text>
-          <Text style={styles.restrictedSubtitle}>
-            System and organization settings are restricted to Administrators and Managers. Agents have focused access strictly for customer calls and follow-ups.
-          </Text>
-          <TouchableOpacity
-            style={styles.restrictedBackBtn}
-            onPress={() => navigation.navigate('Home')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.restrictedBackBtnText}>Return to Calling Queue</Text>
-          </TouchableOpacity>
-        </View>
-      </CrmShell>
-    );
-  }
-
   return (
     <CrmShell
-      title="Organization Settings"
+      title={isAgent ? 'Preferences & Templates' : 'Organization Settings'}
       headerIcon={<Settings2 size={15} color={colors.textSecondary} />}
       breadcrumb="Workspace"
     >
@@ -193,28 +166,34 @@ export const SettingsScreen: React.FC = () => {
       >
         {/* Banner Section */}
         <View style={styles.bannerRow}>
-          <View>
-            <Text style={styles.bannerTitle}>Organization policies</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bannerTitle}>
+              {isAgent ? 'Calling & Message Preferences' : 'Organization policies'}
+            </Text>
             <Text style={styles.bannerSubtitle}>
-              Keep follow-ups consistent across your team
+              {isAgent
+                ? 'Customize your dialing audio and WhatsApp quick response templates'
+                : 'Keep follow-ups and calling workflows consistent across your team'}
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.saveChangesBtn}
-            onPress={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-            activeOpacity={0.8}
-          >
-            {saveMutation.isPending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Save size={14} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={styles.saveChangesText}>Save changes</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {!isAgent && (
+            <TouchableOpacity
+              style={styles.saveChangesBtn}
+              onPress={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              activeOpacity={0.8}
+            >
+              {saveMutation.isPending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Save size={14} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={styles.saveChangesText}>Save changes</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Section 1 Heading: Follow-up & Calling Pacing policies */}
@@ -289,6 +268,7 @@ export const SettingsScreen: React.FC = () => {
             <Switch
               value={allowDisposeWithoutFollowUp}
               onValueChange={setAllowDisposeWithoutFollowUp}
+              disabled={isAgent}
               trackColor={{ false: '#E2E8F0', true: '#10B981' }}
               thumbColor="#FFFFFF"
             />
@@ -305,6 +285,7 @@ export const SettingsScreen: React.FC = () => {
             <Switch
               value={followUpMandatoryForNotConnected}
               onValueChange={setFollowUpMandatoryForNotConnected}
+              disabled={isAgent}
               trackColor={{ false: '#E2E8F0', true: '#10B981' }}
               thumbColor="#FFFFFF"
             />
@@ -321,6 +302,7 @@ export const SettingsScreen: React.FC = () => {
             <Switch
               value={autoLeadDistribution}
               onValueChange={setAutoLeadDistribution}
+              disabled={isAgent}
               trackColor={{ false: '#E2E8F0', true: '#10B981' }}
               thumbColor="#FFFFFF"
             />
