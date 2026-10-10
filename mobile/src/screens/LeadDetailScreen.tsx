@@ -119,18 +119,18 @@ export const LeadDetailScreen: React.FC = () => {
       : 'Cold',
   );
 
-  // Checkboxes for "Select next action*"
+  // Checkboxes for "Select next action*" (Exact match of NeoDove screenshot)
   const [actionNextFollowUp, setActionNextFollowUp] = useState<boolean>(true);
   const [followUpDate, setFollowUpDate] = useState<string | null>(
-    lead.nextFollowUpAt || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+    lead.nextFollowUpAt || null,
   );
   const [showDatePickerModal, setShowDatePickerModal] = useState<boolean>(false);
 
-  const [actionReassign, setActionReassign] = useState<boolean>(false);
+  const [actionReassign, setActionReassign] = useState<boolean>(true);
   const [selectedReassignUserId, setSelectedReassignUserId] = useState<string | null>(null);
   const [showReassignPicker, setShowReassignPicker] = useState<boolean>(false);
 
-  const [actionCopyCampaign, setActionCopyCampaign] = useState<boolean>(false);
+  const [actionCopyCampaign, setActionCopyCampaign] = useState<boolean>(true);
   const [selectedCopyCampaignId, setSelectedCopyCampaignId] = useState<string | null>(null);
   const [showCampaignPicker, setShowCampaignPicker] = useState<boolean>(false);
 
@@ -355,7 +355,7 @@ export const LeadDetailScreen: React.FC = () => {
       : user?.name || 'Kavin';
 
   const formatDisplayDateTime = (iso?: string | null) => {
-    if (!iso) return 'Select Date & Time';
+    if (!iso) return '';
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
     return `${d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })}  ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -396,10 +396,9 @@ export const LeadDetailScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <ArrowLeft size={22} color="#FFFFFF" />
+          <ChevronDown size={24} color="#FFFFFF" strokeWidth={2.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Lead Details</Text>
-        <View style={{ width: 36 }} />
       </View>
 
       {/* 2. SUBHEADER 4 TABS (LEAD INFO | CAPTURE INFO | DISPOSE LEAD | OTHER) */}
@@ -423,8 +422,14 @@ export const LeadDetailScreen: React.FC = () => {
 
       {/* 3. TAB BODIES */}
       <ScrollView
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
+        style={[
+          styles.scrollContainer,
+          activeTab === 'DISPOSE LEAD' && { backgroundColor: '#FFFFFF' },
+        ]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          activeTab === 'DISPOSE LEAD' && styles.disposeScrollContent,
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* =========================================================================
@@ -614,44 +619,44 @@ export const LeadDetailScreen: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 3: DISPOSE LEAD (Exact match of Image 2 - The Follow-up Flow)
+            TAB 3: DISPOSE LEAD (Exact match of NeoDove media_1791614217084_bb1c3038.jpg)
            ========================================================================= */}
         {activeTab === 'DISPOSE LEAD' && (
           <View style={styles.disposeContainer}>
-            {/* 1. Update State* Dropdown */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>
-                Update State<Text style={{ color: '#EF4444' }}>*</Text>
+            {/* 1. Update State* */}
+            <View style={styles.fieldSection}>
+              <Text style={styles.fieldLabel}>
+                Update State<Text style={styles.asterisk}>*</Text>
               </Text>
               <TouchableOpacity
-                style={styles.dropdownSelector}
+                style={styles.dropdownBox}
                 onPress={() => setShowStatePicker(true)}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
-                <Text style={styles.dropdownSelectorText}>{selectedState}</Text>
-                <ChevronDown size={18} color="#64748B" />
+                <Text style={styles.dropdownValueText}>{selectedState}</Text>
+                <Text style={styles.dropdownCaret}>▼</Text>
               </TouchableOpacity>
             </View>
 
-            {/* 2. Select Tag* Radio Buttons */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>
-                Select Tag<Text style={{ color: '#EF4444' }}>*</Text>
+            {/* 2. Select Tag* */}
+            <View style={styles.fieldSection}>
+              <Text style={styles.fieldLabel}>
+                Select Tag<Text style={styles.asterisk}>*</Text>
               </Text>
-              <View style={styles.radioRow}>
+              <View style={styles.radioGroup}>
                 {(['Hot', 'Cold', 'Warm'] as const).map((tag) => {
                   const isSelected = selectedTag === tag;
                   return (
                     <TouchableOpacity
                       key={tag}
-                      style={styles.radioOption}
+                      style={styles.radioRow}
                       onPress={() => setSelectedTag(tag)}
-                      activeOpacity={0.8}
+                      activeOpacity={0.7}
                     >
-                      <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
-                        {isSelected ? <View style={styles.radioInner} /> : null}
+                      <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
+                        {isSelected && <View style={styles.radioDot} />}
                       </View>
-                      <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
+                      <Text style={[styles.radioText, isSelected && styles.radioTextActive]}>
                         {tag}
                       </Text>
                     </TouchableOpacity>
@@ -660,115 +665,122 @@ export const LeadDetailScreen: React.FC = () => {
               </View>
             </View>
 
-            {/* 3. Select next action* Checkboxes */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>
-                Select next action<Text style={{ color: '#EF4444' }}>*</Text>
+            {/* 3. Select next action* */}
+            <View style={styles.fieldSection}>
+              <Text style={styles.fieldLabel}>
+                Select next action<Text style={styles.asterisk}>*</Text>
               </Text>
 
               {/* Action 1: Next follow up date? */}
-              <View style={styles.actionCard}>
+              <View style={styles.actionBlock}>
                 <TouchableOpacity
                   style={styles.checkboxRow}
                   onPress={() => setActionNextFollowUp(!actionNextFollowUp)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.7}
                 >
                   <View style={[styles.checkboxBox, actionNextFollowUp && styles.checkboxBoxChecked]}>
-                    {actionNextFollowUp ? <Check size={13} color="#FFFFFF" strokeWidth={3} /> : null}
+                    {actionNextFollowUp && <Check size={11} color="#0F172A" strokeWidth={3} />}
                   </View>
-                  <Text style={styles.checkboxTitle}>Next follow up date?</Text>
+                  <Text style={styles.checkboxLabel}>Next follow up date?</Text>
                 </TouchableOpacity>
 
                 {actionNextFollowUp && (
                   <TouchableOpacity
-                    style={styles.actionSubSelector}
+                    style={styles.dropdownBoxSub}
                     onPress={() => setShowDatePickerModal(true)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.7}
                   >
-                    <Calendar size={15} color="#059669" />
-                    <Text style={styles.actionSubSelectorText}>
-                      {formatDisplayDateTime(followUpDate)}
+                    <Text style={[styles.dropdownValueText, !followUpDate && styles.placeholderText]}>
+                      {followUpDate ? formatDisplayDateTime(followUpDate) : ''}
                     </Text>
-                    <ChevronDown size={16} color="#64748B" />
+                    <Text style={styles.dropdownCaret}>▼</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
               {/* Action 2: Re-assign this lead to other user? */}
-              <View style={styles.actionCard}>
+              <View style={styles.actionBlock}>
                 <TouchableOpacity
                   style={styles.checkboxRow}
                   onPress={() => setActionReassign(!actionReassign)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.7}
                 >
                   <View style={[styles.checkboxBox, actionReassign && styles.checkboxBoxChecked]}>
-                    {actionReassign ? <Check size={13} color="#FFFFFF" strokeWidth={3} /> : null}
+                    {actionReassign && <Check size={11} color="#0F172A" strokeWidth={3} />}
                   </View>
-                  <Text style={styles.checkboxTitle}>Re-assign this lead to other user?</Text>
+                  <Text style={styles.checkboxLabel}>Re-assign this lead to other user?</Text>
                 </TouchableOpacity>
 
                 {actionReassign && (
                   <TouchableOpacity
-                    style={styles.actionSubSelector}
+                    style={styles.dropdownBoxSub}
                     onPress={() => setShowReassignPicker(true)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.7}
                   >
-                    <Users size={15} color="#059669" />
-                    <Text style={styles.actionSubSelectorText}>
+                    <Text
+                      style={[
+                        styles.dropdownValueText,
+                        !selectedReassignUserId && styles.placeholderText,
+                      ]}
+                    >
                       {selectedReassignUserId
                         ? assignableAgents.find((a) => a._id === selectedReassignUserId)?.name ||
                           'Select User'
                         : 'Select User'}
                     </Text>
-                    <ChevronDown size={16} color="#64748B" />
+                    <Text style={styles.dropdownCaret}>▼</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
               {/* Action 3: Copy lead to other campaign? */}
-              <View style={styles.actionCard}>
+              <View style={styles.actionBlock}>
                 <TouchableOpacity
                   style={styles.checkboxRow}
                   onPress={() => setActionCopyCampaign(!actionCopyCampaign)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.7}
                 >
                   <View style={[styles.checkboxBox, actionCopyCampaign && styles.checkboxBoxChecked]}>
-                    {actionCopyCampaign ? <Check size={13} color="#FFFFFF" strokeWidth={3} /> : null}
+                    {actionCopyCampaign && <Check size={11} color="#0F172A" strokeWidth={3} />}
                   </View>
-                  <Text style={styles.checkboxTitle}>Copy lead to other campaign?</Text>
+                  <Text style={styles.checkboxLabel}>Copy lead to other campaign?</Text>
                 </TouchableOpacity>
 
                 {actionCopyCampaign && (
                   <TouchableOpacity
-                    style={styles.actionSubSelector}
+                    style={styles.dropdownBoxSub}
                     onPress={() => setShowCampaignPicker(true)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.7}
                   >
-                    <Megaphone size={15} color="#059669" />
-                    <Text style={styles.actionSubSelectorText}>
+                    <Text
+                      style={[
+                        styles.dropdownValueText,
+                        !selectedCopyCampaignId && styles.placeholderText,
+                      ]}
+                    >
                       {selectedCopyCampaignId
                         ? campaignsList.find((c) => c._id === selectedCopyCampaignId)?.name ||
                           'Select Campaign'
                         : 'Select Campaign'}
                     </Text>
-                    <ChevronDown size={16} color="#64748B" />
+                    <Text style={styles.dropdownCaret}>▼</Text>
                   </TouchableOpacity>
                 )}
               </View>
             </View>
 
-            {/* 4. Remarks Text Input */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Remarks</Text>
+            {/* 4. Remarks */}
+            <View style={styles.fieldSection}>
+              <Text style={styles.fieldLabel}>Remarks</Text>
               <TextInput
                 value={remarks}
                 onChangeText={setRemarks}
-                placeholder="Type here......."
+                placeholder="Type here...."
                 placeholderTextColor="#94A3B8"
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
-                style={styles.remarksInput}
+                style={styles.remarksBox}
               />
             </View>
 
@@ -1051,28 +1063,28 @@ export const LeadDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#059669',
+    backgroundColor: '#5B2C82',
     paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   headerBar: {
     height: 56,
-    backgroundColor: '#059669',
+    backgroundColor: '#5B2C82',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
+    gap: 10,
   },
   headerBackBtn: {
-    width: 36,
+    width: 32,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   tabBar: {
     flexDirection: 'row',
@@ -1085,11 +1097,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 3,
+    borderBottomWidth: 2.5,
     borderBottomColor: 'transparent',
   },
   tabItemActive: {
-    borderBottomColor: '#059669',
+    borderBottomColor: '#5B2C82',
   },
   tabItemText: {
     fontSize: 11,
@@ -1098,7 +1110,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   tabItemTextActive: {
-    color: '#059669',
+    color: '#5B2C82',
     fontWeight: '800',
   },
   scrollContainer: {
@@ -1248,154 +1260,162 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 4,
   },
-  disposeContainer: {
-    gap: 14,
-  },
-  formGroup: {
+  disposeScrollContent: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...shadows.soft,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
+  disposeContainer: {
+    backgroundColor: '#FFFFFF',
+  },
+  fieldSection: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
   },
   formLabel: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  dropdownSelector: {
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1.5,
+  asterisk: {
+    color: '#0F172A',
+  },
+  dropdownBox: {
+    height: 42,
+    borderRadius: 6,
+    borderWidth: 1,
     borderColor: '#CBD5E1',
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
   },
-  dropdownSelectorText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
+  dropdownBoxSub: {
+    height: 40,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    marginTop: 6,
+  },
+  dropdownValueText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#1E293B',
+  },
+  placeholderText: {
+    color: '#94A3B8',
+    fontWeight: '400',
+  },
+  dropdownCaret: {
+    fontSize: 10,
+    color: '#1E293B',
+    marginLeft: 6,
+    transform: [{ scaleY: 0.85 }],
+  },
+  radioGroup: {
+    gap: 8,
+    paddingTop: 2,
   },
   radioRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 24,
-    paddingTop: 4,
   },
-  radioOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#94A3B8',
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
+    backgroundColor: '#FFFFFF',
   },
-  radioOuterSelected: {
-    borderColor: '#059669',
+  radioCircleActive: {
+    borderColor: '#1E293B',
   },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#059669',
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#1E293B',
   },
-  radioLabel: {
+  radioText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+    color: '#64748B',
+    fontWeight: '400',
   },
-  radioLabelSelected: {
+  radioTextActive: {
     color: '#0F172A',
-    fontWeight: '800',
+    fontWeight: '600',
   },
-  actionCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 12,
-    marginBottom: 10,
+  actionBlock: {
+    marginBottom: 12,
   },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
   },
   checkboxBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: '#94A3B8',
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    marginRight: 10,
   },
   checkboxBoxChecked: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
+    borderColor: '#64748B',
+    backgroundColor: '#E2E8F0',
   },
-  checkboxTitle: {
+  checkboxLabel: {
     fontSize: 13,
-    fontWeight: '700',
     color: '#0F172A',
+    fontWeight: '500',
   },
-  actionSubSelector: {
-    marginTop: 10,
-    height: 42,
-    borderRadius: 10,
+  remarksBox: {
+    height: 75,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#CBD5E1',
     backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 8,
-  },
-  actionSubSelectorText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0F172A',
-    flex: 1,
-  },
-  remarksInput: {
-    minHeight: 90,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    padding: 12,
+    padding: 10,
     fontSize: 13,
     color: '#0F172A',
   },
   purpleSubmitBtn: {
-    height: 52,
-    backgroundColor: '#059669',
-    borderRadius: borderRadius.full,
+    height: 48,
+    backgroundColor: '#5B2C82',
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 4,
+    marginTop: 8,
+    shadowColor: '#5B2C82',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   purpleSubmitBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     letterSpacing: 0.3,
   },
   textInput: {
@@ -1444,7 +1464,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   pickerItemRowSelected: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#F3E8FF',
   },
   pickerItemText: {
     fontSize: 13.5,
@@ -1452,7 +1472,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   pickerItemTextSelected: {
-    color: '#059669',
+    color: '#5B2C82',
     fontWeight: '800',
   },
 });
