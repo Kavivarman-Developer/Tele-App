@@ -36,18 +36,16 @@ import {
   RotateCcw,
 } from 'lucide-react-native';
 
-import { fetchMyLeads, fetchCampaigns, createWalkInLead, disposeLead } from '../api/leadApi';
-import { Lead, RootStackParamList, DetectedCallResult, CustomerTemperature } from '../types';
+import { fetchMyLeads, fetchCampaigns, createWalkInLead } from '../api/leadApi';
+import { Lead, RootStackParamList } from '../types';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { useCampaignStore } from '../store/campaignStore';
-import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { CrmShell } from '../components/CrmShell';
-import { LeadQuickModal } from '../components/LeadQuickModal';
+import { LeadSummaryModal } from '../components/LeadSummaryModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
-import { NeoPostCallModal } from '../components/NeoPostCallModal';
 import { callService } from '../services/call.service';
-import { getDialerTelUrl, formatDisplayPhone, normalizePhoneDigits } from '../utils/phoneUtils';
+import { getDialerTelUrl, formatDisplayPhone, normalizePhoneDigits, isLeadLostOrSuppressed } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
 import { downloadOrShareCsv, convertLeadsToCsv } from '../utils/csvDownloader';
 
@@ -90,16 +88,6 @@ export const MyLeadsScreen: React.FC = () => {
   const callStartTimeRef = useRef<number | null>(null);
   const callingLeadRef = useRef<Lead | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-
-  const [postCallData, setPostCallData] = useState<{
-    visible: boolean;
-    lead: Lead | null;
-    callResult: DetectedCallResult | null;
-  }>({
-    visible: false,
-    lead: null,
-    callResult: null,
-  });
 
   // WhatsApp Template Modal State
   const [whatsAppModalData, setWhatsAppModalData] = useState<{
@@ -175,16 +163,20 @@ export const MyLeadsScreen: React.FC = () => {
             ? l.campaign._id
             : l.campaignId;
 
+        const normalizedStage = l.stage.trim().toLowerCase();
         const stg =
-          l.stage === 'New'
+          normalizedStage === 'new'
             ? 'New'
-            : l.stage === 'Interested'
+            : normalizedStage === 'interested'
             ? 'Interested'
-            : l.stage === 'Not Interested' || l.stage === 'Closed' || l.stage === 'Lost' || l.status === 'CLOSED'
+            : normalizedStage === 'not interested' ||
+              normalizedStage === 'closed' ||
+              normalizedStage === 'lost' ||
+              l.status === 'CLOSED'
             ? 'Not Interested'
-            : l.stage === 'Not connected'
+            : normalizedStage === 'not connected'
             ? 'Not connected'
-            : l.stage === 'Contacted'
+            : normalizedStage === 'contacted'
             ? 'Interested'
             : 'Follow-up';
 
@@ -270,10 +262,24 @@ export const MyLeadsScreen: React.FC = () => {
           return false;
         }
       }
+
+      const isLost = isLeadLostOrSuppressed(lead as any) || lead.status === 'Not Interested';
+
       // Status filter
-      if (selectedFilter !== 'All' && lead.status !== selectedFilter) {
+      if (selectedFilter === 'All') {
+        // By default in All (Active Working Leads), hide Customer Lost / Not Interested so telecallers don't disturb them
+        if (isLost) {
+          return false;
+        }
+      } else if (selectedFilter === 'Not Interested') {
+        // Strictly show Customer Lost in this archive tab
+        if (!isLost) {
+          return false;
+        }
+      } else if (lead.status !== selectedFilter) {
         return false;
       }
+
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -285,7 +291,7 @@ export const MyLeadsScreen: React.FC = () => {
       }
       return true;
     });
-  }, [combinedLeads, selectedFilter, selectedCampaign, searchQuery]);
+  }, [combinedLeads, selectedFilter, selectedCampaign, searchQuery, selectedCampaignId]);
 
   const [isExporting, setIsExporting] = useState(false);
 
@@ -360,6 +366,14 @@ export const MyLeadsScreen: React.FC = () => {
     };
 
     if (isSuppressed) {
+      if (isAgent) {
+        Alert.alert(
+          'Customer Suppressed',
+          `${customerName || 'This customer'} is marked as not interested and cannot be called from the agent queue.`,
+        );
+        return;
+      }
+
       Alert.alert(
         '⚠️ Customer Not Interested',
         `${customerName || 'This customer'} was marked as "Not Interested". Calling again may cause customer irritation.\n\nAre you sure you want to dial anyway?`,
@@ -392,76 +406,26 @@ export const MyLeadsScreen: React.FC = () => {
         isCallingRef.current = false;
         callStartTimeRef.current = null;
 
+        let result: { connected: boolean; durationSeconds: number };
         try {
-          const result = await callService.getCallResult(dialedLead.phone, startTime);
-          setPostCallData({
-            visible: true,
-            lead: dialedLead,
-            callResult: result,
-          });
+          result = await callService.getCallResult(dialedLead.phone, startTime);
         } catch {
-          setPostCallData({
-            visible: true,
-            lead: dialedLead,
-            callResult: { connected: false, durationSeconds: 0 },
-          });
+          result = { connected: false, durationSeconds: 0 };
         }
+
+        navigation.navigate('Dispose', {
+          lead: dialedLead,
+          initialTab: 'DISPOSE LEAD',
+          callDurationSeconds: result.durationSeconds,
+          isCallConnected: result.connected,
+          detectionMethod: 'AUTOMATIC',
+        });
       }
     };
 
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub.remove();
-  }, [refetch, queryClient]);
-
-  // Handle Save Disposition from NeoPostCallModal
-  const handleSavePostCallDisposition = async (payload: {
-    connected: boolean;
-    stage: string;
-    tag?: string | null;
-    temperature?: CustomerTemperature;
-    notConnectedReason?: string;
-    remark?: string;
-    followUpAt?: string | null;
-    durationSeconds: number;
-    callNext?: boolean;
-  }) => {
-    const targetLead = postCallData.lead;
-    if (!targetLead) return;
-
-    try {
-      await disposeLead(targetLead._id, {
-        connected: payload.connected,
-        stage: payload.stage,
-        tag: payload.tag || payload.temperature,
-        notConnectedReason: payload.notConnectedReason as any,
-        remark: payload.remark,
-        followUpAt: payload.followUpAt,
-        durationSeconds: payload.durationSeconds,
-      });
-
-      useLeadHistoryStore.getState().addActivity(targetLead._id, {
-        phone: targetLead.phone,
-        customerName: targetLead.name,
-        agentName: user?.name,
-        agentId: user?._id,
-        branch: user?.branch,
-        connected: payload.connected,
-        stage: payload.stage,
-        tag: payload.tag || payload.temperature,
-        remark: payload.remark,
-        followUpAt: payload.followUpAt,
-        durationSeconds: payload.durationSeconds,
-        notConnectedReason: payload.notConnectedReason,
-      });
-
-      toast.success('Call disposition saved!', 'Saved');
-      refetch();
-      queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to save disposition', 'Error');
-    }
-  };
+  }, [navigation]);
 
   // Handle Direct WhatsApp
   const handleOpenWhatsApp = (lead: ScreenshotLead) => {
@@ -485,6 +449,10 @@ export const MyLeadsScreen: React.FC = () => {
           ? 'Interested'
           : item.status === 'New'
           ? 'New'
+          : item.status === 'Not connected'
+          ? 'Not connected'
+          : item.status === 'Follow-up'
+          ? 'Follow-up'
           : item.status === 'Not Interested'
           ? 'Not Interested'
           : 'Follow Up',
@@ -854,40 +822,41 @@ export const MyLeadsScreen: React.FC = () => {
             </View>
           </TouchableOpacity>
 
-          {/* Not Interested / Suppressed */}
-          <TouchableOpacity
-            style={[
-              styles.filterPill,
-              selectedFilter === 'Not Interested' && styles.filterPillActive,
-              selectedFilter === 'Not Interested' && { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
-            ]}
-            onPress={() => setSelectedFilter('Not Interested')}
-            activeOpacity={0.7}
-          >
-            <Text
+          {!isAgent && (
+            <TouchableOpacity
               style={[
-                styles.filterPillLabel,
-                selectedFilter === 'Not Interested' && { color: '#B91C1C', fontWeight: '800' },
+                styles.filterPill,
+                selectedFilter === 'Not Interested' && styles.filterPillActive,
+                selectedFilter === 'Not Interested' && { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
               ]}
-            >
-              Not Interested
-            </Text>
-            <View
-              style={[
-                styles.filterCountBadge,
-                selectedFilter === 'Not Interested' && { backgroundColor: '#DC2626' },
-              ]}
+              onPress={() => setSelectedFilter('Not Interested')}
+              activeOpacity={0.7}
             >
               <Text
                 style={[
-                  styles.filterCountText,
-                  selectedFilter === 'Not Interested' && { color: '#FFFFFF' },
+                  styles.filterPillLabel,
+                  selectedFilter === 'Not Interested' && { color: '#B91C1C', fontWeight: '800' },
                 ]}
               >
-                {counts.notInterested}
+                Not Interested
               </Text>
-            </View>
-          </TouchableOpacity>
+              <View
+                style={[
+                  styles.filterCountBadge,
+                  selectedFilter === 'Not Interested' && { backgroundColor: '#DC2626' },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterCountText,
+                    selectedFilter === 'Not Interested' && { color: '#FFFFFF' },
+                  ]}
+                >
+                  {counts.notInterested}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </ScrollView>
 
         {/* Leads Display: Clean Mobile Cards for Mobile, Spacious Table for Wide Desktop */}
@@ -1245,15 +1214,15 @@ export const MyLeadsScreen: React.FC = () => {
 
       {/* Interactive Lovable Lead Modal */}
       {Boolean(quickModalLead) && (
-        <LeadQuickModal
+        <LeadSummaryModal
           lead={quickModalLead}
           visible={Boolean(quickModalLead)}
           onClose={() => setQuickModalLead(null)}
-          onLeadUpdated={() => {
-            refetch();
-          }}
-          onOpenFullDispose={(leadToDispose) => {
-            navigation.navigate('Dispose', { lead: leadToDispose });
+          onOpenDisposition={(leadToDispose) => {
+            navigation.navigate('Dispose', {
+              lead: leadToDispose,
+              initialTab: 'DISPOSE LEAD',
+            });
           }}
         />
       )}
@@ -1266,14 +1235,6 @@ export const MyLeadsScreen: React.FC = () => {
         customerPhone={whatsAppModalData.phone}
       />
 
-      {/* NeoDove Automatic Post-Call Modal */}
-      <NeoPostCallModal
-        visible={postCallData.visible}
-        lead={postCallData.lead}
-        callResult={postCallData.callResult}
-        onClose={() => setPostCallData((prev) => ({ ...prev, visible: false }))}
-        onSaveDisposition={handleSavePostCallDisposition}
-      />
     </CrmShell>
   );
 };

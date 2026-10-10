@@ -641,9 +641,6 @@ export const CallHistoryScreen: React.FC = () => {
           lead={quickLead}
           visible={Boolean(quickLead)}
           onClose={() => setQuickLead(null)}
-          onLeadUpdated={() => {
-            loadHistory();
-          }}
           onOpenFullDispose={(leadToDispose) => {
             setQuickLead(null);
             navigation.navigate('Dispose', { lead: leadToDispose });

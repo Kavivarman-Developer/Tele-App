@@ -22,9 +22,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Phone,
+  PhoneCall,
+  PhoneOff,
   MessageCircle,
   Clock,
   Calendar,
+  CalendarClock,
   Users,
   CheckCircle2,
   AlertCircle,
@@ -41,6 +44,7 @@ import {
   Check,
   Megaphone,
   RotateCw,
+  Ban,
 } from 'lucide-react-native';
 
 import { callService } from '../services/call.service';
@@ -62,22 +66,22 @@ import { notificationService } from '../services/notification.service';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
 import { toast } from '../store/toastStore';
-import { getWhatsAppUrl, formatDisplayPhone } from '../utils/phoneUtils';
+import { getWhatsAppUrl, formatDisplayPhone, isLeadLostOrSuppressed } from '../utils/phoneUtils';
 
-type ScreenRouteProp = RouteProp<RootStackParamList, 'LeadDetail'>;
+type ScreenRouteProp = RouteProp<RootStackParamList, 'LeadDetail' | 'Dispose'>;
 type ScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type LeadTab = 'LEAD INFO' | 'DISPOSE LEAD';
 
 const PIPELINE_STATES = [
+  'NOT CONNECTED',
   'IN PROGRESS',
   'NEW',
   'INTERESTED',
   'FOLLOW UP',
-  'NOT CONNECTED',
   'NOT INTERESTED',
   'CONVERTED',
-  'CLOSED',
+  'LOST',
 ];
 
 const NOT_CONNECTED_LABELS: Record<NotConnectedReason, string> = {
@@ -93,12 +97,42 @@ const NOT_CONNECTED_LABELS: Record<NotConnectedReason, string> = {
   OTHER: 'Other Reason',
 };
 
-const QUICK_NOT_CONNECTED_PRESETS: Array<{ reason: NotConnectedReason; label: string; emoji: string }> = [
-  { reason: 'DID_NOT_PICK', label: 'No Pick', emoji: '🔔' },
-  { reason: 'BUSY', label: 'Busy', emoji: '⏳' },
+const ALL_NOT_CONNECTED_REASONS: Array<{ label: string; code: NotConnectedReason; emoji: string }> = [
+  { label: 'Ringing / Did Not Pick', code: 'DID_NOT_PICK', emoji: '🔔' },
+  { label: 'Line Busy', code: 'BUSY', emoji: '⏳' },
+  { label: 'Switched Off', code: 'SWITCHED_OFF', emoji: '📴' },
+  { label: 'Out of Coverage / Unreachable', code: 'OUT_OF_COVERAGE', emoji: '📡' },
+  { label: 'Call Cut / Disconnected', code: 'USER_DISCONNECTED', emoji: '✂️' },
+  { label: 'Call Not Completed', code: 'CALL_NOT_COMPLETED', emoji: '⚠️' },
+  { label: 'Invalid / Wrong Number', code: 'INVALID_NUMBER', emoji: '📵' },
+  { label: 'Incoming Not Available', code: 'INCOMING_NOT_AVAILABLE', emoji: '🚫' },
+  { label: 'Number Not in Use', code: 'NUMBER_NOT_IN_USE', emoji: '❌' },
+  { label: 'Other Reason', code: 'OTHER', emoji: '📝' },
+];
+
+const QUICK_NOT_CONNECTED_PRESETS: Array<{
+  reason: NotConnectedReason;
+  label: string;
+  emoji: string;
+}> = [
+  { reason: 'DID_NOT_PICK', label: 'No Answer', emoji: '🔔' },
+  { reason: 'BUSY', label: 'Line Busy', emoji: '⏳' },
   { reason: 'SWITCHED_OFF', label: 'Switched Off', emoji: '📴' },
-  { reason: 'OUT_OF_COVERAGE', label: 'No Coverage', emoji: '📡' },
-  { reason: 'USER_DISCONNECTED', label: 'Call Cut', emoji: '✂️' },
+];
+
+const LOST_REASONS = [
+  { label: 'Price High / Budget', code: 'PRICE_HIGH', emoji: '💰' },
+  { label: 'Bought Elsewhere', code: 'COMPETITOR', emoji: '🏢' },
+  { label: 'Not Interested / Not Needed', code: 'NOT_NEEDED', emoji: '❌' },
+  { label: 'Wrong Number / Invalid', code: 'WRONG_NUMBER', emoji: '📵' },
+  { label: 'Do Not Call (DND)', code: 'DND', emoji: '⛔' },
+];
+
+const OUTCOME_OPTIONS = [
+  { stage: 'INTERESTED', label: 'Interested', icon: CheckCircle2, color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0' },
+  { stage: 'FOLLOW UP', label: 'Follow-up', icon: CalendarClock, color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+  { stage: 'NOT INTERESTED', label: 'Customer Lost / Not Interested', icon: Ban, color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
+  { stage: 'CONVERTED', label: 'Converted / Won', icon: CheckCircle2, color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
 ];
 
 export const LeadDetailScreen: React.FC = () => {
@@ -108,14 +142,22 @@ export const LeadDetailScreen: React.FC = () => {
   const queryClient = useQueryClient();
 
   const { lead, queue, queueIndex } = route.params;
+  const routeParams = route.params as RootStackParamList['Dispose'];
+  const detectedCallConnected =
+    route.name === 'Dispose' ? routeParams.isCallConnected : undefined;
+  const initialCallDuration =
+    route.name === 'Dispose' ? routeParams.callDurationSeconds || 0 : 0;
+  const initialTab: LeadTab =
+    routeParams.initialTab === 'DISPOSE LEAD' || route.name === 'Dispose'
+      ? 'DISPOSE LEAD'
+      : 'LEAD INFO';
 
   // Active top tab (Only 2 clean tabs: LEAD INFO | DISPOSE LEAD)
-  const [activeTab, setActiveTab] = useState<LeadTab>(
-    (route.params as any)?.initialTab || ((route.name as string) === 'Dispose' ? 'DISPOSE LEAD' : 'LEAD INFO'),
-  );
+  const [activeTab, setActiveTab] = useState<LeadTab>(initialTab);
 
   const [currentLead, setCurrentLead] = useState<Lead>(lead);
   const [callActive, setCallActive] = useState<boolean>(false);
+  const [callDurationSeconds, setCallDurationSeconds] = useState<number>(initialCallDuration);
   const [showPermissionModal, setShowPermissionModal] = useState<boolean>(false);
 
   // Calling & AppState refs
@@ -128,7 +170,11 @@ export const LeadDetailScreen: React.FC = () => {
   // DISPOSE LEAD TAB STATE (Clean Native Dropdowns)
   // ==========================================
   const [selectedState, setSelectedState] = useState<string>(
-    lead.stage?.toUpperCase() || 'IN PROGRESS',
+    detectedCallConnected === false
+      ? 'NOT CONNECTED'
+      : detectedCallConnected === true
+      ? 'FOLLOW UP'
+      : lead.stage?.toUpperCase() || 'IN PROGRESS',
   );
   const [showStatePicker, setShowStatePicker] = useState<boolean>(false);
   const [selectedNotConnectedReason, setSelectedNotConnectedReason] = useState<NotConnectedReason>('DID_NOT_PICK');
@@ -205,6 +251,40 @@ export const LeadDetailScreen: React.FC = () => {
     return deduplicateActivities(local);
   }, [historyData, currentLead._id, getHistoryForLead]);
 
+  // Quick follow-up scheduling helper
+  const setQuickFollowUp = (hoursAhead: number, specificHour?: number) => {
+    const d = new Date();
+    if (specificHour !== undefined) {
+      const daysToAdd = hoursAhead >= 24 ? Math.floor(hoursAhead / 24) : 1;
+      d.setDate(d.getDate() + daysToAdd);
+      d.setHours(specificHour, 0, 0, 0);
+    } else {
+      d.setTime(d.getTime() + hoursAhead * 60 * 60 * 1000);
+    }
+    setFollowUpDate(d.toISOString());
+    setActionNextFollowUp(true);
+  };
+
+  const formatScheduledDate = (isoStr: string) => {
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return isoStr;
+      const now = new Date();
+      const isTomorrow =
+        d.getDate() === now.getDate() + 1 &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+
+      const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (isTomorrow) {
+        return `Tomorrow at ${timeStr}`;
+      }
+      return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${timeStr}`;
+    } catch {
+      return isoStr;
+    }
+  };
+
   // AppState Listener: Detect call completion and switch to DISPOSE LEAD tab
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -217,9 +297,13 @@ export const LeadDetailScreen: React.FC = () => {
         isCallingRef.current &&
         callStartTimeRef.current !== null
       ) {
+        const startedAt = callStartTimeRef.current;
         isCallingRef.current = false;
         callStartTimeRef.current = null;
         setCallActive(false);
+        if (startedAt !== null) {
+          setCallDurationSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+        }
 
         // Seamlessly switch to DISPOSE LEAD tab
         setActiveTab('DISPOSE LEAD');
@@ -247,11 +331,7 @@ export const LeadDetailScreen: React.FC = () => {
   };
 
   const handlePressCall = async () => {
-    const isSuppressed =
-      currentLead.stage === 'Not Interested' ||
-      currentLead.stage === 'Closed' ||
-      currentLead.stage === 'Lost' ||
-      currentLead.status === 'CLOSED';
+    const isSuppressed = isLeadLostOrSuppressed(currentLead);
 
     const proceedCall = async () => {
       if (Platform.OS === 'android' && !skipPermissionCheckRef.current) {
@@ -265,6 +345,14 @@ export const LeadDetailScreen: React.FC = () => {
     };
 
     if (isSuppressed) {
+      if (user?.role === 'AGENT') {
+        Alert.alert(
+          'Customer Suppressed',
+          `${currentLead.name} is marked as not interested and cannot be called from the agent queue.`,
+        );
+        return;
+      }
+
       Alert.alert(
         '⚠️ Customer Not Interested',
         `${currentLead.name} was marked as "${currentLead.stage || 'Not Interested'}". Calling again may cause customer irritation.\n\nAre you sure you want to dial anyway?`,
@@ -291,15 +379,19 @@ export const LeadDetailScreen: React.FC = () => {
         ? selectedNotConnectedReason
         : undefined;
 
+      const isClosing =
+        isLeadLostOrSuppressed({ stage: selectedState }) ||
+        selectedState === 'CONVERTED';
+
       return await disposeLead(currentLead._id, {
         phone: currentLead.phone,
         connected: isConnected,
         notConnectedReason,
         stage: selectedState,
         tag: selectedTag.toUpperCase() as any,
-        followUpAt: actionNextFollowUp ? followUpDate : null,
+        followUpAt: !isClosing && actionNextFollowUp ? followUpDate : null,
         remark: remarks.trim() || (!isConnected ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason]}` : undefined),
-        durationSeconds: 0,
+        durationSeconds: callDurationSeconds,
         reassignToUserId: actionReassign && selectedReassignUserId ? selectedReassignUserId : undefined,
         copyToCampaignId: actionCopyCampaign && selectedCopyCampaignId ? selectedCopyCampaignId : undefined,
       });
@@ -308,6 +400,7 @@ export const LeadDetailScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['myLeads'] });
       queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
       queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
       queryClient.invalidateQueries({ queryKey: ['leadHistory', currentLead._id] });
 
       const isConnected =
@@ -317,6 +410,9 @@ export const LeadDetailScreen: React.FC = () => {
       const notConnectedReason: NotConnectedReason | undefined = !isConnected
         ? selectedNotConnectedReason
         : undefined;
+
+      const isLost = isLeadLostOrSuppressed({ stage: selectedState });
+      const isClosing = data.lead.status === 'CLOSED' || isLost;
 
       useLeadHistoryStore.getState().addActivity(currentLead._id, {
         phone: currentLead.phone,
@@ -329,46 +425,61 @@ export const LeadDetailScreen: React.FC = () => {
         stage: selectedState,
         tag: selectedTag,
         remark: remarks.trim() || (!isConnected ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason]}` : undefined),
-        followUpAt: actionNextFollowUp ? followUpDate : null,
-        durationSeconds: 0,
+        followUpAt: !isClosing && actionNextFollowUp ? followUpDate : null,
+        durationSeconds: callDurationSeconds,
       });
 
-      if (actionNextFollowUp && followUpDate) {
+      if (!isClosing && actionNextFollowUp && followUpDate) {
         notificationService.scheduleFollowUpReminder(
           { ...currentLead, nextFollowUpAt: followUpDate },
           followUpDate,
         );
+      } else {
+        notificationService.cancelFollowUpReminder(currentLead._id);
       }
 
-      toast.success(`Lead marked as ${selectedState}!`, 'Disposition Saved');
+      if (isLost) {
+        toast.success(
+          `${currentLead.name} marked as Customer Lost · Removed from active calling queue`,
+          'Lead Suppressed',
+        );
+      } else if (isClosing) {
+        toast.success(`Lead marked as ${selectedState}!`, 'Lead Closed');
+      } else {
+        toast.success(`Lead marked as ${selectedState}!`, 'Disposition Saved');
+      }
 
       if (queue && queueIndex !== undefined && queueIndex + 1 < queue.length) {
-        const nextLead = queue[queueIndex + 1];
-        Alert.alert(
-          'Lead Disposed',
-          `Outcome recorded. Ready for next lead: ${nextLead.name}?`,
-          [
-            {
-              text: 'Finish',
-              style: 'cancel',
-              onPress: () => navigation.navigate('Main'),
-            },
-            {
-              text: 'Call Next Lead ›',
-              onPress: () => {
-                navigation.replace('LeadDetail', {
-                  lead: nextLead,
-                  queue,
-                  queueIndex: queueIndex + 1,
-                  initialTab: 'LEAD INFO',
-                });
+        const remainingQueue = queue.slice(queueIndex + 1).filter((l) => !isLeadLostOrSuppressed(l));
+        if (remainingQueue.length > 0) {
+          const nextLead = remainingQueue[0];
+          Alert.alert(
+            'Lead Disposed',
+            `Outcome recorded. Ready for next lead: ${nextLead.name}?`,
+            [
+              {
+                text: 'Finish',
+                style: 'cancel',
+                onPress: () => navigation.navigate('Main'),
               },
-            },
-          ],
-        );
-      } else {
-        navigation.goBack();
+              {
+                text: 'Call Next Lead ›',
+                onPress: () => {
+                  navigation.replace('LeadDetail', {
+                    lead: nextLead,
+                    queue,
+                    queueIndex: queue.findIndex((q) => q._id === nextLead._id),
+                    initialTab: 'LEAD INFO',
+                  });
+                },
+              },
+            ],
+          );
+          return;
+        }
       }
+
+      navigation.goBack();
     },
     onError: (err: any) => {
       Alert.alert('Save Failed', err?.response?.data?.message || err?.message || 'Could not save disposition.');

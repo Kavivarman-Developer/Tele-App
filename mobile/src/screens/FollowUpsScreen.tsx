@@ -681,9 +681,6 @@ export const FollowUpsScreen: React.FC = () => {
           lead={quickModalLead}
           visible={Boolean(quickModalLead)}
           onClose={() => setQuickModalLead(null)}
-          onLeadUpdated={() => {
-            refetch();
-          }}
           onOpenFullDispose={(leadToDispose) => {
             setQuickModalLead(null);
             navigation.navigate('Dispose', { lead: leadToDispose });

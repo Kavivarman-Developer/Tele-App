@@ -107,6 +107,12 @@ export class LeadService {
   ): Promise<PaginatedLeads<unknown>> {
     const matchStage: Record<string, unknown> = {};
 
+    // Closed leads belong in reporting/management views, never in an agent's calling queue.
+    if (requester.role === 'AGENT') {
+      matchStage.status = 'OPEN';
+      matchStage.stage = { $not: /not interested|closed|lost|dnd|do not call|junk|dropped/i };
+    }
+
     if (requester.role === 'ADMIN') {
       if (query.userId) {
         matchStage.assignedTo = new Types.ObjectId(query.userId);

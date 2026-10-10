@@ -566,9 +566,6 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
           lead={quickLead}
           visible={Boolean(quickLead)}
           onClose={() => setQuickLead(null)}
-          onLeadUpdated={() => {
-            refetch();
-          }}
           onOpenFullDispose={(leadToDispose) => {
             onClose();
             navigation.navigate('Dispose', { lead: leadToDispose });

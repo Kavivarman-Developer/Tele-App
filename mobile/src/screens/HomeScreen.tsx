@@ -54,18 +54,16 @@ import {
   fetchUserCallsReport,
   fetchMyLeads,
   fetchCampaigns,
-  disposeLead,
 } from '../api/leadApi';
-import { RootStackParamList, Lead, DetectedCallResult, CustomerTemperature } from '../types';
+import { RootStackParamList, Lead } from '../types';
 import { colors, borderRadius, shadows } from '../theme';
 import { CrmShell } from '../components/CrmShell';
 import { ReportingPeriod } from '../components/PeriodControl';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { CrmDateTimePickerModal } from '../components/CrmDateTimePickerModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
-import { NeoPostCallModal } from '../components/NeoPostCallModal';
 import { callService } from '../services/call.service';
-import { getDialerTelUrl, formatDisplayPhone } from '../utils/phoneUtils';
+import { getDialerTelUrl, formatDisplayPhone, isLeadLostOrSuppressed } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
 import { storage } from '../utils/storage';
 
@@ -102,16 +100,6 @@ export const HomeScreen: React.FC = () => {
   const callStartTimeRef = useRef<number | null>(null);
   const callingLeadRef = useRef<Lead | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-
-  const [postCallData, setPostCallData] = useState<{
-    visible: boolean;
-    lead: Lead | null;
-    callResult: DetectedCallResult | null;
-  }>({
-    visible: false,
-    lead: null,
-    callResult: null,
-  });
 
   const effectiveBranch: 'ALL' | 'Trichy' | 'Pudukkottai' =
     user?.role === 'MANAGER' && user?.branch
@@ -400,12 +388,7 @@ export const HomeScreen: React.FC = () => {
 
   const dueTodayFollowUps = useMemo(() => {
     return (myLeadsData?.leads || []).filter((l) => {
-      if (
-        l.status === 'CLOSED' ||
-        l.stage === 'Not Interested' ||
-        l.stage === 'Closed' ||
-        l.stage === 'Lost'
-      ) {
+      if (isLeadLostOrSuppressed(l)) {
         return false;
       }
       if (!l.nextFollowUpAt) return false;
@@ -427,13 +410,7 @@ export const HomeScreen: React.FC = () => {
 
   // Immediate queue (top leads ready to call - strictly excludes Not Interested / Closed / Lost)
   const queueLeads = useMemo(() => {
-    return (myLeadsData?.leads || []).filter(
-      (l) =>
-        l.status !== 'CLOSED' &&
-        l.stage !== 'Not Interested' &&
-        l.stage !== 'Closed' &&
-        l.stage !== 'Lost',
-    );
+    return (myLeadsData?.leads || []).filter((l) => !isLeadLostOrSuppressed(l));
   }, [myLeadsData]);
 
   // Hero Lead to Call (accounts for skipped leads in current session)
@@ -448,14 +425,10 @@ export const HomeScreen: React.FC = () => {
     return queueLeads.filter((l) => l._id !== heroLead._id).slice(0, 5);
   }, [queueLeads, heroLead]);
 
-  // NeoDove 3 Calling Queues (Image 3)
+  // NeoDove 3 Calling Queues (Strictly excludes Customer Lost / Not Interested)
   const newUnattemptedLeads = useMemo(() => {
     return (myLeadsData?.leads || []).filter(
-      (l) =>
-        (!l.attemptCount || l.attemptCount === 0) &&
-        l.status !== 'CLOSED' &&
-        l.stage !== 'Closed' &&
-        l.stage !== 'Lost',
+      (l) => (!l.attemptCount || l.attemptCount === 0) && !isLeadLostOrSuppressed(l),
     );
   }, [myLeadsData]);
 
@@ -463,9 +436,7 @@ export const HomeScreen: React.FC = () => {
     return (myLeadsData?.leads || []).filter(
       (l) =>
         (l.stage === 'Follow Up' || l.stage === 'Follow-up' || !!l.nextFollowUpAt) &&
-        l.status !== 'CLOSED' &&
-        l.stage !== 'Closed' &&
-        l.stage !== 'Lost',
+        !isLeadLostOrSuppressed(l),
     );
   }, [myLeadsData]);
 
@@ -475,7 +446,7 @@ export const HomeScreen: React.FC = () => {
         (l.stage === 'Not connected' ||
           l.stage === 'NOT CONNECTED' ||
           (l.attemptCount && l.attemptCount > 0 && l.stage === 'New')) &&
-        l.status !== 'CLOSED',
+        !isLeadLostOrSuppressed(l),
     );
   }, [myLeadsData]);
 
@@ -523,6 +494,14 @@ export const HomeScreen: React.FC = () => {
     };
 
     if (isSuppressed) {
+      if (isAgent) {
+        Alert.alert(
+          'Customer Suppressed',
+          `${leadItem.name} is marked as not interested and cannot be called from the agent queue.`,
+        );
+        return;
+      }
+
       Alert.alert(
         '⚠️ Customer Not Interested',
         `${leadItem.name} was marked as "${leadItem.stage || 'Not Interested'}". Calling again may cause customer irritation.\n\nAre you sure you want to dial anyway?`,
@@ -555,94 +534,28 @@ export const HomeScreen: React.FC = () => {
         isCallingRef.current = false;
         callStartTimeRef.current = null;
 
+        let result: { connected: boolean; durationSeconds: number };
         try {
           // Read native Android call log (with duration & connection detection)
-          const result = await callService.getCallResult(dialedLead.phone, startTime);
-
-          // Open NeoPostCallModal with detected outcome (One clean update occurs when user saves!)
-          setPostCallData({
-            visible: true,
-            lead: dialedLead,
-            callResult: result,
-          });
+          result = await callService.getCallResult(dialedLead.phone, startTime);
         } catch {
-          setPostCallData({
-            visible: true,
-            lead: dialedLead,
-            callResult: { connected: false, durationSeconds: 0 },
-          });
+          result = { connected: false, durationSeconds: 0 };
         }
+        const queueIndex = queueLeads.findIndex((lead) => lead._id === dialedLead._id);
+        navigation.navigate('Dispose', {
+          lead: dialedLead,
+          initialTab: 'DISPOSE LEAD',
+          callDurationSeconds: result.durationSeconds,
+          isCallConnected: result.connected,
+          detectionMethod: 'AUTOMATIC',
+          ...(queueIndex >= 0 ? { queue: queueLeads, queueIndex } : {}),
+        });
       }
     };
 
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub.remove();
-  }, [refetchDashboard, refetchMyLeads]);
-
-  // Handle Save Disposition from NeoPostCallModal
-  const handleSavePostCallDisposition = async (payload: {
-    connected: boolean;
-    stage: string;
-    tag?: string | null;
-    temperature?: CustomerTemperature;
-    notConnectedReason?: string;
-    remark?: string;
-    followUpAt?: string | null;
-    durationSeconds: number;
-    callNext?: boolean;
-  }) => {
-    const targetLead = postCallData.lead;
-    if (!targetLead) return;
-
-    try {
-      // 1. Save to backend database
-      await disposeLead(targetLead._id, {
-        connected: payload.connected,
-        stage: payload.stage,
-        tag: payload.tag || payload.temperature,
-        notConnectedReason: payload.notConnectedReason as any,
-        remark: payload.remark,
-        followUpAt: payload.followUpAt,
-        durationSeconds: payload.durationSeconds,
-      });
-
-      // 2. Record to local activity store
-      useLeadHistoryStore.getState().addActivity(targetLead._id, {
-        phone: targetLead.phone,
-        customerName: targetLead.name,
-        agentName: user?.name,
-        agentId: user?._id,
-        branch: user?.branch,
-        connected: payload.connected,
-        stage: payload.stage,
-        tag: payload.tag || payload.temperature,
-        remark: payload.remark,
-        followUpAt: payload.followUpAt,
-        durationSeconds: payload.durationSeconds,
-        notConnectedReason: payload.notConnectedReason,
-      });
-
-      toast.success('Call disposition saved!', 'Saved');
-      refetchDashboard();
-      refetchMyLeads();
-
-      // 3. Auto-Advance: "Save & Call Next Lead"
-      if (payload.callNext) {
-        const remaining = queueLeads.filter((l) => l._id !== targetLead._id);
-        if (remaining.length > 0) {
-          const nextLead = remaining[0];
-          setTimeout(() => {
-            handleDirectDial(nextLead);
-          }, 350);
-        } else {
-          toast.info('All leads in queue completed! Great job!', 'Queue Finished');
-        }
-      }
-    } catch (err: any) {
-      console.warn('Failed to save disposition to backend:', err);
-      toast.error(err?.response?.data?.message || 'Failed to save disposition', 'Error');
-    }
-  };
+  }, [navigation, queueLeads]);
 
   const handleOpenWhatsApp = (leadItem: Lead) => {
     setWhatsAppTarget({ name: leadItem.name, phone: leadItem.phone });
@@ -1591,25 +1504,12 @@ export const HomeScreen: React.FC = () => {
         )}
       </ScrollView>
 
-      {/* Automatic NeoDove Post-Call Disposition Modal */}
-      <NeoPostCallModal
-        visible={postCallData.visible}
-        lead={postCallData.lead}
-        callResult={postCallData.callResult}
-        onClose={() => setPostCallData((prev) => ({ ...prev, visible: false }))}
-        onSaveDisposition={handleSavePostCallDisposition}
-      />
-
       {/* Quick Lead Modal */}
       {selectedLeadForQuickModal && (
         <LeadQuickModal
           lead={selectedLeadForQuickModal}
           visible={Boolean(selectedLeadForQuickModal)}
           onClose={() => setSelectedLeadForQuickModal(null)}
-          onLeadUpdated={() => {
-            refetchMyLeads();
-            refetchDashboard();
-          }}
           onOpenFullDispose={(leadToDispose) => {
             setSelectedLeadForQuickModal(null);
             navigation.navigate('Dispose', { lead: leadToDispose });

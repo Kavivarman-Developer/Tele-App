@@ -72,7 +72,21 @@ export class ActivityService {
       // Stage is required when connected
       const stageName = input.stage!;
       const stageDoc = await PipelineService.getStage(campaign.pipelineId, stageName);
-      if (!stageDoc) {
+      const normalizedStageName = stageName.trim().toLowerCase();
+      const standaloneClosingStages: Record<string, string> = {
+        closed: 'Closed',
+        lost: 'Lost',
+        'customer lost': 'Customer Lost',
+        dnd: 'DND',
+        'do not call': 'Do Not Call',
+        junk: 'Junk',
+        dropped: 'Dropped',
+      };
+      const standaloneClosingStage = standaloneClosingStages[normalizedStageName];
+
+      // "Closed" is a disposition state in the app even when a campaign pipeline
+      // doesn't define it as a stage (the default pipeline uses "Lost" instead).
+      if (!stageDoc && !standaloneClosingStage) {
         throw new AppError(
           `Stage '${stageName}' does not exist in the campaign's pipeline`,
           400,
@@ -82,7 +96,7 @@ export class ActivityService {
       // If tag is provided, verify it belongs to this stage (case-insensitive & accept standard temperature tags)
       if (input.tag) {
         const lowerTag = input.tag.toLowerCase();
-        const stageTagsLower = (stageDoc.tags || []).map((t: string) => t.toLowerCase());
+        const stageTagsLower = (stageDoc?.tags || []).map((t: string) => t.toLowerCase());
         const standardTags = ['hot', 'warm', 'cold'];
         if (
           stageTagsLower.length > 0 &&
@@ -90,19 +104,24 @@ export class ActivityService {
           !standardTags.includes(lowerTag)
         ) {
           throw new AppError(
-            `Tag '${input.tag}' does not belong to stage '${stageDoc.name}'`,
+            `Tag '${input.tag}' does not belong to stage '${stageDoc?.name || standaloneClosingStage}'`,
             400,
           );
         }
       }
 
       // Check if the stage closes the lead (isClosed flag, or Not Interested / Lost / Closed stage names)
-      const stageLower = (stageDoc.name || '').trim().toLowerCase();
+      const stageLower = (stageDoc?.name || standaloneClosingStage || '').trim().toLowerCase();
       const isClosingStage =
-        stageDoc.isClosed ||
+        Boolean(stageDoc?.isClosed) ||
         stageLower === 'not interested' ||
         stageLower === 'lost' ||
-        stageLower === 'closed';
+        stageLower === 'closed' ||
+        stageLower === 'customer lost' ||
+        stageLower === 'dnd' ||
+        stageLower === 'do not call' ||
+        stageLower === 'junk' ||
+        stageLower === 'dropped';
 
       if (isClosingStage) {
         lead.status = 'CLOSED';
@@ -119,7 +138,7 @@ export class ActivityService {
         lead.nextFollowUpAt = input.followUpAt ? new Date(input.followUpAt) : null;
       }
 
-      lead.stage = stageDoc.name;
+      lead.stage = stageDoc?.name || standaloneClosingStage || stageName;
       lead.tag = input.tag || null;
       lead.followUpDue = false;
     } else {
@@ -155,7 +174,7 @@ export class ActivityService {
       }
 
       lead.nextFollowUpAt = agentFollowUp || computedFollowUp;
-      lead.stage = input.stage || 'Not Connected';
+      lead.stage = 'Not Connected';
       if (input.tag) {
         lead.tag = input.tag;
       }

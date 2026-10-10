@@ -74,3 +74,31 @@ export const getWhatsAppUrl = (phone: string, text?: string): string => {
   const encodedText = text ? `?text=${encodeURIComponent(text)}` : '';
   return `https://wa.me/${target}${encodedText}`;
 };
+
+/**
+ * Checks whether a lead has been marked as Lost, Not Interested, Closed, or DND.
+ * Suppressed/Lost leads MUST be hidden from active calling queues to avoid disturbing customers.
+ */
+export const isLeadLostOrSuppressed = (lead: any): boolean => {
+  if (!lead) return false;
+  const statusUpper = String(lead.status || '').toUpperCase();
+  if (statusUpper === 'CLOSED') return true;
+
+  const stageLower = String(lead.stage || '').trim().toLowerCase();
+  if (
+    stageLower === 'not interested' ||
+    stageLower === 'closed' ||
+    stageLower === 'lost' ||
+    stageLower === 'customer lost' ||
+    stageLower === 'dnd' ||
+    stageLower === 'do not call' ||
+    stageLower === 'junk' ||
+    stageLower === 'dropped' ||
+    stageLower.includes('not interested') ||
+    stageLower.includes('lost')
+  ) {
+    return true;
+  }
+
+  return false;
+};
