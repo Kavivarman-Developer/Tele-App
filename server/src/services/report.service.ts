@@ -69,7 +69,7 @@ export class ReportService {
     activityMatch: Record<string, unknown>;
   }> {
     const leadMatch: Record<string, unknown> = {};
-    const activityMatch: Record<string, unknown> = {};
+    const activityMatch: Record<string, unknown> = { type: 'CALL' };
 
     // Date range filter
     if (query.from || query.to) {

@@ -178,6 +178,10 @@ export const HomeScreen: React.FC = () => {
   const periodActivities = useMemo(() => {
     return getActivitiesForPeriod(period, customDate, user?._id || user?.name);
   }, [historyMap, period, customDate, user, getActivitiesForPeriod]);
+  const periodCallActivities = useMemo(
+    () => periodActivities.filter((activity) => activity.type === 'CALL'),
+    [periodActivities],
+  );
 
   // Overall Agent Calls List for Manager & Admin
   const agentCallsList = useMemo(() => {
@@ -320,7 +324,7 @@ export const HomeScreen: React.FC = () => {
   const myAssignedLeadsCount = myLeadsData?.total ?? (myLeadsData?.leads?.length || 0);
 
   // Calls made and connected (combines local session with backend reports)
-  const realLocalActivities = periodActivities.filter(
+  const realLocalActivities = periodCallActivities.filter(
     (a) => a.stage !== 'Call Initiated' && a.stage !== 'Dialing',
   );
   const localCallsCount = realLocalActivities.length;
@@ -340,7 +344,12 @@ export const HomeScreen: React.FC = () => {
   // Dynamic daily call report grouped from real activity history
   const realDailyCallReports = useMemo(() => {
     const allUserActivities = (useLeadHistoryStore.getState().getAllActivities(user?._id) || [])
-      .filter((a) => a.stage !== 'Call Initiated' && a.stage !== 'Dialing');
+      .filter(
+        (a) =>
+          a.type === 'CALL' &&
+          a.stage !== 'Call Initiated' &&
+          a.stage !== 'Dialing',
+      );
 
     const map = new Map<string, { attempted: number; connected: number; duration: number }>();
     const todayStr = `Today (${new Date().toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' })})`;
@@ -547,6 +556,7 @@ export const HomeScreen: React.FC = () => {
           initialTab: 'DISPOSE LEAD',
           callDurationSeconds: result.durationSeconds,
           isCallConnected: result.connected,
+          callAttempt: true,
           detectionMethod: 'AUTOMATIC',
           ...(queueIndex >= 0 ? { queue: queueLeads, queueIndex } : {}),
         });
@@ -1206,7 +1216,7 @@ export const HomeScreen: React.FC = () => {
             >
               <Clock3 size={12} color={activeTab === 'calls' ? '#FFFFFF' : '#475569'} />
               <Text style={[styles.tabChipText, activeTab === 'calls' && styles.tabChipTextActive]}>
-                Today's Calls ({periodActivities.length})
+                Today's Calls ({periodCallActivities.length})
               </Text>
             </TouchableOpacity>
 
@@ -1345,7 +1355,7 @@ export const HomeScreen: React.FC = () => {
         {/* TAB 3: TODAY'S CALLS ACTIVITY */}
         {activeTab === 'calls' && (
           <View style={styles.tabContentBox}>
-            {periodActivities.length === 0 ? (
+            {periodCallActivities.length === 0 ? (
               <View style={styles.tabEmptyBox}>
                 <Clock3 size={24} color="#94A3B8" />
                 <Text style={styles.tabEmptyTitle}>No calls logged today yet</Text>
@@ -1354,8 +1364,8 @@ export const HomeScreen: React.FC = () => {
                 </Text>
               </View>
             ) : (
-              periodActivities.slice(0, 10).map((act, index) => {
-                const isLast = index === Math.min(periodActivities.length, 10) - 1;
+              periodCallActivities.slice(0, 10).map((act, index) => {
+                const isLast = index === Math.min(periodCallActivities.length, 10) - 1;
                 const durText = act.connected ? formatSeconds(act.durationSeconds || 0) : 'Missed';
                 const timeStr = new Date(act.createdAt).toLocaleTimeString([], {
                   hour: '2-digit',

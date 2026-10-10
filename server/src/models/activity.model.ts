@@ -26,7 +26,7 @@ export interface IActivity {
   userId: Types.ObjectId;
   phone?: string | null;
   branch?: string | null;
-  type: 'CALL';
+  type: 'CALL' | 'UPDATE';
   connected: boolean;
   notConnectedReason?: NotConnectedReason | null;
   stage: string;
@@ -78,7 +78,7 @@ const activitySchema = new Schema<IActivityDoc>(
     },
     type: {
       type: String,
-      enum: ['CALL'],
+      enum: ['CALL', 'UPDATE'],
       default: 'CALL',
     },
     connected: {

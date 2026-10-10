@@ -81,7 +81,7 @@ export const CallHistoryScreen: React.FC = () => {
 
   // Fetch activities from store, strictly scoped to current user if agent
   const userActivities = useMemo(() => {
-    return getAllActivities(user?._id || user?.name);
+    return getAllActivities(user?._id || user?.name).filter((activity) => activity.type === 'CALL');
   }, [getAllActivities, user]);
 
   // Start of Day timestamps

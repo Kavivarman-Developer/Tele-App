@@ -67,6 +67,7 @@ export class ActivityService {
     }
 
     const settings = await SettingService.getSettings();
+    const isCallAttempt = input.callAttempt;
 
     if (input.connected) {
       // Stage is required when connected
@@ -143,9 +144,11 @@ export class ActivityService {
       lead.followUpDue = false;
     } else {
       // Not connected - count consecutive not-connected attempts
-      const previousActivities = await Activity.find({ leadId: lead._id })
-        .sort({ createdAt: -1 })
-        .limit(20);
+      const previousActivities = isCallAttempt
+        ? await Activity.find({ leadId: lead._id, type: 'CALL' })
+            .sort({ createdAt: -1 })
+            .limit(20)
+        : [];
 
       let consecutiveAttempts = 1; // Including this current call attempt
       for (const act of previousActivities) {
@@ -158,13 +161,11 @@ export class ActivityService {
 
       // Check if retry rule applies
       const reason = input.notConnectedReason || 'DID_NOT_PICK';
-      const rule = await RetryRuleService.getRuleByReason(reason);
+      const rule = isCallAttempt ? await RetryRuleService.getRuleByReason(reason) : null;
       const agentFollowUp = input.followUpAt ? new Date(input.followUpAt) : null;
-      const computedFollowUp = RetryRuleService.calculateRetryFollowUp(
-        rule,
-        consecutiveAttempts,
-        agentFollowUp,
-      );
+      const computedFollowUp = isCallAttempt
+        ? RetryRuleService.calculateRetryFollowUp(rule, consecutiveAttempts, agentFollowUp)
+        : null;
 
       if (settings.followUpMandatoryForNotConnected && !computedFollowUp && !agentFollowUp) {
         throw new AppError(
@@ -174,7 +175,7 @@ export class ActivityService {
       }
 
       lead.nextFollowUpAt = agentFollowUp || computedFollowUp;
-      lead.stage = 'Not Connected';
+      lead.stage = isCallAttempt ? 'Not Connected' : input.stage || 'Not Connected';
       if (input.tag) {
         lead.tag = input.tag;
       }
@@ -215,22 +216,27 @@ export class ActivityService {
       await LeadIngestService.ingest(input.copyToCampaignId, [copyRow], 'CAMPAIGN_COPY');
     }
 
-    // Update lead metadata
-    lead.lastContactedAt = new Date();
-    lead.attemptCount += 1;
-    await lead.save();
-
-    // Rapid debounce check: if an identical activity was created in the last 4 seconds, return it
-    const recentActivity = await Activity.findOne({
-      leadId: lead._id,
-      userId: requester._id,
-      connected: input.connected,
-      createdAt: { $gte: new Date(Date.now() - 4000) },
-    }).sort({ createdAt: -1 });
+    // A repeated post-call submission must not increment the lead twice.
+    const recentActivity = isCallAttempt
+      ? await Activity.findOne({
+          leadId: lead._id,
+          userId: requester._id,
+          type: 'CALL',
+          connected: input.connected,
+          createdAt: { $gte: new Date(Date.now() - 4000) },
+        }).sort({ createdAt: -1 })
+      : null;
 
     if (recentActivity) {
       return { activity: recentActivity, lead };
     }
+
+    // Follow-up and outcome edits are not call attempts.
+    if (isCallAttempt) {
+      lead.lastContactedAt = new Date();
+      lead.attemptCount += 1;
+    }
+    await lead.save();
 
     // Create Activity log
     const activity = await Activity.create({
@@ -239,14 +245,15 @@ export class ActivityService {
       branch: (requester as { branch?: string }).branch || (lead as { branch?: string }).branch || null,
       campaignId: lead.campaignId,
       userId: requester._id,
-      type: 'CALL',
-      connected: input.connected,
-      notConnectedReason: input.connected ? null : (input.notConnectedReason || 'DID_NOT_PICK'),
+      type: isCallAttempt ? 'CALL' : 'UPDATE',
+      connected: isCallAttempt && input.connected,
+      notConnectedReason:
+        isCallAttempt && !input.connected ? (input.notConnectedReason || 'DID_NOT_PICK') : null,
       stage: lead.stage || input.stage || 'New',
       tag: lead.tag || input.tag || null,
       remark: input.remark || null,
       followUpAt: lead.nextFollowUpAt,
-      durationSeconds: input.durationSeconds || 0,
+      durationSeconds: isCallAttempt ? input.durationSeconds || 0 : 0,
       answers: input.answers || [],
     });
 
@@ -295,7 +302,7 @@ export class ActivityService {
           const sameStage =
             (existing.stage || '').toLowerCase().trim() === (act.stage || '').toLowerCase().trim();
           const sameConnected = existing.connected === act.connected;
-          if (sameStage && sameConnected) {
+          if (existing.type === act.type && sameStage && sameConnected) {
             return true;
           }
         }
@@ -310,7 +317,7 @@ export class ActivityService {
   }
 
   public static async getBranchCallStats(branchName?: string) {
-    const match: Record<string, unknown> = {};
+    const match: Record<string, unknown> = { type: 'CALL' };
     if (branchName && branchName !== 'ALL') {
       match.branch = branchName;
     }

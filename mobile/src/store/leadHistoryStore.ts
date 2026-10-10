@@ -41,6 +41,7 @@ interface LeadHistoryStore {
       agentName?: string;
       agentId?: string;
       connected: boolean;
+      type?: 'CALL' | 'UPDATE';
       stage: string;
       tag?: string | null;
       temperature?: 'HOT' | 'WARM' | 'COLD';
@@ -278,7 +279,7 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       branch: data.branch || null,
       campaignId: 'camp-1',
       userId: agentUser,
-      type: 'CALL',
+      type: data.type || 'UPDATE',
       connected: data.connected,
       notConnectedReason: data.connected ? null : data.notConnectedReason,
       stage: data.stage,

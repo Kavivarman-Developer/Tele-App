@@ -158,6 +158,9 @@ export const LeadDetailScreen: React.FC = () => {
   const [currentLead, setCurrentLead] = useState<Lead>(lead);
   const [callActive, setCallActive] = useState<boolean>(false);
   const [callDurationSeconds, setCallDurationSeconds] = useState<number>(initialCallDuration);
+  const [isCallAttempt, setIsCallAttempt] = useState<boolean>(
+    route.name === 'Dispose' && routeParams.callAttempt === true,
+  );
   const [showPermissionModal, setShowPermissionModal] = useState<boolean>(false);
 
   // Calling & AppState refs
@@ -301,6 +304,7 @@ export const LeadDetailScreen: React.FC = () => {
         isCallingRef.current = false;
         callStartTimeRef.current = null;
         setCallActive(false);
+        setIsCallAttempt(true);
         if (startedAt !== null) {
           setCallDurationSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
         }
@@ -386,6 +390,7 @@ export const LeadDetailScreen: React.FC = () => {
       return await disposeLead(currentLead._id, {
         phone: currentLead.phone,
         connected: isConnected,
+        callAttempt: isCallAttempt,
         notConnectedReason,
         stage: selectedState,
         tag: selectedTag.toUpperCase() as any,
@@ -420,13 +425,14 @@ export const LeadDetailScreen: React.FC = () => {
         agentName: user?.name,
         agentId: user?._id,
         branch: user?.branch,
-        connected: isConnected,
-        notConnectedReason,
+        connected: isCallAttempt && isConnected,
+        type: isCallAttempt ? 'CALL' : 'UPDATE',
+        notConnectedReason: isCallAttempt ? notConnectedReason : undefined,
         stage: selectedState,
         tag: selectedTag,
-        remark: remarks.trim() || (!isConnected ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason]}` : undefined),
+        remark: remarks.trim() || (isCallAttempt && !isConnected ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason]}` : undefined),
         followUpAt: !isClosing && actionNextFollowUp ? followUpDate : null,
-        durationSeconds: callDurationSeconds,
+        durationSeconds: isCallAttempt ? callDurationSeconds : 0,
       });
 
       if (!isClosing && actionNextFollowUp && followUpDate) {

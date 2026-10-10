@@ -418,6 +418,7 @@ export const MyLeadsScreen: React.FC = () => {
           initialTab: 'DISPOSE LEAD',
           callDurationSeconds: result.durationSeconds,
           isCallConnected: result.connected,
+          callAttempt: true,
           detectionMethod: 'AUTOMATIC',
         });
       }

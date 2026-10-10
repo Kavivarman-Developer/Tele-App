@@ -163,6 +163,7 @@ export const AgentReportScreen: React.FC = () => {
       let localDuration = 0;
 
       for (const act of allLocalActivities) {
+        if (act.type !== 'CALL') continue;
         if (!act.createdAt) continue;
         const actTime = new Date(act.createdAt).getTime();
         if (fromDate && actTime < new Date(fromDate).getTime()) continue;
@@ -323,7 +324,9 @@ export const AgentReportScreen: React.FC = () => {
   // Get call history timeline strictly for selected drill-down agent
   const selectedAgentCalls = useMemo(() => {
     if (!selectedAgentDetail) return [];
-    const allActivities = getAllActivities(selectedAgentDetail.userId || selectedAgentDetail.name);
+    const allActivities = getAllActivities(
+      selectedAgentDetail.userId || selectedAgentDetail.name,
+    ).filter((activity) => activity.type === 'CALL');
 
     return allActivities.filter((act) => {
       if (!act.createdAt) return false;

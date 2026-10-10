@@ -110,6 +110,7 @@ export const FollowUpsScreen: React.FC = () => {
             try {
               await disposeLead(item._id, {
                 connected: false,
+                callAttempt: false,
                 stage: 'Follow Up',
                 remark: 'Snoozed by 2 hours',
                 followUpAt: nextTime,
@@ -121,6 +122,7 @@ export const FollowUpsScreen: React.FC = () => {
               agentName: user?.name || 'Agent',
               agentId: user?._id,
               connected: false,
+              type: 'UPDATE',
               stage: 'Follow Up',
               remark: 'Follow-up snoozed +2 hours',
               followUpAt: nextTime,
@@ -140,6 +142,7 @@ export const FollowUpsScreen: React.FC = () => {
             try {
               await disposeLead(item._id, {
                 connected: false,
+                callAttempt: false,
                 stage: 'Follow Up',
                 remark: 'Snoozed to Tomorrow 10 AM',
                 followUpAt: nextTime,
@@ -151,6 +154,7 @@ export const FollowUpsScreen: React.FC = () => {
               agentName: user?.name || 'Agent',
               agentId: user?._id,
               connected: false,
+              type: 'UPDATE',
               stage: 'Follow Up',
               remark: 'Follow-up snoozed to Tomorrow 10 AM',
               followUpAt: nextTime,

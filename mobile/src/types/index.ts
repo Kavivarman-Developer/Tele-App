@@ -156,6 +156,7 @@ export type LeadFilterType = 'ALL' | 'NEW' | 'FOLLOW_UP' | 'NOT_CONNECTED';
 export interface DisposeLeadPayload {
   phone?: string | null;
   connected: boolean;
+  callAttempt?: boolean;
   notConnectedReason?: NotConnectedReason;
   stage?: string;
   tag?: string | null;
@@ -177,7 +178,7 @@ export interface Activity {
   phone?: string;
   customerName?: string;
   branch?: string | null;
-  type: 'CALL';
+  type: 'CALL' | 'UPDATE';
   connected: boolean;
   notConnectedReason?: NotConnectedReason | null;
   stage: string;
@@ -225,6 +226,7 @@ export type RootStackParamList = {
     lead: Lead;
     callDurationSeconds?: number;
     isCallConnected?: boolean;
+    callAttempt?: boolean;
     detectionMethod?: 'AUTOMATIC' | 'MANUAL';
     queue?: Lead[];
     queueIndex?: number;

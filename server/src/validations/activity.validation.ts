@@ -11,6 +11,7 @@ export const disposeLeadSchema = z.object({
     .object({
       phone: z.string().optional().nullable(),
       connected: z.boolean({ required_error: 'connected boolean is required' }),
+      callAttempt: z.boolean().default(false),
       notConnectedReason: z.enum(NotConnectedReasons).optional(),
       stage: z.string().trim().optional(),
       tag: z.string().trim().optional().nullable(),

@@ -46,12 +46,12 @@ export const deduplicateActivities = (list: Activity[]): Activity[] => {
         const sameStage = (existing.stage || '').toLowerCase().trim() === (act.stage || '').toLowerCase().trim();
         const sameConnected = existing.connected === act.connected;
 
-        if (sameStage && sameConnected) {
+        if (existing.type === act.type && sameStage && sameConnected) {
           return true;
         }
 
         // If same connected status and both are calls within 60 seconds
-        if (sameConnected && timeDiff < 60000) {
+        if (existing.type === act.type && sameConnected && timeDiff < 60000) {
           return true;
         }
       }
@@ -148,14 +148,15 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
       <View style={styles.summaryBar}>
         <Text style={styles.summaryTitle}>Activity Timeline</Text>
         <Text style={styles.summaryCount}>
-          {cleanActivities.length} {cleanActivities.length === 1 ? 'call recorded' : 'calls recorded'}
+          {cleanActivities.length} {cleanActivities.length === 1 ? 'activity recorded' : 'activities recorded'}
         </Text>
       </View>
 
       {/* Vertical Timeline Items */}
       <View style={styles.timelineList}>
         {cleanActivities.map((act, index) => {
-          const isConnected = act.connected;
+          const isCall = act.type === 'CALL';
+          const isConnected = isCall && act.connected;
           const agent = typeof act.userId === 'object' && act.userId ? act.userId : null;
           const agentName = agent?.name || (typeof act.userId === 'string' ? act.userId : 'Agent');
           const isCurrentUser =
@@ -175,7 +176,7 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
           const isWarm = temp.includes('WARM');
           const isCold = temp.includes('COLD');
 
-          const isLast = index === activities.length - 1;
+          const isLast = index === cleanActivities.length - 1;
 
           return (
             <View key={act._id || String(index)} style={styles.timelineItemWrap}>
@@ -187,7 +188,9 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
                     isConnected ? styles.nodeConnected : styles.nodeNotConnected,
                   ]}
                 >
-                  {isConnected ? (
+                  {!isCall ? (
+                    <MessageSquare size={10} color="#FFFFFF" strokeWidth={2.5} />
+                  ) : isConnected ? (
                     <Phone size={10} color="#FFFFFF" strokeWidth={2.5} />
                   ) : (
                     <PhoneOff size={10} color="#FFFFFF" strokeWidth={2.5} />
@@ -239,20 +242,22 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
                     </View>
                   </View>
 
-                  {/* Call Connected & Duration */}
+                  {/* Call status or non-call lead update */}
                   <View
                     style={[
                       styles.callStatusPill,
-                      isConnected ? styles.callConnectedPill : styles.callNotConnectedPill,
+                      isCall && isConnected ? styles.callConnectedPill : styles.callNotConnectedPill,
                     ]}
                   >
                     <Text
                       style={[
                         styles.callStatusText,
-                        isConnected ? styles.callConnectedText : styles.callNotConnectedText,
+                        isCall && isConnected ? styles.callConnectedText : styles.callNotConnectedText,
                       ]}
                     >
-                      {isConnected
+                      {!isCall
+                        ? 'Lead updated · No call attempt'
+                        : isConnected
                         ? `Connected · ${formatDuration(act.durationSeconds)}`
                         : `${act.notConnectedReason?.replace(/_/g, ' ') || 'Did Not Pick'}`}
                     </Text>
