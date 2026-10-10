@@ -688,7 +688,7 @@ export const HomeScreen: React.FC = () => {
 
   return (
     <CrmShell
-      title="OKBOZ Tele App"
+      title="Hi Talk"
       headerIcon={<LayoutGrid size={15} color="#6B7280" />}
       customSubtitleNode={
         <TouchableOpacity

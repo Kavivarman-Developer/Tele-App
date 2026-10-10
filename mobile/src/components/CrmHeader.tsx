@@ -17,7 +17,7 @@ interface CrmHeaderProps {
 }
 
 export const CrmHeader: React.FC<CrmHeaderProps> = ({
-  title = 'Tell',
+  title = 'Hi Talk',
   subtitle,
   showBack = false,
   rightAction,

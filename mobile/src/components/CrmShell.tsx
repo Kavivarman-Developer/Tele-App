@@ -99,7 +99,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                 >
                   <ArrowLeft size={18} color="#6B7280" />
                 </TouchableOpacity>
-              ) : (
+              ) : (!isWide || isCollapsed) ? (
                 <TouchableOpacity
                   style={styles.toggleBtn}
                   onPress={handleToggle}
@@ -112,7 +112,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                     <PanelLeftClose size={18} color="#6B7280" />
                   )}
                 </TouchableOpacity>
-              )}
+              ) : null}
 
               <View style={styles.headerTitleGroup}>
                 {headerIcon && isWide ? <View style={styles.headerIconBox}>{headerIcon}</View> : null}

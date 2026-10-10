@@ -164,7 +164,7 @@ export const CrmSidebarContent: React.FC<{
       icon: Info,
       action: () =>
         Alert.alert(
-          'NeoDove Tele Calling CRM',
+          'Hi Talk Tele Calling CRM',
           'Version 2.4.1\n\nHigh Performance Cloud Telephony & Automated Lead Management CRM.',
         ),
     },
@@ -176,7 +176,7 @@ export const CrmSidebarContent: React.FC<{
       action: () =>
         Alert.alert(
           'Send Feedback',
-          'Have a suggestion or encounter an issue? Your feedback helps us improve NeoDove.',
+          'Have a suggestion or encounter an issue? Your feedback helps us improve Hi Talk.',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Submit Feedback', onPress: () => Alert.alert('Thank You!', 'Your feedback has been logged.') },
@@ -195,13 +195,13 @@ export const CrmSidebarContent: React.FC<{
           activeOpacity={0.8}
         >
           <View style={styles.brandMark}>
-            <Text style={styles.brandMarkText}>ND</Text>
+            <Text style={styles.brandMarkText}>HT</Text>
           </View>
           {!collapsed && (
             <View style={styles.brandTextWrap}>
               <Text style={styles.brandTitle}>
-                <Text style={{ fontWeight: '900', color: '#5B2C82', fontSize: 18, letterSpacing: 0.5 }}>NEO</Text>
-                <Text style={{ fontWeight: '900', color: '#E11D48', fontSize: 18, letterSpacing: 0.5 }}>DOVE</Text>
+                <Text style={{ fontWeight: '900', color: '#0F9D58', fontSize: 18, letterSpacing: 0.5 }}>Hi </Text>
+                <Text style={{ fontWeight: '900', color: '#1F2937', fontSize: 18, letterSpacing: 0.5 }}>Talk</Text>
               </Text>
             </View>
           )}

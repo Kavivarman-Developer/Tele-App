@@ -57,7 +57,7 @@ export const LoginScreen: React.FC = () => {
               <Phone size={30} color="#FFFFFF" strokeWidth={2.5} />
             </View>
             <Text style={{ fontSize: 26, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>
-              Tell
+              Hi Talk
             </Text>
             <Text style={{ fontSize: 13, color: '#64748B', marginTop: 3, fontWeight: '500' }}>
               High-Velocity Calling & Lead Management

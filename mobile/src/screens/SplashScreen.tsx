@@ -15,7 +15,7 @@ export const SplashScreen: React.FC = () => {
       </View>
 
       {/* App Title & Subtitle */}
-      <Text className="text-3xl font-black text-slate-900 tracking-tight mb-1.5">Tell</Text>
+      <Text className="text-3xl font-black text-slate-900 tracking-tight mb-1.5">Hi Talk</Text>
       <Text className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-8 text-center">
         Smart Calling & Lead Automation
       </Text>
