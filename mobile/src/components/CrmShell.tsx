@@ -99,18 +99,14 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                 >
                   <ArrowLeft size={18} color="#6B7280" />
                 </TouchableOpacity>
-              ) : (!isWide || isCollapsed) ? (
+              ) : !isWide ? (
                 <TouchableOpacity
                   style={styles.toggleBtn}
                   onPress={handleToggle}
                   activeOpacity={0.7}
                   accessibilityLabel="Toggle sidebar"
                 >
-                  {isCollapsed && isWide ? (
-                    <PanelLeftOpen size={18} color="#6B7280" />
-                  ) : (
-                    <PanelLeftClose size={18} color="#6B7280" />
-                  )}
+                  <PanelLeftClose size={18} color="#6B7280" />
                 </TouchableOpacity>
               ) : null}
 
