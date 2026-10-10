@@ -8,7 +8,7 @@ import { Request } from 'express';
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300,
+  max: 3000, // High throughput for active telecalling sessions & auto-refresh
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -16,7 +16,7 @@ export const apiLimiter = rateLimit({
     message: 'Too many requests from this IP. Please try again after 15 minutes.',
   },
   skip: (req: Request) => {
-    // Never throttle health check or server ping
+    // Never throttle health checks or active polling
     return (
       req.path === '/health' ||
       req.path === '/api/health' ||

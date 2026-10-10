@@ -13,6 +13,7 @@ import {
   AppState,
   AppStateStatus,
   useWindowDimensions,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -31,12 +32,15 @@ import {
   Flame,
   Sun,
   Snowflake,
+  Megaphone,
+  RotateCcw,
 } from 'lucide-react-native';
 
 import { fetchMyLeads, fetchCampaigns, createWalkInLead, disposeLead } from '../api/leadApi';
 import { Lead, RootStackParamList, DetectedCallResult, CustomerTemperature } from '../types';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { useCampaignStore } from '../store/campaignStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { CrmShell } from '../components/CrmShell';
 import { LeadQuickModal } from '../components/LeadQuickModal';
@@ -54,6 +58,7 @@ interface ScreenshotLead {
   name: string;
   phone: string;
   campaignName: string;
+  campaignId?: string;
   attempts: number;
   assignedAgent: string;
   status: 'New' | 'Interested' | 'Follow-up' | 'Not connected' | 'Not Interested';
@@ -200,13 +205,18 @@ export const MyLeadsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const {
+    selectedCampaignName,
+    selectedCampaignId,
+    setSelectedCampaign: setStoreCampaign,
+  } = useCampaignStore();
   const isAgent = user?.role === 'AGENT';
   const { width } = useWindowDimensions();
   const isWide = width >= 860;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'New' | 'Interested' | 'Follow-up' | 'Not connected' | 'Not Interested'>('All');
-  const [selectedCampaign, setSelectedCampaign] = useState<string>('All campaigns');
+  const selectedCampaign = selectedCampaignName || 'All campaigns';
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   const [quickModalLead, setQuickModalLead] = useState<Lead | null>(null);
 
@@ -243,22 +253,29 @@ export const MyLeadsScreen: React.FC = () => {
   const [walkInPhone, setWalkInPhone] = useState('');
 
   // Fetch real campaigns & leads from backend
-  const { data: campaignData } = useQuery({
+  const { data: campaignData, refetch: refetchCampaigns } = useQuery({
     queryKey: ['campaigns'],
     queryFn: fetchCampaigns,
   });
 
-  const { data: leadsData, refetch } = useQuery({
+  const {
+    data: leadsData,
+    isLoading: isLeadsLoading,
+    isRefetching: isLeadsRefetching,
+    isError: isLeadsError,
+    error: leadsError,
+    refetch,
+  } = useQuery({
     queryKey: ['myLeadsList'],
     queryFn: () => fetchMyLeads({ limit: 100 }),
-    refetchInterval: 6000,
+    refetchInterval: 15000,
     refetchIntervalInBackground: false,
   });
 
   // Mutation to add walk-in lead
   const walkInMutation = useMutation({
     mutationFn: (newLead: { name: string; phone: string; campaignId?: string }) => {
-      const campId = newLead.campaignId || campaignData?.campaigns?.[0]?._id || 'default';
+      const campId = newLead.campaignId || selectedCampaignId || campaignData?.campaigns?.[0]?._id || 'default';
       return createWalkInLead(campId, {
         name: newLead.name,
         phone: normalizePhoneDigits(newLead.phone),
@@ -279,26 +296,20 @@ export const MyLeadsScreen: React.FC = () => {
     },
   });
 
-  // Combine real backend leads with default leads (strictly filtered for agents)
+  // Real backend leads (backend /api/leads/my is already strictly scoped to logged-in user)
   const combinedLeads: ScreenshotLead[] = useMemo(() => {
     const realLeads = leadsData?.leads || [];
     if (realLeads.length > 0) {
-      const agentScopedLeads = isAgent
-        ? realLeads.filter((l: Lead) => {
-            if (!l.assignedTo) return true;
-            if (typeof l.assignedTo === 'string') {
-              return l.assignedTo === user?._id || l.assignedTo === user?.email;
-            }
-            return (
-              l.assignedTo._id === user?._id ||
-              l.assignedTo.email === user?.email ||
-              l.assignedTo.name?.toLowerCase() === user?.name?.toLowerCase()
-            );
-          })
-        : realLeads;
+      return realLeads.map((l: Lead, idx: number) => {
+        const camp =
+          typeof l.campaign === 'object' && l.campaign
+            ? l.campaign.name
+            : (l as any).campaignName || 'Testing Campaigns';
+        const cId =
+          typeof l.campaign === 'object' && l.campaign
+            ? l.campaign._id
+            : l.campaignId;
 
-      return agentScopedLeads.map((l: Lead, idx: number) => {
-        const camp = typeof l.campaign === 'object' && l.campaign ? l.campaign.name : 'Demo Sales Campaign';
         const stg =
           l.stage === 'New'
             ? 'New'
@@ -325,6 +336,7 @@ export const MyLeadsScreen: React.FC = () => {
           name: l.name,
           phone: formatDisplayPhone(l.phone),
           campaignName: camp,
+          campaignId: cId,
           attempts: l.attemptCount || 0,
           assignedAgent: agentDisplay,
           status: stg as any,
@@ -340,26 +352,50 @@ export const MyLeadsScreen: React.FC = () => {
     return [];
   }, [leadsData, isAgent, user]);
 
-  // Compute status pill counts
+  // Dynamic available campaign options from backend & leads
+  const availableCampaignOptions = useMemo(() => {
+    const list = ['All campaigns'];
+    const backendNames = (campaignData?.campaigns || []).map((c) => c.name);
+    combinedLeads.forEach((l) => {
+      if (l.campaignName && !backendNames.includes(l.campaignName)) {
+        backendNames.push(l.campaignName);
+      }
+    });
+    return Array.from(new Set([...list, ...backendNames]));
+  }, [campaignData, combinedLeads]);
+
+  // Compute status pill counts based on active campaign selection
   const counts = useMemo(() => {
-    const all = combinedLeads.length;
-    const n = combinedLeads.filter((l) => l.status === 'New').length;
-    const interested = combinedLeads.filter((l) => l.status === 'Interested').length;
-    const followup = combinedLeads.filter((l) => l.status === 'Follow-up').length;
-    const notConn = combinedLeads.filter((l) => l.status === 'Not connected').length;
-    const notInterested = combinedLeads.filter((l) => l.status === 'Not Interested').length;
+    const scopedLeads = combinedLeads.filter((l) => {
+      if (selectedCampaign === 'All campaigns') return true;
+      return (
+        l.campaignName.toLowerCase() === selectedCampaign.toLowerCase() ||
+        (selectedCampaignId && l.campaignId === selectedCampaignId)
+      );
+    });
+
+    const all = scopedLeads.length;
+    const n = scopedLeads.filter((l) => l.status === 'New').length;
+    const interested = scopedLeads.filter((l) => l.status === 'Interested').length;
+    const followup = scopedLeads.filter((l) => l.status === 'Follow-up').length;
+    const notConn = scopedLeads.filter((l) => l.status === 'Not connected').length;
+    const notInterested = scopedLeads.filter((l) => l.status === 'Not Interested').length;
     return { all, new: n, interested, followup, notConnected: notConn, notInterested };
-  }, [combinedLeads]);
+  }, [combinedLeads, selectedCampaign, selectedCampaignId]);
 
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     return combinedLeads.filter((lead) => {
+      // Campaign filter (scoped strictly to selected campaign)
+      if (selectedCampaign !== 'All campaigns') {
+        const matchesName = lead.campaignName.toLowerCase() === selectedCampaign.toLowerCase();
+        const matchesId = selectedCampaignId && lead.campaignId === selectedCampaignId;
+        if (!matchesName && !matchesId) {
+          return false;
+        }
+      }
       // Status filter
       if (selectedFilter !== 'All' && lead.status !== selectedFilter) {
-        return false;
-      }
-      // Campaign filter
-      if (selectedCampaign !== 'All campaigns' && lead.campaignName !== selectedCampaign) {
         return false;
       }
       // Search query
@@ -714,7 +750,43 @@ export const MyLeadsScreen: React.FC = () => {
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLeadsRefetching}
+            onRefresh={() => {
+              refetch();
+              refetchCampaigns();
+            }}
+            colors={['#10B981']}
+          />
+        }
       >
+        {/* Campaign Workspace Context Banner */}
+        {selectedCampaign !== 'All campaigns' ? (
+          <View style={styles.activeWorkspaceBanner}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <View style={styles.activeWorkspaceIcon}>
+                <Megaphone size={16} color="#047857" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.activeWorkspaceTitle} numberOfLines={1}>
+                  Campaign: {selectedCampaign}
+                </Text>
+                <Text style={styles.activeWorkspaceSub}>
+                  {counts.all} numbers strictly isolated in this campaign
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.switchCampBtn}
+              onPress={() => navigation.navigate('CampaignSelect' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.switchCampBtnText}>Change ➔</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* Banner Section: Your lead queue & Actions */}
         <View style={[styles.bannerRow, !isWide && styles.bannerRowMobile]}>
           <View style={!isWide ? styles.bannerTitleBlockMobile : { flex: 1 }}>
@@ -797,12 +869,13 @@ export const MyLeadsScreen: React.FC = () => {
         {/* Campaign Dropdown Menu */}
         {showCampaignDropdown && (
           <View style={styles.dropdownMenu}>
-            {['All campaigns', 'Demo Sales Campaign', 'OK Real Estate Outreach'].map((camp) => (
+            {availableCampaignOptions.map((camp) => (
               <TouchableOpacity
                 key={camp}
                 style={styles.dropdownItem}
                 onPress={() => {
-                  setSelectedCampaign(camp);
+                  const matched = (campaignData?.campaigns || []).find((c) => c.name === camp);
+                  setStoreCampaign(matched ? matched._id : null, camp);
                   setShowCampaignDropdown(false);
                 }}
               >
@@ -944,24 +1017,42 @@ export const MyLeadsScreen: React.FC = () => {
         {/* Leads Display: Clean Mobile Cards for Mobile, Spacious Table for Wide Desktop */}
         {!isWide ? (
           <View style={styles.mobileListContainer}>
-            {filteredLeads.length === 0 ? (
+            {isLeadsLoading && !combinedLeads.length ? (
+              <View style={styles.loadingCard}>
+                <ActivityIndicator size="large" color="#10B981" />
+                <Text style={styles.loadingCardText}>Loading lead queue from server...</Text>
+              </View>
+            ) : isLeadsError && !combinedLeads.length ? (
+              <View style={styles.errorCard}>
+                <RotateCcw size={32} color="#EF4444" />
+                <Text style={styles.errorTitle}>Server Reconnecting</Text>
+                <Text style={styles.errorSub}>
+                  {(leadsError as any)?.response?.data?.message || (leadsError as any)?.message || 'Connecting to Render cloud backend. Please tap below to retry.'}
+                </Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()} activeOpacity={0.8}>
+                  <Text style={styles.retryBtnText}>Retry Fetching Leads</Text>
+                </TouchableOpacity>
+              </View>
+            ) : filteredLeads.length === 0 ? (
               <View style={styles.emptyStateCard}>
                 <Users size={36} color="#94A3B8" />
                 <Text style={styles.emptyStateTitle}>No leads found</Text>
                 <Text style={styles.emptyStateSubtitle}>
-                  No leads match your current search query or filter selection.
+                  {selectedCampaign !== 'All campaigns'
+                    ? `No leads found under "${selectedCampaign}". Switch campaign or reset filter.`
+                    : 'No leads match your current search query or filter selection.'}
                 </Text>
                 {(selectedFilter !== 'All' || selectedCampaign !== 'All campaigns' || searchQuery.length > 0) && (
                   <TouchableOpacity
                     style={styles.emptyResetBtn}
                     onPress={() => {
                       setSelectedFilter('All');
-                      setSelectedCampaign('All campaigns');
+                      setStoreCampaign(null, 'All campaigns');
                       setSearchQuery('');
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.emptyResetBtnText}>Reset All Filters</Text>
+                    <Text style={styles.emptyResetBtnText}>Reset to All Campaigns</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -1960,5 +2051,95 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#2563EB',
+  },
+  activeWorkspaceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  activeWorkspaceIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeWorkspaceTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  activeWorkspaceSub: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 1,
+  },
+  switchCampBtn: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  switchCampBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  loadingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingCardText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  errorCard: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  errorTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  errorSub: {
+    fontSize: 12,
+    color: '#7F1D1D',
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 17,
+  },
+  retryBtn: {
+    marginTop: 8,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

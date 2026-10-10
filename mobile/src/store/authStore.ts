@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await axios.post<{ token: string; user: User }>(
         `${API_BASE_URL}/auth/login`,
         { email: cleanEmail, password },
-        { timeout: 7000 },
+        { timeout: 30000 },
       );
 
       const { token, user } = response.data;
@@ -165,7 +165,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
           const response = await axios.get<{ user: User }>(`${API_BASE_URL}/auth/me`, {
             headers: { Authorization: `Bearer ${token}` },
-            timeout: 4000,
+            timeout: 15000,
           });
 
           const user = response.data.user;

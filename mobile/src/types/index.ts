@@ -198,9 +198,10 @@ export interface DetectedCallResult {
 
 export type RootStackParamList = {
   Login: undefined;
+  CampaignSelect: undefined;
   Main: undefined;
   Home: undefined;
-  MyLeads: undefined;
+  MyLeads: { campaignId?: string; campaignName?: string } | undefined;
   FollowUps: undefined;
   CallHistory: undefined;
   Profile: undefined;

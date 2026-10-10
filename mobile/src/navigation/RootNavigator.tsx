@@ -10,9 +10,11 @@ import {
   CalendarClock,
   SlidersHorizontal,
   User as UserIcon,
+  Megaphone,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
+import { useCampaignStore } from '../store/campaignStore';
 import { SplashScreen } from '../screens/SplashScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -22,6 +24,7 @@ import { DashboardScreen } from '../screens/DashboardScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { TeamScreen } from '../screens/TeamScreen';
 import { CampaignsScreen } from '../screens/CampaignsScreen';
+import { CampaignSelectScreen } from '../screens/CampaignSelectScreen';
 import { UploadLeadsScreen } from '../screens/UploadLeadsScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { RetryRulesScreen } from '../screens/RetryRulesScreen';
@@ -47,6 +50,7 @@ const MainTabs: React.FC = () => {
 
   return (
     <Tab.Navigator
+      initialRouteName={!isManagerOrAdmin ? 'CampaignsHub' : 'Home'}
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
@@ -71,6 +75,15 @@ const MainTabs: React.FC = () => {
         tabBarInactiveTintColor: '#94A3B8',
       }}
     >
+      <Tab.Screen
+        name="CampaignsHub"
+        component={CampaignSelectScreen}
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <Megaphone size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+          ),
+        }}
+      />
       <Tab.Screen
         name="Home"
         component={HomeScreen}
@@ -129,6 +142,7 @@ export const RootNavigator: React.FC = () => {
 
   useEffect(() => {
     restoreSession();
+    useCampaignStore.getState().restoreCampaignSelection();
     notificationService.requestPermissions();
   }, [restoreSession]);
 
@@ -144,6 +158,7 @@ export const RootNavigator: React.FC = () => {
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="CampaignSelect" component={CampaignSelectScreen} />
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="MyLeads" component={MyLeadsScreen} />
             <Stack.Screen name="FollowUps" component={FollowUpsScreen} />

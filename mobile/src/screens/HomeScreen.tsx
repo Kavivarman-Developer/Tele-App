@@ -148,7 +148,7 @@ export const HomeScreen: React.FC = () => {
   } = useQuery({
     queryKey: ['homeDashboard', period, fromDate],
     queryFn: () => fetchDashboardReports({ from: fromDate }),
-    refetchInterval: 6000,
+    refetchInterval: 15000,
     refetchIntervalInBackground: false,
   });
 
@@ -162,7 +162,7 @@ export const HomeScreen: React.FC = () => {
     queryKey: ['homeUserCalls', period, fromDate],
     queryFn: () => fetchUserCallsReport({ from: fromDate }),
     enabled: isManagerOrAdmin,
-    refetchInterval: 6000,
+    refetchInterval: 15000,
     refetchIntervalInBackground: false,
   });
 
@@ -175,7 +175,7 @@ export const HomeScreen: React.FC = () => {
   } = useQuery({
     queryKey: ['homeMyLeadsQueue'],
     queryFn: () => fetchMyLeads({ type: 'ALL', limit: 100 }),
-    refetchInterval: 6000,
+    refetchInterval: 15000,
     refetchIntervalInBackground: false,
   });
 

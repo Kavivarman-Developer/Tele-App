@@ -9,6 +9,9 @@ import { AppError } from './utils/AppError';
 
 const app: Application = express();
 
+// Trust reverse proxy (Render, Cloudflare, Heroku) to correctly identify client IP
+app.set('trust proxy', 1);
+
 // Security and utility middlewares
 app.use(helmet());
 app.use(cors());

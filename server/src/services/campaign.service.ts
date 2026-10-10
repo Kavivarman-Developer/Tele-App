@@ -1,5 +1,6 @@
 import mongoose, { Types } from 'mongoose';
 import { Campaign, ICampaignDoc } from '../models/campaign.model';
+import { Lead } from '../models/lead.model';
 import { Pipeline } from '../models/pipeline.model';
 import { User, IUserDoc } from '../models/user.model';
 import {
@@ -108,12 +109,15 @@ export class CampaignService {
     } else if (requester.role === 'MANAGER') {
       query = { managerId: requester._id };
     } else if (requester.role === 'AGENT') {
-      const specificCount = await Campaign.countDocuments({ agentIds: requester._id, isActive: true });
-      if (specificCount > 0) {
-        query = { agentIds: requester._id, isActive: true };
-      } else {
-        query = { isActive: true };
-      }
+      const assignedCampaignIds = await Lead.distinct('campaignId', { assignedTo: requester._id });
+      query = {
+        $or: [
+          { agentIds: requester._id, isActive: true },
+          { _id: { $in: assignedCampaignIds }, isActive: true },
+          { agentIds: { $size: 0 }, isActive: true },
+          { isActive: true },
+        ],
+      };
     }
 
     return Campaign.find(query)
