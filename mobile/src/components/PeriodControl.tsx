@@ -60,7 +60,7 @@ export const PeriodControl: React.FC<PeriodControlProps> = ({
       >
         <Calendar
           size={12}
-          color={selected === 'Custom' ? colors.primary : '#64748B'}
+          color={selected === 'Custom' ? '#0F9D58' : '#6B7280'}
         />
         <Text
           style={[
@@ -81,17 +81,17 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: borderRadius.md,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
     padding: 3,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5E7EB',
   },
   button: {
     flex: 1,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: borderRadius.sm,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -100,16 +100,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   activeButton: {
-    backgroundColor: '#FFFFFF',
-    ...shadows.soft,
+    backgroundColor: '#E6F4EA',
   },
   buttonText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#6B7280',
   },
   activeButtonText: {
-    color: colors.primary,
-    fontWeight: '800',
+    color: '#0F9D58',
+    fontWeight: '500',
   },
 });

@@ -56,23 +56,23 @@ const MainTabs: React.FC = () => {
         tabBarShowLabel: false,
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
-          borderTopColor: '#E2E8F0',
+          borderTopColor: '#E5E7EB',
           borderTopWidth: 1,
           height: tabHeight,
           paddingTop: 8,
           paddingBottom: bottomPadding,
-          elevation: 12,
-          shadowColor: '#0F172A',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.08,
-          shadowRadius: 10,
+          elevation: 2,
+          shadowColor: '#000000',
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: 0.04,
+          shadowRadius: 3,
         },
         tabBarItemStyle: {
           justifyContent: 'center',
           alignItems: 'center',
         },
-        tabBarActiveTintColor: '#10B981',
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarActiveTintColor: '#0F9D58',
+        tabBarInactiveTintColor: '#9CA3AF',
       }}
     >
       <Tab.Screen

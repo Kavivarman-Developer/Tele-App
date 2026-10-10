@@ -25,6 +25,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   ChevronRight,
+  ChevronDown,
   PhoneCall,
   Plus,
   LayoutGrid,
@@ -45,6 +46,7 @@ import {
 } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
+import { useCampaignStore } from '../store/campaignStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useNotificationStore } from '../store/notificationStore';
 import {
@@ -73,6 +75,7 @@ export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const { selectedCampaignName } = useCampaignStore();
   const { width } = useWindowDimensions();
   const isWide = width >= 860;
 
@@ -642,8 +645,20 @@ export const HomeScreen: React.FC = () => {
 
   return (
     <CrmShell
-      title="My Report"
-      headerIcon={<LayoutGrid size={15} color="#FFFFFF" />}
+      title="OKBOZ Tele App"
+      headerIcon={<LayoutGrid size={15} color="#6B7280" />}
+      customSubtitleNode={
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+          onPress={() => navigation.navigate('CampaignSelect')}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 13, color: '#6B7280', fontWeight: '400' }} numberOfLines={1}>
+            {selectedCampaignName || 'All campaigns'}
+          </Text>
+          <ChevronDown size={14} color="#6B7280" />
+        </TouchableOpacity>
+      }
       showPeriodControl
       period={period}
       onPeriodChange={(newP) => {
@@ -662,7 +677,7 @@ export const HomeScreen: React.FC = () => {
             onPress={() => navigation.navigate('Campaigns')}
             activeOpacity={0.8}
           >
-            <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
+            <Plus size={13} color="#0F9D58" strokeWidth={2.5} />
             <Text style={styles.headerAddBtnText}>Campaign</Text>
           </TouchableOpacity>
         ) : null
@@ -676,7 +691,7 @@ export const HomeScreen: React.FC = () => {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefreshAll}
-            colors={[colors.primary]}
+            colors={['#0F9D58']}
           />
         }
       >
@@ -697,7 +712,7 @@ export const HomeScreen: React.FC = () => {
         {/* Assigned Leads Notification Alert Banner */}
         {isAgent && assignedLeadAlert && (
           <View style={styles.alertBanner}>
-            <Sparkles size={16} color="#2563EB" />
+            <Sparkles size={16} color="#0F9D58" />
             <View style={{ flex: 1, paddingHorizontal: 6 }}>
               <Text style={styles.alertTitle}>New Leads Assigned!</Text>
               <Text style={styles.alertSubtitle}>
@@ -717,136 +732,121 @@ export const HomeScreen: React.FC = () => {
         )}
 
         {/* =========================================================================
-            NEODOVE "MY REPORT" TOP SECTION (Exact match of Image 4)
+            CLEAN MINIMAL "MY REPORT" TOP SECTION
            ========================================================================= */}
-        {/* Top Date Range Banner (Emerald Green #059669) */}
+        {/* Top Date Range Banner */}
         <TouchableOpacity
           style={{
-            backgroundColor: '#059669',
-            borderRadius: 14,
-            paddingVertical: 14,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            paddingVertical: 12,
             paddingHorizontal: 16,
             marginBottom: 16,
             alignItems: 'center',
-            shadowColor: '#059669',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 4,
-            elevation: 3,
           }}
           onPress={() => setShowDatePicker(true)}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
-          <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13.5, letterSpacing: 0.4, textAlign: 'center' }}>
+          <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 13.5, letterSpacing: 0.2, textAlign: 'center' }}>
             {bannerDateInfo.fromTo}
           </Text>
-          <Text style={{ color: '#ECFDF5', fontWeight: '700', fontSize: 12, marginTop: 4 }}>
+          <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12, marginTop: 3 }}>
             {bannerDateInfo.duration}
           </Text>
         </TouchableOpacity>
 
-        {/* 4 Big Color Metric Cards (2x2 Grid - Image 4 Match) */}
+        {/* 4 Clean Minimal Metric Cards (2x2 Grid) */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
-          {/* Card 1: Calls Attempted (#6347D1) */}
+          {/* Card 1: Calls Attempted */}
           <View
             style={{
               flex: 1,
               minWidth: '46%',
-              backgroundColor: '#6347D1',
-              borderRadius: 14,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
               padding: 16,
-              shadowColor: '#6347D1',
-              shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.3,
-              shadowRadius: 5,
-              elevation: 4,
+              borderWidth: 1,
+              borderColor: '#E5E7EB',
             }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: 'rgba(255, 255, 255, 0.95)', fontWeight: '700', fontSize: 13 }}>
+              <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12 }}>
                 Calls Attempted
               </Text>
-              <Phone size={18} color="#FFFFFF" />
+              <Phone size={18} color="#6B7280" />
             </View>
-            <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 26, marginTop: 8 }}>
+            <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 20, marginTop: 8 }}>
               {callsMade}
             </Text>
           </View>
 
-          {/* Card 2: Calls Connected (#EA580C) */}
+          {/* Card 2: Calls Connected */}
           <View
             style={{
               flex: 1,
               minWidth: '46%',
-              backgroundColor: '#EA580C',
-              borderRadius: 14,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
               padding: 16,
-              shadowColor: '#EA580C',
-              shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.3,
-              shadowRadius: 5,
-              elevation: 4,
+              borderWidth: 1,
+              borderColor: '#E5E7EB',
             }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: 'rgba(255, 255, 255, 0.95)', fontWeight: '700', fontSize: 13 }}>
+              <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12 }}>
                 Calls Connected
               </Text>
-              <PhoneCall size={18} color="#FFFFFF" />
+              <PhoneCall size={18} color="#6B7280" />
             </View>
-            <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 26, marginTop: 8 }}>
+            <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 20, marginTop: 8 }}>
               {connectedCalls}
             </Text>
           </View>
 
-          {/* Card 3: Call Time (#5B8DEF) */}
+          {/* Card 3: Call Time */}
           <View
             style={{
               flex: 1,
               minWidth: '46%',
-              backgroundColor: '#5B8DEF',
-              borderRadius: 14,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
               padding: 16,
-              shadowColor: '#5B8DEF',
-              shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.3,
-              shadowRadius: 5,
-              elevation: 4,
+              borderWidth: 1,
+              borderColor: '#E5E7EB',
             }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: 'rgba(255, 255, 255, 0.95)', fontWeight: '700', fontSize: 13 }}>
+              <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12 }}>
                 Call Time
               </Text>
-              <Clock3 size={18} color="#FFFFFF" />
+              <Clock3 size={18} color="#6B7280" />
             </View>
-            <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 22, marginTop: 8 }}>
+            <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 20, marginTop: 8 }}>
               {formatDurationHoursMinutes(localTotalDuration || (connectedCalls * 68))}
             </Text>
           </View>
 
-          {/* Card 4: Avg Call Duration (#1D7BF2) */}
+          {/* Card 4: Avg Call Duration */}
           <View
             style={{
               flex: 1,
               minWidth: '46%',
-              backgroundColor: '#1D7BF2',
-              borderRadius: 14,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
               padding: 16,
-              shadowColor: '#1D7BF2',
-              shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.3,
-              shadowRadius: 5,
-              elevation: 4,
+              borderWidth: 1,
+              borderColor: '#E5E7EB',
             }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: 'rgba(255, 255, 255, 0.95)', fontWeight: '700', fontSize: 13 }}>
+              <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12 }}>
                 Avg Call Duration
               </Text>
-              <Clock size={18} color="#FFFFFF" />
+              <Clock size={18} color="#6B7280" />
             </View>
-            <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 22, marginTop: 8 }}>
+            <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 20, marginTop: 8 }}>
               {formatAvgDurationMins(avgDurationSeconds || 68)}
             </Text>
           </View>
@@ -856,29 +856,29 @@ export const HomeScreen: React.FC = () => {
         <View
           style={{
             flexDirection: 'row',
-            backgroundColor: '#FFFFFF',
-            borderRadius: 12,
-            padding: 4,
+            backgroundColor: '#F9FAFB',
+            borderRadius: 8,
+            padding: 3,
             marginBottom: 16,
             borderWidth: 1,
-            borderColor: '#E2E8F0',
+            borderColor: '#E5E7EB',
           }}
         >
           <TouchableOpacity
             style={{
               flex: 1,
-              paddingVertical: 9,
+              paddingVertical: 8,
               alignItems: 'center',
-              borderRadius: 10,
-              backgroundColor: dashboardSubTab === 'QUEUES' ? '#059669' : 'transparent',
+              borderRadius: 6,
+              backgroundColor: dashboardSubTab === 'QUEUES' ? '#E6F4EA' : 'transparent',
             }}
             onPress={() => setDashboardSubTab('QUEUES')}
           >
             <Text
               style={{
-                fontSize: 12.5,
-                fontWeight: '800',
-                color: dashboardSubTab === 'QUEUES' ? '#FFFFFF' : '#64748B',
+                fontSize: 12,
+                fontWeight: dashboardSubTab === 'QUEUES' ? '500' : '400',
+                color: dashboardSubTab === 'QUEUES' ? '#0F9D58' : '#6B7280',
               }}
             >
               Calling Queues
@@ -888,18 +888,18 @@ export const HomeScreen: React.FC = () => {
           <TouchableOpacity
             style={{
               flex: 1,
-              paddingVertical: 9,
+              paddingVertical: 8,
               alignItems: 'center',
-              borderRadius: 10,
-              backgroundColor: dashboardSubTab === 'LOGIN_REPORT' ? '#059669' : 'transparent',
+              borderRadius: 6,
+              backgroundColor: dashboardSubTab === 'LOGIN_REPORT' ? '#E6F4EA' : 'transparent',
             }}
             onPress={() => setDashboardSubTab('LOGIN_REPORT')}
           >
             <Text
               style={{
-                fontSize: 12.5,
-                fontWeight: '800',
-                color: dashboardSubTab === 'LOGIN_REPORT' ? '#FFFFFF' : '#64748B',
+                fontSize: 12,
+                fontWeight: dashboardSubTab === 'LOGIN_REPORT' ? '500' : '400',
+                color: dashboardSubTab === 'LOGIN_REPORT' ? '#0F9D58' : '#6B7280',
               }}
             >
               Login Report
@@ -909,18 +909,18 @@ export const HomeScreen: React.FC = () => {
           <TouchableOpacity
             style={{
               flex: 1,
-              paddingVertical: 9,
+              paddingVertical: 8,
               alignItems: 'center',
-              borderRadius: 10,
-              backgroundColor: dashboardSubTab === 'CALL_REPORT' ? '#059669' : 'transparent',
+              borderRadius: 6,
+              backgroundColor: dashboardSubTab === 'CALL_REPORT' ? '#E6F4EA' : 'transparent',
             }}
             onPress={() => setDashboardSubTab('CALL_REPORT')}
           >
             <Text
               style={{
-                fontSize: 12.5,
-                fontWeight: '800',
-                color: dashboardSubTab === 'CALL_REPORT' ? '#FFFFFF' : '#64748B',
+                fontSize: 12,
+                fontWeight: dashboardSubTab === 'CALL_REPORT' ? '500' : '400',
+                color: dashboardSubTab === 'CALL_REPORT' ? '#0F9D58' : '#6B7280',
               }}
             >
               Call Report
@@ -943,19 +943,19 @@ export const HomeScreen: React.FC = () => {
                   borderRadius: 12,
                   padding: 14,
                   borderWidth: 1,
-                  borderColor: '#E2E8F0',
+                  borderColor: '#E5E7EB',
                 }}
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ fontWeight: '800', fontSize: 13.5, color: '#0F172A' }}>{day.date}</Text>
-                  <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                    <Text style={{ color: '#059669', fontSize: 11, fontWeight: '700' }}>{day.connectRate} Connected</Text>
+                  <Text style={{ fontWeight: '500', fontSize: 13.5, color: '#1F2937' }}>{day.date}</Text>
+                  <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                    <Text style={{ color: '#0F9D58', fontSize: 11, fontWeight: '500' }}>{day.connectRate} Connected</Text>
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                  <Text style={{ fontSize: 12, color: '#64748B' }}>Attempted: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{day.attempted}</Text></Text>
-                  <Text style={{ fontSize: 12, color: '#64748B' }}>Connected: <Text style={{ fontWeight: '700', color: '#10B981' }}>{day.connected}</Text></Text>
-                  <Text style={{ fontSize: 12, color: '#64748B' }}>Duration: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{day.duration}</Text></Text>
+                  <Text style={{ fontSize: 12, color: '#6B7280' }}>Attempted: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.attempted}</Text></Text>
+                  <Text style={{ fontSize: 12, color: '#6B7280' }}>Connected: <Text style={{ fontWeight: '500', color: '#0F9D58' }}>{day.connected}</Text></Text>
+                  <Text style={{ fontSize: 12, color: '#6B7280' }}>Duration: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.duration}</Text></Text>
                 </View>
               </View>
             ))}
@@ -972,22 +972,22 @@ export const HomeScreen: React.FC = () => {
                   borderRadius: 12,
                   padding: 14,
                   borderWidth: 1,
-                  borderColor: '#E2E8F0',
+                  borderColor: '#E5E7EB',
                   flexDirection: 'row',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                 }}
               >
                 <View>
-                  <Text style={{ fontWeight: '800', fontSize: 13.5, color: '#0F172A' }}>{u.name}</Text>
-                  <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{u.branch || 'Trichy'} Branch · {u.role || 'AGENT'}</Text>
+                  <Text style={{ fontWeight: '500', fontSize: 13.5, color: '#1F2937' }}>{u.name}</Text>
+                  <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{u.branch || 'Trichy'} Branch · {u.role || 'AGENT'}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>Logged In</Text>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#0F9D58' }} />
+                    <Text style={{ fontSize: 11, fontWeight: '500', color: '#0F9D58' }}>Logged In</Text>
                   </View>
-                  <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Today at 09:30 AM</Text>
+                  <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Today at 09:30 AM</Text>
                 </View>
               </View>
             ))}
@@ -1582,25 +1582,28 @@ export const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   contentContainer: {
     padding: 12,
     paddingBottom: 90,
+    backgroundColor: '#FFFFFF',
   },
   headerAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#E6F4EA',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   headerAddBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
+    color: '#0F9D58',
+    fontSize: 12,
+    fontWeight: '500',
   },
 
   // 1. Top Bar
@@ -2168,14 +2171,13 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
 
-  // NeoDove Queue Cards (Image 3)
+  // NeoDove Queue Cards (Clean Minimal)
   neoQueueCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...shadows.card,
+    borderColor: '#E5E7EB',
   },
   neoQueueCardHeader: {
     flexDirection: 'row',
@@ -2183,26 +2185,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   neoQueueCardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#1F2937',
   },
   neoQueueCountBadge: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#E6F4EA',
     paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: borderRadius.full,
+    borderRadius: 8,
   },
   neoQueueCountBadgeText: {
-    color: '#059669',
+    color: '#0F9D58',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '500',
   },
   neoQueueCardSub: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#6B7280',
     marginTop: 4,
     marginBottom: 14,
+    fontWeight: '400',
   },
   neoQueueActionsRow: {
     flexDirection: 'row',
@@ -2210,35 +2213,30 @@ const styles = StyleSheet.create({
   },
   neoQueueViewBtn: {
     flex: 1,
-    height: 42,
-    borderRadius: borderRadius.full,
-    borderWidth: 1.5,
-    borderColor: '#059669',
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   neoQueueViewBtnText: {
-    color: '#059669',
-    fontWeight: '800',
+    color: '#1F2937',
+    fontWeight: '500',
     fontSize: 13,
   },
   neoQueueCallBtn: {
     flex: 1.4,
-    height: 42,
-    borderRadius: borderRadius.full,
-    backgroundColor: '#059669',
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#0F9D58',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 3,
   },
   neoQueueCallBtnText: {
     color: '#FFFFFF',
-    fontWeight: '800',
+    fontWeight: '500',
     fontSize: 13,
   },
 });

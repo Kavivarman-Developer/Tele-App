@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Modal,
   Linking,
+  StatusBar as RNStatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
@@ -391,14 +392,15 @@ export const LeadDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* 1. TOP HEADER (Deep Purple #5B2C82) */}
+      <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+      {/* 1. TOP HEADER (Clean White) */}
       <View style={styles.headerBar}>
         <TouchableOpacity
           style={styles.headerBackBtn}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <ChevronDown size={24} color="#FFFFFF" strokeWidth={2.5} />
+          <ChevronDown size={24} color="#1F2937" strokeWidth={2.5} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Lead Details</Text>
       </View>
@@ -607,6 +609,7 @@ export const LeadDetailScreen: React.FC = () => {
               <View style={styles.radioGroup}>
                 {(['Hot', 'Cold', 'Warm'] as const).map((tag) => {
                   const isSelected = selectedTag === tag;
+                  const tagColor = tag === 'Hot' ? '#DC2626' : tag === 'Warm' ? '#D97706' : '#2563EB';
                   return (
                     <TouchableOpacity
                       key={tag}
@@ -614,10 +617,10 @@ export const LeadDetailScreen: React.FC = () => {
                       onPress={() => setSelectedTag(tag)}
                       activeOpacity={0.7}
                     >
-                      <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                        {isSelected && <View style={styles.radioDot} />}
+                      <View style={[styles.radioCircle, isSelected && { borderColor: tagColor }]}>
+                        {isSelected && <View style={[styles.radioDot, { backgroundColor: tagColor }]} />}
                       </View>
-                      <Text style={[styles.radioText, isSelected && styles.radioTextActive]}>
+                      <Text style={[styles.radioText, isSelected && { color: tagColor, fontWeight: '500' }]}>
                         {tag}
                       </Text>
                     </TouchableOpacity>
@@ -640,7 +643,7 @@ export const LeadDetailScreen: React.FC = () => {
                   activeOpacity={0.7}
                 >
                   <View style={[styles.checkboxBox, actionNextFollowUp && styles.checkboxBoxChecked]}>
-                    {actionNextFollowUp && <Check size={11} color="#0F172A" strokeWidth={3} />}
+                    {actionNextFollowUp && <Check size={11} color="#0F9D58" strokeWidth={3} />}
                   </View>
                   <Text style={styles.checkboxLabel}>Next follow up date?</Text>
                 </TouchableOpacity>
@@ -667,7 +670,7 @@ export const LeadDetailScreen: React.FC = () => {
                   activeOpacity={0.7}
                 >
                   <View style={[styles.checkboxBox, actionReassign && styles.checkboxBoxChecked]}>
-                    {actionReassign && <Check size={11} color="#0F172A" strokeWidth={3} />}
+                    {actionReassign && <Check size={11} color="#0F9D58" strokeWidth={3} />}
                   </View>
                   <Text style={styles.checkboxLabel}>Re-assign this lead to other user?</Text>
                 </TouchableOpacity>
@@ -702,7 +705,7 @@ export const LeadDetailScreen: React.FC = () => {
                   activeOpacity={0.7}
                 >
                   <View style={[styles.checkboxBox, actionCopyCampaign && styles.checkboxBoxChecked]}>
-                    {actionCopyCampaign && <Check size={11} color="#0F172A" strokeWidth={3} />}
+                    {actionCopyCampaign && <Check size={11} color="#0F9D58" strokeWidth={3} />}
                   </View>
                   <Text style={styles.checkboxLabel}>Copy lead to other campaign?</Text>
                 </TouchableOpacity>
@@ -997,12 +1000,14 @@ export const LeadDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#FFFFFF',
     paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   headerBar: {
     height: 56,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -1015,41 +1020,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1F2937',
   },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#E5E7EB',
   },
   tabItem: {
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 2.5,
+    borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
   tabItemActive: {
-    borderBottomColor: '#5B2C82',
+    borderBottomColor: '#0F9D58',
   },
   tabItemText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.2,
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#6B7280',
   },
   tabItemTextActive: {
-    color: '#5B2C82',
-    fontWeight: '800',
+    color: '#0F9D58',
+    fontWeight: '500',
   },
   scrollContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     padding: 16,
@@ -1057,42 +1060,39 @@ const styles = StyleSheet.create({
   },
   scheduledLeadsBanner: {
     alignSelf: 'center',
-    backgroundColor: '#059669',
-    paddingVertical: 8,
-    paddingHorizontal: 28,
-    borderRadius: borderRadius.full,
-    ...shadows.card,
+    backgroundColor: '#E6F4EA',
+    paddingVertical: 6,
+    paddingHorizontal: 20,
+    borderRadius: 8,
   },
   scheduledLeadsBannerText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 12.5,
-    letterSpacing: 0.5,
+    color: '#0F9D58',
+    fontWeight: '500',
+    fontSize: 12,
   },
   neoCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...shadows.soft,
+    borderColor: '#E5E7EB',
   },
   contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#F3F4F6',
   },
   contactLabel: {
     fontSize: 13,
-    color: '#475569',
-    fontWeight: '600',
+    color: '#6B7280',
+    fontWeight: '400',
   },
   contactValue: {
     fontSize: 13.5,
-    color: '#0F172A',
-    fontWeight: '700',
+    color: '#1F2937',
+    fontWeight: '500',
     flex: 1,
   },
   pencilBtn: {
@@ -1106,24 +1106,24 @@ const styles = StyleSheet.create({
   },
   historyCardTitle: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: '500',
+    color: '#1F2937',
   },
   purpleViewBtn: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 22,
-    paddingVertical: 7,
-    borderRadius: borderRadius.full,
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   purpleViewBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
+    color: '#0F9D58',
+    fontWeight: '500',
     fontSize: 12.5,
   },
   otherDetailsHeading: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: '500',
+    color: '#1F2937',
     marginBottom: 8,
   },
   detailRow: {
@@ -1132,17 +1132,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 7.5,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    borderBottomColor: '#F3F4F6',
   },
   detailLabel: {
     fontSize: 12.5,
-    color: '#64748B',
-    fontWeight: '600',
+    color: '#6B7280',
+    fontWeight: '400',
   },
   detailValue: {
     fontSize: 12.5,
-    color: '#0F172A',
-    fontWeight: '700',
+    color: '#1F2937',
+    fontWeight: '500',
   },
   stickyBottomBar: {
     position: 'absolute',
@@ -1151,48 +1151,36 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E5E7EB',
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    ...shadows.elevated,
   },
   callNowPillBtn: {
     flex: 1,
-    height: 50,
-    backgroundColor: '#059669',
-    borderRadius: borderRadius.full,
+    height: 48,
+    backgroundColor: '#0F9D58',
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 4,
   },
   callNowPillBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+    fontWeight: '500',
   },
   floatingPlusBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#059669',
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#0F9D58',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 4,
   },
   disposeScrollContent: {
     backgroundColor: '#FFFFFF',
@@ -1204,79 +1192,79 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   leadHeaderBanner: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 12,
+    borderColor: '#E5E7EB',
+    padding: 14,
     marginBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   leadHeaderName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#1F2937',
   },
   leadHeaderPhone: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#6B7280',
     marginTop: 2,
-    fontWeight: '600',
+    fontWeight: '400',
   },
   quickDialBtn: {
-    backgroundColor: '#059669',
+    backgroundColor: '#0F9D58',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 5,
   },
   quickDialBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   goToDisposeBtn: {
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#0F9D58',
     height: 46,
-    borderRadius: 10,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
+    marginTop: 8,
     gap: 8,
   },
   goToDisposeBtnText: {
     color: '#FFFFFF',
     fontSize: 13.5,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   fieldSection: {
     marginBottom: 16,
   },
   fieldLabel: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: '500',
+    color: '#1F2937',
     marginBottom: 6,
   },
   formLabel: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: '500',
+    color: '#1F2937',
     marginBottom: 6,
   },
   asterisk: {
-    color: '#0F172A',
+    color: '#DC2626',
   },
   dropdownBox: {
-    height: 42,
-    borderRadius: 6,
+    height: 44,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1284,35 +1272,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   dropdownBoxSub: {
-    height: 40,
-    borderRadius: 6,
+    height: 42,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    marginTop: 6,
+    marginTop: 8,
   },
   dropdownValueText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#1E293B',
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#1F2937',
   },
   placeholderText: {
-    color: '#94A3B8',
+    color: '#9CA3AF',
     fontWeight: '400',
   },
   dropdownCaret: {
     fontSize: 10,
-    color: '#1E293B',
+    color: '#6B7280',
     marginLeft: 6,
     transform: [{ scaleY: 0.85 }],
   },
   radioGroup: {
-    gap: 8,
-    paddingTop: 2,
+    gap: 10,
+    paddingTop: 4,
   },
   radioRow: {
     flexDirection: 'row',
@@ -1323,29 +1311,29 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
     backgroundColor: '#FFFFFF',
   },
   radioCircleActive: {
-    borderColor: '#1E293B',
+    borderColor: '#0F9D58',
   },
   radioDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0F9D58',
   },
   radioText: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#6B7280',
     fontWeight: '400',
   },
   radioTextActive: {
-    color: '#0F172A',
-    fontWeight: '600',
+    color: '#1F2937',
+    fontWeight: '500',
   },
   actionBlock: {
     marginBottom: 12,
@@ -1355,73 +1343,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkboxBox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: '#D1D5DB',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   checkboxBoxChecked: {
-    borderColor: '#64748B',
-    backgroundColor: '#E2E8F0',
+    borderColor: '#0F9D58',
+    backgroundColor: '#E6F4EA',
   },
   checkboxLabel: {
     fontSize: 13,
-    color: '#0F172A',
-    fontWeight: '500',
+    color: '#1F2937',
+    fontWeight: '400',
   },
   remarksBox: {
-    height: 75,
-    borderRadius: 6,
+    height: 80,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
-    padding: 10,
-    fontSize: 13,
-    color: '#0F172A',
+    padding: 12,
+    fontSize: 14,
+    color: '#1F2937',
   },
   purpleSubmitBtn: {
     height: 48,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#0F9D58',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    shadowColor: '#5B2C82',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
   },
   purpleSubmitBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
   textInput: {
     height: 44,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
-    fontSize: 13,
-    color: '#0F172A',
+    fontSize: 14,
+    color: '#1F2937',
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     padding: 20,
     paddingBottom: Platform.OS === 'ios' ? 36 : 24,
     maxHeight: '80%',
@@ -1432,12 +1415,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E5E7EB',
   },
   modalTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: '500',
+    color: '#1F2937',
   },
   pickerItemRow: {
     flexDirection: 'row',
@@ -1446,18 +1429,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#F3F4F6',
   },
   pickerItemRowSelected: {
-    backgroundColor: '#F3E8FF',
+    backgroundColor: '#E6F4EA',
   },
   pickerItemText: {
     fontSize: 13.5,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: '400',
+    color: '#1F2937',
   },
   pickerItemTextSelected: {
-    color: '#5B2C82',
-    fontWeight: '800',
+    color: '#0F9D58',
+    fontWeight: '500',
   },
 });

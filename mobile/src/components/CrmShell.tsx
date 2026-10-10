@@ -33,6 +33,7 @@ interface CrmShellProps {
   title: string;
   headerIcon?: React.ReactNode;
   subtitle?: string;
+  customSubtitleNode?: React.ReactNode;
   breadcrumb?: string;
   showBack?: boolean;
   showPeriodControl?: boolean;
@@ -48,6 +49,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
   title,
   headerIcon,
   subtitle,
+  customSubtitleNode,
   breadcrumb,
   showBack = false,
   showPeriodControl = false,
@@ -77,7 +79,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
 
   return (
     <SafeAreaView style={styles.shellContainer} edges={['top']}>
-      <RNStatusBar barStyle="light-content" backgroundColor="#5B2C82" translucent={false} />
+      <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
       <View style={styles.shellLayout}>
         {/* Persistent sidebar for wide screen/web */}
         {isWide && (
@@ -95,7 +97,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                   onPress={() => navigation.goBack()}
                   activeOpacity={0.7}
                 >
-                  <ArrowLeft size={18} color="#FFFFFF" />
+                  <ArrowLeft size={18} color="#6B7280" />
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
@@ -105,9 +107,9 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                   accessibilityLabel="Toggle sidebar"
                 >
                   {isCollapsed && isWide ? (
-                    <PanelLeftOpen size={18} color="#FFFFFF" />
+                    <PanelLeftOpen size={18} color="#6B7280" />
                   ) : (
-                    <PanelLeftClose size={18} color="#FFFFFF" />
+                    <PanelLeftClose size={18} color="#6B7280" />
                   )}
                 </TouchableOpacity>
               )}
@@ -133,7 +135,9 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                       ) : null
                     )}
                   </View>
-                  {subtitle ? (
+                  {customSubtitleNode ? (
+                    customSubtitleNode
+                  ) : subtitle ? (
                     <Text style={styles.headerSubtitle} numberOfLines={1} ellipsizeMode="tail">
                       {subtitle}
                     </Text>
@@ -173,7 +177,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                 activeOpacity={0.7}
                 accessibilityLabel="Follow-up Notifications"
               >
-                <Bell size={18} color="#FFFFFF" />
+                <Bell size={18} color="#6B7280" />
                 {unreadNotifications > 0 ? (
                   <View style={styles.bellBadge}>
                     <Text style={styles.bellBadgeText}>{unreadNotifications}</Text>
@@ -217,7 +221,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
 const styles = StyleSheet.create({
   shellContainer: {
     flex: 1,
-    backgroundColor: '#059669',
+    backgroundColor: '#FFFFFF',
     paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   shellLayout: {
@@ -231,19 +235,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   header: {
-    height: 60,
-    backgroundColor: '#059669',
-    borderBottomWidth: 0,
+    height: 56,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    ...shadows.card,
   },
   mobileSubHeader: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#E5E7EB',
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
@@ -260,7 +264,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -277,15 +283,14 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: borderRadius.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+    fontWeight: '500',
+    color: '#1F2937',
   },
   headerBranchBadge: {
     flexDirection: 'row',
@@ -320,8 +325,8 @@ const styles = StyleSheet.create({
     color: '#4338CA',
   },
   headerSubtitle: {
-    fontSize: 11,
-    color: '#ECFDF5',
+    fontSize: 12,
+    color: '#6B7280',
     marginTop: 1,
   },
   breadcrumbRightRow: {
@@ -350,11 +355,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: '#F9FAFB',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: '#E5E7EB',
     position: 'relative',
   },
   bellBadge: {
@@ -378,6 +383,6 @@ const styles = StyleSheet.create({
   },
   contentWrap: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
 });
