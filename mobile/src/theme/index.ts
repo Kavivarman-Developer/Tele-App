@@ -4,31 +4,31 @@
  */
 
 export const colors = {
-  // Brand & Primary (NeoDove Signature Royal Purple)
-  primary: '#5B2C82', // NeoDove purple
-  primaryHover: '#471B69',
-  primaryDark: '#3E155C',
-  primaryLight: '#F3E8FF', // soft lilac
-  primarySubtle: '#EDE9FE',
-  headerBg: '#5B2C82', // Solid NeoDove Purple Header
+  // Brand & Primary (NeoDove Emerald Green - "color green la erukattum")
+  primary: '#059669', // Emerald 600
+  primaryHover: '#047857', // Emerald 700
+  primaryDark: '#065F46', // Emerald 800
+  primaryLight: '#ECFDF5', // soft emerald mint
+  primarySubtle: '#D1FAE5', // emerald 100
+  headerBg: '#059669', // Solid Emerald Green Header
 
   // Background & Surfaces
-  background: '#F5F0FA', // soft lavender/lilac background as seen in NeoDove
+  background: '#F8FAFC', // clean modern slate/mint background
   surface: '#FFFFFF', // pure white card surface
-  surfaceLight: '#FAF5FF',
-  surfaceMuted: '#F5F0FA',
-  overlay: 'rgba(91, 44, 130, 0.45)',
+  surfaceLight: '#F0FDF4', // soft green surface
+  surfaceMuted: '#F8FAFC',
+  overlay: 'rgba(5, 150, 105, 0.45)',
 
-  // NeoDove Report Cards Colors
+  // NeoDove Report Cards Colors (Exact match of Image 4)
   reportAttempted: '#6347D1', // Purple
   reportConnected: '#EA580C', // Orange
   reportCallTime: '#5B8DEF', // Steel Blue
   reportAvgDuration: '#1D7BF2', // Bright Blue
 
   // Borders & Dividers
-  border: '#E9D5FF', // subtle purple tint border
-  borderSubtle: '#F3E8FF',
-  borderFocus: '#5B2C82',
+  border: '#E2E8F0', // clean border
+  borderSubtle: '#F1F5F9',
+  borderFocus: '#059669',
 
   // Typography
   text: '#0F172A', // slate-900 (High contrast)

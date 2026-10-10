@@ -204,6 +204,7 @@ export type RootStackParamList = {
   MyLeads: { campaignId?: string; campaignName?: string } | undefined;
   FollowUps: undefined;
   CallHistory: undefined;
+  Dashboard: undefined;
   Profile: undefined;
   Team: undefined;
   Campaigns: undefined;

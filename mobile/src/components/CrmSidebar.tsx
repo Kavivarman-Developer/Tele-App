@@ -396,10 +396,10 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#059669',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#4F46E5',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   navBtnActive: {
-    backgroundColor: '#F3E8FF',
+    backgroundColor: '#ECFDF5',
   },
   navLabel: {
     fontSize: 13,
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   navLabelActive: {
-    color: '#5B2C82',
+    color: '#059669',
     fontWeight: '700',
   },
   navBadge: {

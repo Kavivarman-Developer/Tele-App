@@ -171,6 +171,7 @@ export const RootNavigator: React.FC = () => {
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="LeadDetail" component={LeadDetailScreen} />
             <Stack.Screen name="Dispose" component={DisposeScreen} />
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
             <Stack.Screen name="AddWalkInLead" component={AddWalkInLeadScreen} />
           </>
         )}

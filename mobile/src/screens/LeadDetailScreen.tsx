@@ -447,7 +447,7 @@ export const LeadDetailScreen: React.FC = () => {
                   style={styles.pencilBtn}
                   activeOpacity={0.7}
                 >
-                  <Edit2 size={13} color="#5B2C82" />
+                  <Edit2 size={13} color="#059669" />
                 </TouchableOpacity>
               </View>
 
@@ -459,13 +459,13 @@ export const LeadDetailScreen: React.FC = () => {
                   style={styles.pencilBtn}
                   activeOpacity={0.7}
                 >
-                  <Edit2 size={13} color="#5B2C82" />
+                  <Edit2 size={13} color="#059669" />
                 </TouchableOpacity>
               </View>
 
               <View style={[styles.contactRow, { borderBottomWidth: 0 }]}>
                 <Text style={styles.contactLabel}>Campaign name: </Text>
-                <Text style={[styles.contactValue, { color: '#5B2C82', fontWeight: '800' }]}>
+                <Text style={[styles.contactValue, { color: '#059669', fontWeight: '800' }]}>
                   {campaignName}
                 </Text>
               </View>
@@ -1051,12 +1051,12 @@ export const LeadDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   headerBar: {
     height: 56,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabItemActive: {
-    borderBottomColor: '#5B2C82',
+    borderBottomColor: '#059669',
   },
   tabItemText: {
     fontSize: 11,
@@ -1098,12 +1098,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   tabItemTextActive: {
-    color: '#5B2C82',
+    color: '#059669',
     fontWeight: '800',
   },
   scrollContainer: {
     flex: 1,
-    backgroundColor: '#F5F0FA',
+    backgroundColor: '#F8FAFC',
   },
   scrollContent: {
     padding: 16,
@@ -1111,7 +1111,7 @@ const styles = StyleSheet.create({
   },
   scheduledLeadsBanner: {
     alignSelf: 'center',
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     paddingVertical: 8,
     paddingHorizontal: 28,
     borderRadius: borderRadius.full,
@@ -1128,7 +1128,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E9D5FF',
+    borderColor: '#E2E8F0',
     ...shadows.soft,
   },
   contactRow: {
@@ -1136,7 +1136,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3E8FF',
+    borderBottomColor: '#F1F5F9',
   },
   contactLabel: {
     fontSize: 13,
@@ -1164,7 +1164,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   purpleViewBtn: {
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     paddingHorizontal: 22,
     paddingVertical: 7,
     borderRadius: borderRadius.full,
@@ -1217,13 +1217,13 @@ const styles = StyleSheet.create({
   callNowPillBtn: {
     flex: 1,
     height: 50,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     borderRadius: borderRadius.full,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: '#5B2C82',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
@@ -1239,10 +1239,10 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#5B2C82',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
@@ -1256,7 +1256,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E9D5FF',
+    borderColor: '#E2E8F0',
     ...shadows.soft,
   },
   formLabel: {
@@ -1302,13 +1302,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioOuterSelected: {
-    borderColor: '#5B2C82',
+    borderColor: '#059669',
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
   },
   radioLabel: {
     fontSize: 13,
@@ -1343,8 +1343,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   checkboxBoxChecked: {
-    backgroundColor: '#5B2C82',
-    borderColor: '#5B2C82',
+    backgroundColor: '#059669',
+    borderColor: '#059669',
   },
   checkboxTitle: {
     fontSize: 13,
@@ -1381,12 +1381,12 @@ const styles = StyleSheet.create({
   },
   purpleSubmitBtn: {
     height: 52,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 6,
-    shadowColor: '#5B2C82',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
@@ -1444,7 +1444,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   pickerItemRowSelected: {
-    backgroundColor: '#F3E8FF',
+    backgroundColor: '#ECFDF5',
   },
   pickerItemText: {
     fontSize: 13.5,
@@ -1452,7 +1452,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   pickerItemTextSelected: {
-    color: '#5B2C82',
+    color: '#059669',
     fontWeight: '800',
   },
 });

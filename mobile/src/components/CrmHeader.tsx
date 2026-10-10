@@ -67,7 +67,7 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({
             >
               <RefreshCw
                 size={16}
-                color={isRefreshing ? '#FFFFFF' : '#E9D5FF'}
+                color={isRefreshing ? '#FFFFFF' : '#ECFDF5'}
               />
             </TouchableOpacity>
           ) : null}
@@ -103,7 +103,7 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({
 const styles = StyleSheet.create({
   header: {
     height: 60,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   },
   subtitleText: {
     fontSize: 11,
-    color: '#E9D5FF',
+    color: '#ECFDF5',
     marginTop: 1,
     fontWeight: '500',
   },
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 2,
     borderWidth: 1.5,
-    borderColor: '#5B2C82',
+    borderColor: '#059669',
   },
   bellBadgeText: {
     color: '#FFFFFF',

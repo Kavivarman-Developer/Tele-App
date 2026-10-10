@@ -439,9 +439,9 @@ export const DashboardScreen: React.FC = () => {
   });
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#5B2C82', paddingTop: Platform.OS === 'android' ? 6 : 0 }} edges={['top']}>
-      {/* Top Header - Deep Purple #5B2C82 (Image 4 Match) */}
-      <View style={{ backgroundColor: '#5B2C82', paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#059669', paddingTop: Platform.OS === 'android' ? 6 : 0 }} edges={['top']}>
+      {/* Top Header - Emerald Green #059669 (Clean & Modern) */}
+      <View style={{ backgroundColor: '#059669', paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={() => useSidebarStore.getState().toggleDrawer()} style={{ padding: 4 }}>
             <Menu size={22} color="#FFFFFF" />
@@ -486,10 +486,10 @@ export const DashboardScreen: React.FC = () => {
                     isSelected ? 'bg-white shadow-xs' : ''
                   }`}
                 >
-                  <Icon size={14} color={isSelected ? '#5B2C82' : '#64748B'} />
+                  <Icon size={14} color={isSelected ? '#059669' : '#64748B'} />
                   <Text
                     className={`text-xs font-bold ${
-                      isSelected ? 'text-purple-900' : 'text-slate-600'
+                      isSelected ? 'text-emerald-800' : 'text-slate-600'
                     }`}
                   >
                     {tab.label}
@@ -501,22 +501,22 @@ export const DashboardScreen: React.FC = () => {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110, backgroundColor: '#F5F0FA' }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110, backgroundColor: '#F8FAFC' }} showsVerticalScrollIndicator={false}>
         {/* =========================================================================
             NEODOVE "MY REPORT" SCREEN (Exact match of Image 4)
            ========================================================================= */}
         {viewMode === 'REPORT' && (
           <View style={{ marginBottom: 20 }}>
-            {/* Top Date Range Banner (Deep Purple #5B2C82) */}
+            {/* Top Date Range Banner (Emerald Green #059669) */}
             <View
               style={{
-                backgroundColor: '#5B2C82',
+                backgroundColor: '#059669',
                 borderRadius: 14,
                 paddingVertical: 14,
                 paddingHorizontal: 16,
                 marginBottom: 16,
                 alignItems: 'center',
-                shadowColor: '#5B2C82',
+                shadowColor: '#059669',
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.25,
                 shadowRadius: 4,
@@ -526,7 +526,7 @@ export const DashboardScreen: React.FC = () => {
               <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 }}>
                 FROM 01-10-2026 - TO 10-10-2026
               </Text>
-              <Text style={{ color: '#E9D5FF', fontWeight: '700', fontSize: 12, marginTop: 4 }}>
+              <Text style={{ color: '#ECFDF5', fontWeight: '700', fontSize: 12, marginTop: 4 }}>
                 Duration : 10 Day(s)
               </Text>
             </View>
@@ -647,7 +647,7 @@ export const DashboardScreen: React.FC = () => {
                 padding: 4,
                 marginBottom: 16,
                 borderWidth: 1,
-                borderColor: '#E9D5FF',
+                borderColor: '#E2E8F0',
               }}
             >
               <TouchableOpacity
@@ -656,7 +656,7 @@ export const DashboardScreen: React.FC = () => {
                   paddingVertical: 10,
                   alignItems: 'center',
                   borderRadius: 10,
-                  backgroundColor: reportSubTab === 'LOGIN_REPORT' ? '#5B2C82' : 'transparent',
+                  backgroundColor: reportSubTab === 'LOGIN_REPORT' ? '#059669' : 'transparent',
                 }}
                 onPress={() => setReportSubTab('LOGIN_REPORT')}
               >
@@ -677,7 +677,7 @@ export const DashboardScreen: React.FC = () => {
                   paddingVertical: 10,
                   alignItems: 'center',
                   borderRadius: 10,
-                  backgroundColor: reportSubTab === 'CALL_REPORT' ? '#5B2C82' : 'transparent',
+                  backgroundColor: reportSubTab === 'CALL_REPORT' ? '#059669' : 'transparent',
                 }}
                 onPress={() => setReportSubTab('CALL_REPORT')}
               >
@@ -708,13 +708,13 @@ export const DashboardScreen: React.FC = () => {
                       borderRadius: 12,
                       padding: 14,
                       borderWidth: 1,
-                      borderColor: '#E9D5FF',
+                      borderColor: '#E2E8F0',
                     }}
                   >
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
                       <Text style={{ fontWeight: '800', fontSize: 13.5, color: '#0F172A' }}>{day.date}</Text>
-                      <View style={{ backgroundColor: '#F3E8FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                        <Text style={{ color: '#5B2C82', fontSize: 11, fontWeight: '700' }}>{day.connectRate} Connected</Text>
+                      <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ color: '#059669', fontSize: 11, fontWeight: '700' }}>{day.connectRate} Connected</Text>
                       </View>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
@@ -735,7 +735,7 @@ export const DashboardScreen: React.FC = () => {
                       borderRadius: 12,
                       padding: 14,
                       borderWidth: 1,
-                      borderColor: '#E9D5FF',
+                      borderColor: '#E2E8F0',
                       flexDirection: 'row',
                       justifyContent: 'space-between',
                       alignItems: 'center',
@@ -763,7 +763,7 @@ export const DashboardScreen: React.FC = () => {
             EXECUTIVE DASHBOARD: Branch Selector, 4 KPIs, Funnel, Leaderboard (Management Mode)
            ========================================================================= */}
         {viewMode === 'MANAGEMENT' && (
-          <>
+          <View style={{ gap: 16 }}>
           <View style={{ marginBottom: 20 }}>
           {/* Branch Pill Selector */}
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
@@ -778,9 +778,9 @@ export const DashboardScreen: React.FC = () => {
                     paddingHorizontal: 12,
                     paddingVertical: 6,
                     borderRadius: 8,
-                    backgroundColor: isSelected ? '#4F46E5' : '#FFFFFF',
+                    backgroundColor: isSelected ? '#059669' : '#FFFFFF',
                     borderWidth: 1,
-                    borderColor: isSelected ? '#4F46E5' : '#E2E8F0',
+                    borderColor: isSelected ? '#059669' : '#E2E8F0',
                   }}
                 >
                   <Text
@@ -1882,7 +1882,7 @@ export const DashboardScreen: React.FC = () => {
             </View>
           </View>
         )}
-        </>
+        </View>
         )}
       </ScrollView>
     </SafeAreaView>

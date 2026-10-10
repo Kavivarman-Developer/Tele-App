@@ -217,7 +217,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
 const styles = StyleSheet.create({
   shellContainer: {
     flex: 1,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   shellLayout: {
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   },
   header: {
     height: 60,
-    backgroundColor: '#5B2C82',
+    backgroundColor: '#059669',
     borderBottomWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 11,
-    color: '#E9D5FF',
+    color: '#ECFDF5',
     marginTop: 1,
   },
   breadcrumbRightRow: {
