@@ -39,11 +39,11 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({
               onPress={() => navigation.goBack()}
               activeOpacity={0.7}
             >
-              <ArrowLeft size={20} color={colors.text} />
+              <ArrowLeft size={20} color="#FFFFFF" />
             </TouchableOpacity>
           ) : (
             <View style={styles.brandMark}>
-              <Text style={styles.brandMarkText}>Tell</Text>
+              <Text style={styles.brandMarkText}>ND</Text>
             </View>
           )}
 
@@ -67,7 +67,7 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({
             >
               <RefreshCw
                 size={16}
-                color={isRefreshing ? colors.primary : colors.textMuted}
+                color={isRefreshing ? '#FFFFFF' : '#E9D5FF'}
               />
             </TouchableOpacity>
           ) : null}
@@ -79,7 +79,7 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({
             activeOpacity={0.7}
             accessibilityLabel="Follow-up Notifications"
           >
-            <Bell size={16} color={colors.text} />
+            <Bell size={18} color="#FFFFFF" />
             {unreadCount > 0 ? (
               <View style={styles.bellBadge}>
                 <Text style={styles.bellBadgeText}>{unreadCount}</Text>
@@ -102,15 +102,13 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({
 
 const styles = StyleSheet.create({
   header: {
-    height: 64,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    height: 60,
+    backgroundColor: '#5B2C82',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    ...shadows.soft,
+    ...shadows.card,
   },
   leftContainer: {
     flexDirection: 'row',
@@ -121,7 +119,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -130,13 +128,13 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: borderRadius.md,
-    backgroundColor: '#10B981',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
   brandMarkText: {
-    color: colors.textInverse,
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -147,11 +145,11 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   subtitleText: {
-    fontSize: 10,
-    color: colors.textQuiet,
+    fontSize: 11,
+    color: '#E9D5FF',
     marginTop: 1,
     fontWeight: '500',
   },
@@ -164,7 +162,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -172,15 +170,15 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
   },
   bellBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 3,
+    right: 3,
     backgroundColor: '#EF4444',
     minWidth: 14,
     height: 14,
@@ -189,7 +187,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 2,
     borderWidth: 1.5,
-    borderColor: '#FFFFFF',
+    borderColor: '#5B2C82',
   },
   bellBadgeText: {
     color: '#FFFFFF',

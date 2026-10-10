@@ -343,6 +343,51 @@ export const HomeScreen: React.FC = () => {
     return queueLeads.filter((l) => l._id !== heroLead._id).slice(0, 5);
   }, [queueLeads, heroLead]);
 
+  // NeoDove 3 Calling Queues (Image 3)
+  const newUnattemptedLeads = useMemo(() => {
+    return (myLeadsData?.leads || []).filter(
+      (l) =>
+        (!l.attemptCount || l.attemptCount === 0) &&
+        l.status !== 'CLOSED' &&
+        l.stage !== 'Closed' &&
+        l.stage !== 'Lost',
+    );
+  }, [myLeadsData]);
+
+  const followUpLeads = useMemo(() => {
+    return (myLeadsData?.leads || []).filter(
+      (l) =>
+        (l.stage === 'Follow Up' || l.stage === 'Follow-up' || !!l.nextFollowUpAt) &&
+        l.status !== 'CLOSED' &&
+        l.stage !== 'Closed' &&
+        l.stage !== 'Lost',
+    );
+  }, [myLeadsData]);
+
+  const notConnectedLeads = useMemo(() => {
+    return (myLeadsData?.leads || []).filter(
+      (l) =>
+        (l.stage === 'Not connected' ||
+          l.stage === 'NOT CONNECTED' ||
+          (l.attemptCount && l.attemptCount > 0 && l.stage === 'New')) &&
+        l.status !== 'CLOSED',
+    );
+  }, [myLeadsData]);
+
+  const handleStartCallingQueue = (targetQueue: Lead[], queueTitle: string) => {
+    if (targetQueue.length === 0) {
+      Alert.alert('Queue Empty', `No leads currently in "${queueTitle}".`);
+      return;
+    }
+    const firstLead = targetQueue[0];
+    navigation.navigate('LeadDetail', {
+      lead: firstLead,
+      queue: targetQueue,
+      queueIndex: 0,
+      initialTab: 'LEAD INFO',
+    });
+  };
+
   // ==============================================================
   // NATIVE CALLING & AUTOMATIC CALL DETECTION (Like NeoDove)
   // ==============================================================
@@ -664,6 +709,98 @@ export const HomeScreen: React.FC = () => {
             <View style={styles.metricCol}>
               <Text style={styles.metricVal}>{avgDurationFormatted}</Text>
               <Text style={styles.metricLbl}>Avg Talk (mm:ss)</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 3 NEODOVE QUEUE CARDS (Exact match of Image 3) */}
+        <View style={{ gap: 14, marginBottom: 16 }}>
+          {/* Card 1: New/Un-attempted Leads */}
+          <View style={styles.neoQueueCard}>
+            <View style={styles.neoQueueCardHeader}>
+              <Text style={styles.neoQueueCardTitle}>New/Un-attempted Leads</Text>
+              <View style={styles.neoQueueCountBadge}>
+                <Text style={styles.neoQueueCountBadgeText}>{newUnattemptedLeads.length} Leads</Text>
+              </View>
+            </View>
+            <Text style={styles.neoQueueCardSub}>Leads, which haven't been called so far</Text>
+            <View style={styles.neoQueueActionsRow}>
+              <TouchableOpacity
+                style={styles.neoQueueViewBtn}
+                onPress={() => {
+                  setActiveTab('queue');
+                  navigation.navigate('MyLeads');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.neoQueueViewBtnText}>View</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.neoQueueCallBtn}
+                onPress={() => handleStartCallingQueue(newUnattemptedLeads, 'New/Un-attempted Leads')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.neoQueueCallBtnText}>Start Calling</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Card 2: Follow-up Leads */}
+          <View style={styles.neoQueueCard}>
+            <View style={styles.neoQueueCardHeader}>
+              <Text style={styles.neoQueueCardTitle}>Follow-up Leads</Text>
+              <View style={styles.neoQueueCountBadge}>
+                <Text style={styles.neoQueueCountBadgeText}>{followUpLeads.length} Leads</Text>
+              </View>
+            </View>
+            <Text style={styles.neoQueueCardSub}>Leads, which are scheduled to be called later</Text>
+            <View style={styles.neoQueueActionsRow}>
+              <TouchableOpacity
+                style={styles.neoQueueViewBtn}
+                onPress={() => {
+                  setActiveTab('callbacks');
+                  navigation.navigate('FollowUps');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.neoQueueViewBtnText}>View</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.neoQueueCallBtn}
+                onPress={() => handleStartCallingQueue(followUpLeads, 'Follow-up Leads')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.neoQueueCallBtnText}>Start Calling</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Card 3: Not Connected Leads */}
+          <View style={styles.neoQueueCard}>
+            <View style={styles.neoQueueCardHeader}>
+              <Text style={styles.neoQueueCardTitle}>Not Connected Leads</Text>
+              <View style={styles.neoQueueCountBadge}>
+                <Text style={styles.neoQueueCountBadgeText}>{notConnectedLeads.length} Leads</Text>
+              </View>
+            </View>
+            <Text style={styles.neoQueueCardSub}>Leads, which were not connected in previous attempt</Text>
+            <View style={styles.neoQueueActionsRow}>
+              <TouchableOpacity
+                style={styles.neoQueueViewBtn}
+                onPress={() => {
+                  navigation.navigate('MyLeads');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.neoQueueViewBtnText}>View</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.neoQueueCallBtn}
+                onPress={() => handleStartCallingQueue(notConnectedLeads, 'Not Connected Leads')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.neoQueueCallBtnText}>Start Calling</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1744,5 +1881,79 @@ const styles = StyleSheet.create({
   agentMetricLbl: {
     fontSize: 9,
     color: '#64748B',
+  },
+
+  // NeoDove Queue Cards (Image 3)
+  neoQueueCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    ...shadows.card,
+  },
+  neoQueueCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  neoQueueCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  neoQueueCountBadge: {
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+  },
+  neoQueueCountBadgeText: {
+    color: '#5B2C82',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  neoQueueCardSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  neoQueueActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  neoQueueViewBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: '#5B2C82',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  neoQueueViewBtnText: {
+    color: '#5B2C82',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  neoQueueCallBtn: {
+    flex: 1.4,
+    height: 42,
+    borderRadius: borderRadius.full,
+    backgroundColor: '#5B2C82',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#5B2C82',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  neoQueueCallBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
   },
 });

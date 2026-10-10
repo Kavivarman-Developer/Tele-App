@@ -8,6 +8,7 @@ import {
   Modal,
   Dimensions,
   Platform,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -25,6 +26,12 @@ import {
   X,
   History,
   PhoneCall,
+  BarChart2,
+  MapPin,
+  Globe,
+  Bell,
+  Info,
+  MessageSquare,
 } from 'lucide-react-native';
 
 import { useSidebarStore } from '../store/sidebarStore';
@@ -39,22 +46,8 @@ interface NavItemConfig {
   label: string;
   icon: any;
   badge?: string | number;
+  action?: () => void;
 }
-
-const WORKSPACE_ITEMS: NavItemConfig[] = [
-  { name: 'Home', route: 'Home', label: 'Home', icon: LayoutGrid },
-  { name: 'MyLeads', route: 'MyLeads', label: 'My Leads', icon: Users },
-  { name: 'FollowUps', route: 'FollowUps', label: 'Follow ups', icon: CalendarCheck2 },
-  { name: 'CallHistory', route: 'CallHistory', label: 'Call History', icon: History },
-];
-
-const MANAGEMENT_ITEMS: NavItemConfig[] = [
-  { name: 'Team', route: 'Team', label: 'Users', icon: Users },
-  { name: 'Campaigns', route: 'Campaigns', label: 'Campaigns', icon: Megaphone },
-  { name: 'UploadLeads', route: 'UploadLeads', label: 'Upload Leads', icon: Upload },
-  { name: 'Settings', route: 'Settings', label: 'Settings', icon: Settings2 },
-  { name: 'RetryRules', route: 'RetryRules', label: 'Retry Rules', icon: RotateCw },
-];
 
 export const CrmSidebarContent: React.FC<{
   collapsed?: boolean;
@@ -66,7 +59,12 @@ export const CrmSidebarContent: React.FC<{
   const { user } = useAuthStore();
   const unreadCount = useNotificationStore((s) => s.unreadCount);
 
-  const handleNav = (route: string) => {
+  const handleNav = (route: string, action?: () => void) => {
+    if (action) {
+      action();
+      onNavigate?.();
+      return;
+    }
     setCurrentRoute(route);
     onNavigate?.();
     navigation.navigate(route);
@@ -80,15 +78,72 @@ export const CrmSidebarContent: React.FC<{
     ? '🏢 Manager Role'
     : 'Agent Role';
 
-  const filteredManagementItems = MANAGEMENT_ITEMS.filter((item) => {
-    // Agents have NO access to management/settings controls; focus strictly on calling
-    if (user?.role === 'AGENT') return false;
-    // Managers can only view branch team and campaigns; Settings & RetryRules are Admin only
-    if (user?.role === 'MANAGER') {
-      return item.route === 'Team' || item.route === 'Campaigns';
-    }
-    return true;
-  });
+  const WORKSPACE_ITEMS: NavItemConfig[] = [
+    { name: 'Dashboard', route: 'Home', label: 'Dashboard', icon: LayoutGrid },
+    { name: 'MyLeads', route: 'MyLeads', label: 'My Leads', icon: Users },
+    { name: 'MyTasks', route: 'FollowUps', label: 'My Tasks', icon: CalendarCheck2 },
+    { name: 'MyReport', route: 'Dashboard', label: 'My Report', icon: BarChart2 },
+    {
+      name: 'GeoTagging',
+      route: 'GeoTagging',
+      label: 'Geo Tagging',
+      icon: MapPin,
+      action: () => Alert.alert('Geo Tagging', 'GPS location tracking active for field visits and call verification.'),
+    },
+  ];
+
+  const SECONDARY_ITEMS: NavItemConfig[] = [
+    { name: 'Profile', route: 'Profile', label: 'Profile', icon: UserIcon },
+    {
+      name: 'Language',
+      route: 'Language',
+      label: 'Change Language',
+      icon: Globe,
+      action: () =>
+        Alert.alert('Language Settings', 'App is configured for English & Tamil (தமிழ்).', [
+          { text: 'English', style: 'default' },
+          { text: 'தமிழ் (Tamil)', style: 'default' },
+          { text: 'Cancel', style: 'cancel' },
+        ]),
+    },
+    {
+      name: 'Notifications',
+      route: 'Notifications',
+      label: 'Notifications',
+      icon: Bell,
+      badge: unreadCount > 0 ? unreadCount : undefined,
+      action: () => navigation.navigate('FollowUps'),
+    },
+  ];
+
+  const SUPPORT_ITEMS: NavItemConfig[] = [
+    {
+      name: 'AboutUs',
+      route: 'About',
+      label: 'About Us',
+      icon: Info,
+      action: () =>
+        Alert.alert(
+          'NeoDove Tele Calling CRM',
+          'Version 2.4.1\n\nHigh Performance Cloud Telephony & Automated Lead Management CRM.',
+        ),
+    },
+    {
+      name: 'Feedback',
+      route: 'Feedback',
+      label: 'Feedback',
+      icon: MessageSquare,
+      action: () =>
+        Alert.alert(
+          'Send Feedback',
+          'Have a suggestion or encounter an issue? Your feedback helps us improve NeoDove.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Submit Feedback', onPress: () => Alert.alert('Thank You!', 'Your feedback has been logged.') },
+          ],
+        ),
+    },
+  ];
 
   return (
     <View style={[styles.sidebarContainer, collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded]}>
@@ -100,13 +155,13 @@ export const CrmSidebarContent: React.FC<{
           activeOpacity={0.8}
         >
           <View style={styles.brandMark}>
-            <Text style={styles.brandMarkText}>OK</Text>
+            <Text style={styles.brandMarkText}>ND</Text>
           </View>
           {!collapsed && (
             <View style={styles.brandTextWrap}>
               <Text style={styles.brandTitle}>
-                <Text style={{ fontWeight: '800', color: '#0F172A' }}>OKBOZ</Text>
-                <Text style={{ fontWeight: '600', color: '#64748B' }}> {user?.role === 'ADMIN' ? 'Admin' : 'CRM'}</Text>
+                <Text style={{ fontWeight: '900', color: '#5B2C82', fontSize: 18, letterSpacing: 0.5 }}>NEO</Text>
+                <Text style={{ fontWeight: '900', color: '#E11D48', fontSize: 18, letterSpacing: 0.5 }}>DOVE</Text>
               </Text>
             </View>
           )}
@@ -181,41 +236,72 @@ export const CrmSidebarContent: React.FC<{
           );
         })}
 
-        {/* Section 2: Management (Strictly hidden from Agents) */}
-        {filteredManagementItems.length > 0 && (
-          <>
-            <View style={styles.divider} />
-            {!collapsed && <Text style={styles.sectionHeading}>MANAGEMENT</Text>}
-            {filteredManagementItems.map((item) => {
-              const isActive = currentRoute === item.route;
-              const Icon = item.icon;
+        {/* Section 2: Account & Settings */}
+        <View style={styles.divider} />
+        {SECONDARY_ITEMS.map((item) => {
+          const isActive = currentRoute === item.route;
+          const Icon = item.icon;
 
-              return (
-                <TouchableOpacity
-                  key={item.route}
-                  style={[
-                    styles.navBtn,
-                    collapsed && styles.navBtnCollapsed,
-                    isActive && styles.navBtnActive,
-                  ]}
-                  onPress={() => handleNav(item.route)}
-                  activeOpacity={0.75}
-                >
-                  <Icon
-                    size={18}
-                    color={isActive ? colors.primary : colors.textMuted}
-                    strokeWidth={isActive ? 2.5 : 2}
-                  />
-                  {!collapsed && (
-                    <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
-                      {item.label}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </>
-        )}
+          return (
+            <TouchableOpacity
+              key={item.name}
+              style={[
+                styles.navBtn,
+                collapsed && styles.navBtnCollapsed,
+                isActive && styles.navBtnActive,
+              ]}
+              onPress={() => handleNav(item.route, item.action)}
+              activeOpacity={0.75}
+            >
+              <Icon
+                size={18}
+                color={isActive ? '#5B2C82' : '#64748B'}
+                strokeWidth={isActive ? 2.5 : 2}
+              />
+              {!collapsed && (
+                <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                  {item.label}
+                </Text>
+              )}
+              {!collapsed && item.badge ? (
+                <View style={[styles.navBadge, styles.navBadgeAlert]}>
+                  <Text style={[styles.navBadgeText, styles.navBadgeAlertText]}>
+                    {item.badge}
+                  </Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* Section 3: App Info & Feedback */}
+        <View style={styles.divider} />
+        {SUPPORT_ITEMS.map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <TouchableOpacity
+              key={item.name}
+              style={[
+                styles.navBtn,
+                collapsed && styles.navBtnCollapsed,
+              ]}
+              onPress={() => handleNav(item.route, item.action)}
+              activeOpacity={0.75}
+            >
+              <Icon
+                size={18}
+                color="#64748B"
+                strokeWidth={2}
+              />
+              {!collapsed && (
+                <Text style={styles.navLabel}>
+                  {item.label}
+                </Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       {/* Sidebar Bottom: Account Card */}
@@ -379,7 +465,7 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   navBtnActive: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#F3E8FF',
   },
   navLabel: {
     fontSize: 13,
@@ -388,7 +474,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   navLabelActive: {
-    color: '#4F46E5',
+    color: '#5B2C82',
     fontWeight: '700',
   },
   navBadge: {

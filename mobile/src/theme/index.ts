@@ -4,24 +4,31 @@
  */
 
 export const colors = {
-  // Brand & Primary (Modern Indigo/Blue)
-  primary: '#4F46E5', // indigo-600
-  primaryHover: '#4338CA', // indigo-700
-  primaryDark: '#3730A3', // indigo-800
-  primaryLight: '#EEF2FF', // indigo-50
-  primarySubtle: '#E0E7FF', // indigo-100
+  // Brand & Primary (NeoDove Signature Royal Purple)
+  primary: '#5B2C82', // NeoDove purple
+  primaryHover: '#471B69',
+  primaryDark: '#3E155C',
+  primaryLight: '#F3E8FF', // soft lilac
+  primarySubtle: '#EDE9FE',
+  headerBg: '#5B2C82', // Solid NeoDove Purple Header
 
   // Background & Surfaces
-  background: '#F8FAFC', // clean slate-50
+  background: '#F5F0FA', // soft lavender/lilac background as seen in NeoDove
   surface: '#FFFFFF', // pure white card surface
-  surfaceLight: '#F1F5F9', // slate-100
-  surfaceMuted: '#F8FAFC',
-  overlay: 'rgba(15, 23, 42, 0.4)',
+  surfaceLight: '#FAF5FF',
+  surfaceMuted: '#F5F0FA',
+  overlay: 'rgba(91, 44, 130, 0.45)',
+
+  // NeoDove Report Cards Colors
+  reportAttempted: '#6347D1', // Purple
+  reportConnected: '#EA580C', // Orange
+  reportCallTime: '#5B8DEF', // Steel Blue
+  reportAvgDuration: '#1D7BF2', // Bright Blue
 
   // Borders & Dividers
-  border: '#E2E8F0', // slate-200
-  borderSubtle: '#F1F5F9', // slate-100
-  borderFocus: '#4F46E5',
+  border: '#E9D5FF', // subtle purple tint border
+  borderSubtle: '#F3E8FF',
+  borderFocus: '#5B2C82',
 
   // Typography
   text: '#0F172A', // slate-900 (High contrast)

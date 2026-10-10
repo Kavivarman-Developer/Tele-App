@@ -77,7 +77,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
 
   return (
     <SafeAreaView style={styles.shellContainer} edges={['top']}>
-      <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+      <RNStatusBar barStyle="light-content" backgroundColor="#5B2C82" translucent={false} />
       <View style={styles.shellLayout}>
         {/* Persistent sidebar for wide screen/web */}
         {isWide && (
@@ -95,7 +95,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                   onPress={() => navigation.goBack()}
                   activeOpacity={0.7}
                 >
-                  <ArrowLeft size={18} color={colors.text} />
+                  <ArrowLeft size={18} color="#FFFFFF" />
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
@@ -105,9 +105,9 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                   accessibilityLabel="Toggle sidebar"
                 >
                   {isCollapsed && isWide ? (
-                    <PanelLeftOpen size={18} color={colors.text} />
+                    <PanelLeftOpen size={18} color="#FFFFFF" />
                   ) : (
-                    <PanelLeftClose size={18} color={colors.text} />
+                    <PanelLeftClose size={18} color="#FFFFFF" />
                   )}
                 </TouchableOpacity>
               )}
@@ -173,7 +173,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                 activeOpacity={0.7}
                 accessibilityLabel="Follow-up Notifications"
               >
-                <Bell size={17} color={colors.text} />
+                <Bell size={18} color="#FFFFFF" />
                 {unreadNotifications > 0 ? (
                   <View style={styles.bellBadge}>
                     <Text style={styles.bellBadgeText}>{unreadNotifications}</Text>
@@ -217,7 +217,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
 const styles = StyleSheet.create({
   shellContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#5B2C82',
     paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   shellLayout: {
@@ -231,18 +231,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   header: {
-    height: 64,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    height: 60,
+    backgroundColor: '#5B2C82',
+    borderBottomWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    ...shadows.soft,
+    ...shadows.card,
   },
   mobileSubHeader: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     paddingHorizontal: 16,
@@ -261,11 +260,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
     flexShrink: 0,
   },
   headerTitleGroup: {
@@ -280,16 +277,14 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.text,
+    color: '#FFFFFF',
     letterSpacing: -0.3,
   },
   headerBranchBadge: {
@@ -326,7 +321,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 11,
-    color: colors.textMuted,
+    color: '#E9D5FF',
     marginTop: 1,
   },
   breadcrumbRightRow: {

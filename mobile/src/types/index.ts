@@ -215,6 +215,7 @@ export type RootStackParamList = {
     lead: Lead;
     queue?: Lead[];
     queueIndex?: number;
+    initialTab?: 'LEAD INFO' | 'CAPTURE INFO' | 'DISPOSE LEAD' | 'OTHER';
   };
   Dispose: {
     lead: Lead;
@@ -223,6 +224,7 @@ export type RootStackParamList = {
     detectionMethod?: 'AUTOMATIC' | 'MANUAL';
     queue?: Lead[];
     queueIndex?: number;
+    initialTab?: 'LEAD INFO' | 'CAPTURE INFO' | 'DISPOSE LEAD' | 'OTHER';
   };
 };
 
