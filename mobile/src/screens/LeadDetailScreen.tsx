@@ -66,7 +66,7 @@ import { getWhatsAppUrl, formatDisplayPhone } from '../utils/phoneUtils';
 type ScreenRouteProp = RouteProp<RootStackParamList, 'LeadDetail'>;
 type ScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-type LeadTab = 'LEAD INFO' | 'CAPTURE INFO' | 'DISPOSE LEAD' | 'OTHER';
+type LeadTab = 'LEAD INFO' | 'DISPOSE LEAD';
 
 const PIPELINE_STATES = [
   'IN PROGRESS',
@@ -87,7 +87,7 @@ export const LeadDetailScreen: React.FC = () => {
 
   const { lead, queue, queueIndex } = route.params;
 
-  // Active top tab
+  // Active top tab (Only 2 clean tabs: LEAD INFO | DISPOSE LEAD)
   const [activeTab, setActiveTab] = useState<LeadTab>(
     (route.params as any)?.initialTab || ((route.name as string) === 'Dispose' ? 'DISPOSE LEAD' : 'LEAD INFO'),
   );
@@ -103,7 +103,7 @@ export const LeadDetailScreen: React.FC = () => {
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   // ==========================================
-  // DISPOSE LEAD TAB STATE (Image 2 Match)
+  // DISPOSE LEAD TAB STATE (Clean Native Dropdowns)
   // ==========================================
   const [selectedState, setSelectedState] = useState<string>(
     lead.stage?.toUpperCase() || 'IN PROGRESS',
@@ -119,18 +119,19 @@ export const LeadDetailScreen: React.FC = () => {
       : 'Cold',
   );
 
-  // Checkboxes for "Select next action*" (Exact match of NeoDove screenshot)
+  // Checkboxes for "Select next action*"
   const [actionNextFollowUp, setActionNextFollowUp] = useState<boolean>(true);
   const [followUpDate, setFollowUpDate] = useState<string | null>(
     lead.nextFollowUpAt || null,
   );
   const [showDatePickerModal, setShowDatePickerModal] = useState<boolean>(false);
 
-  const [actionReassign, setActionReassign] = useState<boolean>(true);
+  // Clean unselected checkboxes by default
+  const [actionReassign, setActionReassign] = useState<boolean>(false);
   const [selectedReassignUserId, setSelectedReassignUserId] = useState<string | null>(null);
   const [showReassignPicker, setShowReassignPicker] = useState<boolean>(false);
 
-  const [actionCopyCampaign, setActionCopyCampaign] = useState<boolean>(true);
+  const [actionCopyCampaign, setActionCopyCampaign] = useState<boolean>(false);
   const [selectedCopyCampaignId, setSelectedCopyCampaignId] = useState<string | null>(null);
   const [showCampaignPicker, setShowCampaignPicker] = useState<boolean>(false);
 
@@ -141,14 +142,6 @@ export const LeadDetailScreen: React.FC = () => {
   const [showEditContactModal, setShowEditContactModal] = useState<boolean>(false);
   const [editName, setEditName] = useState<string>(lead.name);
   const [editPhone, setEditPhone] = useState<string>(lead.phone);
-
-  // Capture Info Questionnaire State
-  const [capturedFields, setCapturedFields] = useState<Record<string, string>>({
-    email: lead.email || '',
-    city: lead.customProperties?.city || '',
-    budget: lead.customProperties?.budget || '',
-    notes: lead.customProperties?.notes || '',
-  });
 
   // Query: Assignable agents
   const { data: usersData } = useQuery({
@@ -270,9 +263,18 @@ export const LeadDetailScreen: React.FC = () => {
         selectedState !== 'SWITCHED OFF' &&
         selectedState !== 'BUSY';
 
+      const notConnectedReason: NotConnectedReason | undefined = !isConnected
+        ? selectedState === 'SWITCHED OFF'
+          ? 'SWITCHED_OFF'
+          : selectedState === 'BUSY'
+          ? 'BUSY'
+          : 'DID_NOT_PICK'
+        : undefined;
+
       return await disposeLead(currentLead._id, {
         phone: currentLead.phone,
         connected: isConnected,
+        notConnectedReason,
         stage: selectedState,
         tag: selectedTag.toUpperCase() as any,
         followUpAt: actionNextFollowUp ? followUpDate : null,
@@ -401,9 +403,9 @@ export const LeadDetailScreen: React.FC = () => {
         <Text style={styles.headerTitle}>Lead Details</Text>
       </View>
 
-      {/* 2. SUBHEADER 4 TABS (LEAD INFO | CAPTURE INFO | DISPOSE LEAD | OTHER) */}
+      {/* 2. SUBHEADER 2 TABS (LEAD INFO | DISPOSE LEAD) */}
       <View style={styles.tabBar}>
-        {(['LEAD INFO', 'CAPTURE INFO', 'DISPOSE LEAD', 'OTHER'] as LeadTab[]).map((tab) => {
+        {(['LEAD INFO', 'DISPOSE LEAD'] as LeadTab[]).map((tab) => {
           const isActive = activeTab === tab;
           return (
             <TouchableOpacity
@@ -546,83 +548,42 @@ export const LeadDetailScreen: React.FC = () => {
                 <Text style={styles.detailValue}>{currentLead.source || 'Uploaded'}</Text>
               </View>
             </View>
+
+            {/* Direct button to Disposition Form */}
+            <TouchableOpacity
+              style={styles.goToDisposeBtn}
+              onPress={() => setActiveTab('DISPOSE LEAD')}
+              activeOpacity={0.85}
+            >
+              <FileText size={16} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.goToDisposeBtnText}>Update Lead Outcome / Dispose ›</Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {/* =========================================================================
-            TAB 2: CAPTURE INFO
-           ========================================================================= */}
-        {activeTab === 'CAPTURE INFO' && (
-          <View style={styles.neoCard}>
-            <Text style={styles.otherDetailsHeading}>Capture Lead Information</Text>
-            <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 14 }}>
-              Record customer requirements, email, address, and survey notes.
-            </Text>
-
-            <View style={{ gap: 12 }}>
-              <View>
-                <Text style={styles.formLabel}>Email Address</Text>
-                <TextInput
-                  value={capturedFields.email}
-                  onChangeText={(val) => setCapturedFields((p) => ({ ...p, email: val }))}
-                  placeholder="customer@domain.com"
-                  placeholderTextColor="#94A3B8"
-                  style={styles.textInput}
-                  keyboardType="email-address"
-                />
-              </View>
-
-              <View>
-                <Text style={styles.formLabel}>City / Location</Text>
-                <TextInput
-                  value={capturedFields.city}
-                  onChangeText={(val) => setCapturedFields((p) => ({ ...p, city: val }))}
-                  placeholder="e.g. Trichy / Chennai"
-                  placeholderTextColor="#94A3B8"
-                  style={styles.textInput}
-                />
-              </View>
-
-              <View>
-                <Text style={styles.formLabel}>Budget / Requirements</Text>
-                <TextInput
-                  value={capturedFields.budget}
-                  onChangeText={(val) => setCapturedFields((p) => ({ ...p, budget: val }))}
-                  placeholder="e.g. ₹5,00,000 / Commercial Project"
-                  placeholderTextColor="#94A3B8"
-                  style={styles.textInput}
-                />
-              </View>
-
-              <View>
-                <Text style={styles.formLabel}>Additional Notes</Text>
-                <TextInput
-                  value={capturedFields.notes}
-                  onChangeText={(val) => setCapturedFields((p) => ({ ...p, notes: val }))}
-                  placeholder="Type notes here..."
-                  placeholderTextColor="#94A3B8"
-                  multiline
-                  numberOfLines={3}
-                  style={[styles.textInput, { minHeight: 70, textAlignVertical: 'top' }]}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.purpleSubmitBtn}
-                onPress={() => toast.success('Lead details saved successfully!', 'Saved')}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.purpleSubmitBtnText}>Save Information</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* =========================================================================
-            TAB 3: DISPOSE LEAD (Exact match of NeoDove media_1791614217084_bb1c3038.jpg)
+            TAB 2: DISPOSE LEAD (Clean Native Dropdown Form)
            ========================================================================= */}
         {activeTab === 'DISPOSE LEAD' && (
           <View style={styles.disposeContainer}>
+            {/* Customer Quick Summary Card */}
+            <View style={styles.leadHeaderBanner}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.leadHeaderName}>{currentLead.name}</Text>
+                <Text style={styles.leadHeaderPhone}>
+                  {formatDisplayPhone(currentLead.phone)} • {campaignName}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.quickDialBtn}
+                onPress={handlePressCall}
+                activeOpacity={0.8}
+              >
+                <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.quickDialBtnText}>{callActive ? 'Calling…' : 'Call'}</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* 1. Update State* */}
             <View style={styles.fieldSection}>
               <Text style={styles.fieldLabel}>
@@ -797,33 +758,6 @@ export const LeadDetailScreen: React.FC = () => {
                 <Text style={styles.purpleSubmitBtnText}>Save & Update Lead</Text>
               )}
             </TouchableOpacity>
-          </View>
-        )}
-
-        {/* =========================================================================
-            TAB 4: OTHER
-           ========================================================================= */}
-        {activeTab === 'OTHER' && (
-          <View style={styles.neoCard}>
-            <Text style={styles.otherDetailsHeading}>System Identifiers & Audit</Text>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Lead ID:</Text>
-              <Text style={styles.detailValue}>{currentLead._id}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Total Dial Attempts:</Text>
-              <Text style={styles.detailValue}>{currentLead.attemptCount || 0}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Branch:</Text>
-              <Text style={styles.detailValue}>{currentLead.branch || user?.branch || 'Trichy'}</Text>
-            </View>
-            <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-              <Text style={styles.detailLabel}>Scheduled Follow-up:</Text>
-              <Text style={[styles.detailValue, { color: '#5B2C82', fontWeight: '700' }]}>
-                {formatDisplayDateTime(currentLead.nextFollowUpAt)}
-              </Text>
-            </View>
           </View>
         )}
       </ScrollView>
@@ -1268,6 +1202,57 @@ const styles = StyleSheet.create({
   },
   disposeContainer: {
     backgroundColor: '#FFFFFF',
+  },
+  leadHeaderBanner: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  leadHeaderName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  leadHeaderPhone: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  quickDialBtn: {
+    backgroundColor: '#059669',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  quickDialBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  goToDisposeBtn: {
+    backgroundColor: '#5B2C82',
+    height: 46,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    gap: 8,
+  },
+  goToDisposeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '700',
   },
   fieldSection: {
     marginBottom: 16,

@@ -138,7 +138,8 @@ export class ActivityService {
       }
 
       // Check if retry rule applies
-      const rule = await RetryRuleService.getRuleByReason(input.notConnectedReason!);
+      const reason = input.notConnectedReason || 'DID_NOT_PICK';
+      const rule = await RetryRuleService.getRuleByReason(reason);
       const agentFollowUp = input.followUpAt ? new Date(input.followUpAt) : null;
       const computedFollowUp = RetryRuleService.calculateRetryFollowUp(
         rule,
@@ -146,14 +147,18 @@ export class ActivityService {
         agentFollowUp,
       );
 
-      if (settings.followUpMandatoryForNotConnected && !computedFollowUp) {
+      if (settings.followUpMandatoryForNotConnected && !computedFollowUp && !agentFollowUp) {
         throw new AppError(
           'followUpAt is mandatory for not-connected calls per organization settings',
           400,
         );
       }
 
-      lead.nextFollowUpAt = computedFollowUp;
+      lead.nextFollowUpAt = agentFollowUp || computedFollowUp;
+      lead.stage = input.stage || 'Not Connected';
+      if (input.tag) {
+        lead.tag = input.tag;
+      }
       lead.followUpDue = false;
     }
 
@@ -217,7 +222,7 @@ export class ActivityService {
       userId: requester._id,
       type: 'CALL',
       connected: input.connected,
-      notConnectedReason: input.connected ? null : input.notConnectedReason,
+      notConnectedReason: input.connected ? null : (input.notConnectedReason || 'DID_NOT_PICK'),
       stage: lead.stage || input.stage || 'New',
       tag: lead.tag || input.tag || null,
       remark: input.remark || null,

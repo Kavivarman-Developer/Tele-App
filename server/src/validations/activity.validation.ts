@@ -37,14 +37,6 @@ export const disposeLeadSchema = z.object({
             path: ['stage'],
           });
         }
-      } else {
-        if (!data.notConnectedReason) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'notConnectedReason is required when connected is false',
-            path: ['notConnectedReason'],
-          });
-        }
       }
     }),
 });
