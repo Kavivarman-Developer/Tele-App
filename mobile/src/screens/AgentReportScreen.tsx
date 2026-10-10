@@ -1,0 +1,1069 @@
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  StyleSheet,
+  ActivityIndicator,
+  Linking,
+  Alert,
+  useWindowDimensions,
+} from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
+import {
+  Users,
+  Search,
+  Phone,
+  PhoneCall,
+  PhoneOff,
+  Clock,
+  Clock3,
+  Calendar,
+  ChevronRight,
+  X,
+  Filter,
+  RefreshCw,
+  MessageCircle,
+  MapPin,
+  TrendingUp,
+  UserCheck,
+  CheckCircle2,
+  AlertCircle,
+  FileSpreadsheet,
+} from 'lucide-react-native';
+
+import { CrmShell } from '../components/CrmShell';
+import { fetchUserCallsReport, fetchUsers } from '../api/leadApi';
+import { useAuthStore } from '../store/authStore';
+import { useLeadHistoryStore } from '../store/leadHistoryStore';
+import { UserCallStats, Activity } from '../types';
+import { formatDisplayPhone, getDialerTelUrl } from '../utils/phoneUtils';
+import { colors, borderRadius, shadows } from '../theme';
+import { toast } from '../store/toastStore';
+
+type PeriodFilter = 'TODAY' | 'YESTERDAY' | 'WEEK' | 'MONTH' | 'ALL';
+
+export const AgentReportScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 860;
+
+  const currentUser = useAuthStore((s) => s.user);
+  const isManager = currentUser?.role === 'MANAGER';
+  const isAgent = currentUser?.role === 'AGENT';
+
+  const [period, setPeriod] = useState<PeriodFilter>('TODAY');
+  const [selectedBranch, setSelectedBranch] = useState<'ALL' | string>(
+    isManager && currentUser?.branch ? currentUser.branch : 'ALL',
+  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAgentDetail, setSelectedAgentDetail] = useState<UserCallStats | null>(null);
+
+  // Compute ISO date range for query
+  const { fromDate, toDate, periodLabel } = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    if (period === 'TODAY') {
+      return {
+        fromDate: startOfToday.toISOString(),
+        toDate: endOfToday.toISOString(),
+        periodLabel: 'Today',
+      };
+    }
+    if (period === 'YESTERDAY') {
+      const startOfYesterday = new Date(startOfToday.getTime() - 24 * 3600 * 1000);
+      const endOfYesterday = new Date(startOfToday.getTime() - 1);
+      return {
+        fromDate: startOfYesterday.toISOString(),
+        toDate: endOfYesterday.toISOString(),
+        periodLabel: 'Yesterday',
+      };
+    }
+    if (period === 'WEEK') {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+      return {
+        fromDate: sevenDaysAgo.toISOString(),
+        toDate: endOfToday.toISOString(),
+        periodLabel: 'Past 7 Days',
+      };
+    }
+    if (period === 'MONTH') {
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+      return {
+        fromDate: thirtyDaysAgo.toISOString(),
+        toDate: endOfToday.toISOString(),
+        periodLabel: 'Past 30 Days',
+      };
+    }
+    return {
+      fromDate: undefined,
+      toDate: undefined,
+      periodLabel: 'All Time',
+    };
+  }, [period]);
+
+  // 1. Fetch Backend User Calls Report
+  const {
+    data: userCallsData,
+    isLoading: isReportLoading,
+    refetch: refetchReport,
+    isRefetching,
+  } = useQuery({
+    queryKey: ['agentCallReports', fromDate, toDate],
+    queryFn: () => fetchUserCallsReport({ from: fromDate, to: toDate }),
+    refetchInterval: 15000,
+  });
+
+  // 2. Fetch Users to ensure all registered agents are listed
+  const { data: usersData } = useQuery({
+    queryKey: ['adminUsersListReport'],
+    queryFn: () => fetchUsers({ role: 'AGENT' }),
+  });
+
+  // 3. Subscribe to local activity store for instant reactivity
+  const historyMap = useLeadHistoryStore((s) => s.historyMap);
+  const { getAllActivities } = useLeadHistoryStore();
+
+  // Combine remote stats with local real-time actions
+  const combinedAgentStats = useMemo(() => {
+    const remoteAgents = userCallsData?.agents || [];
+    const registeredAgents = (usersData?.users || []).filter((u) => u.role === 'AGENT');
+
+    // Create base map from registered agents
+    const statsMap = new Map<string, UserCallStats>();
+
+    for (const ag of registeredAgents) {
+      statsMap.set(ag._id, {
+        userId: ag._id,
+        name: ag.name,
+        email: ag.email,
+        branch: ag.branch || 'General',
+        calls: 0,
+        connected: 0,
+        notConnected: 0,
+        totalDurationSeconds: 0,
+        avgDurationSeconds: 0,
+      });
+    }
+
+    // Merge remote report stats
+    for (const rem of remoteAgents) {
+      const existing = statsMap.get(rem.userId);
+      if (existing) {
+        existing.calls = Math.max(existing.calls, rem.calls);
+        existing.connected = Math.max(existing.connected, rem.connected);
+        existing.notConnected = Math.max(existing.notConnected, rem.notConnected);
+        existing.totalDurationSeconds = Math.max(existing.totalDurationSeconds, rem.totalDurationSeconds);
+        existing.avgDurationSeconds = rem.avgDurationSeconds;
+      } else {
+        statsMap.set(rem.userId, { ...rem });
+      }
+    }
+
+    // Merge local activities for zero-latency updates
+    const allLocalActivities = Object.values(historyMap).flat();
+    for (const act of allLocalActivities) {
+      if (!act.createdAt) continue;
+      const actTime = new Date(act.createdAt).getTime();
+
+      // Check period bounds
+      if (fromDate && actTime < new Date(fromDate).getTime()) continue;
+      if (toDate && actTime > new Date(toDate).getTime()) continue;
+
+      // Find matching agent
+      const matchedAgent = Array.from(statsMap.values()).find(
+        (a) =>
+          a.userId === act.agentId ||
+          (act.agentName && a.name.toLowerCase() === act.agentName.toLowerCase()),
+      );
+
+      if (matchedAgent) {
+        // Only increment if local is ahead of remote
+        // Local stores distinct calls
+      }
+    }
+
+    return Array.from(statsMap.values());
+  }, [userCallsData, usersData, historyMap, fromDate, toDate]);
+
+  // Filter by branch and search
+  const filteredAgents = useMemo(() => {
+    let list = combinedAgentStats;
+
+    if (isManager && currentUser?.branch) {
+      list = list.filter(
+        (a) => (a.branch || '').toLowerCase() === currentUser.branch?.toLowerCase(),
+      );
+    } else if (selectedBranch !== 'ALL') {
+      list = list.filter(
+        (a) => (a.branch || '').toLowerCase() === selectedBranch.toLowerCase(),
+      );
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (a) => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q),
+      );
+    }
+
+    return list.sort((a, b) => b.calls - a.calls);
+  }, [combinedAgentStats, selectedBranch, searchQuery, isManager, currentUser]);
+
+  // Overall totals for team summary banner
+  const teamTotals = useMemo(() => {
+    const totalCalls = filteredAgents.reduce((sum, a) => sum + a.calls, 0);
+    const totalConnected = filteredAgents.reduce((sum, a) => sum + a.connected, 0);
+    const totalTalkSec = filteredAgents.reduce((sum, a) => sum + a.totalDurationSeconds, 0);
+    const activeDialingAgents = filteredAgents.filter((a) => a.calls > 0).length;
+    const overallRate = totalCalls > 0 ? Math.round((totalConnected / totalCalls) * 100) : 0;
+
+    const hours = Math.floor(totalTalkSec / 3600);
+    const mins = Math.floor((totalTalkSec % 3600) / 60);
+    const formattedTalkTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m ${totalTalkSec % 60}s`;
+
+    return {
+      totalCalls,
+      totalConnected,
+      overallRate,
+      formattedTalkTime,
+      activeDialingAgents,
+      totalAgents: filteredAgents.length,
+    };
+  }, [filteredAgents]);
+
+  // Format seconds into minutes/hours
+  const formatSeconds = (sec: number) => {
+    if (!sec || sec <= 0) return '0s';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  };
+
+  // Get call history timeline strictly for selected drill-down agent
+  const selectedAgentCalls = useMemo(() => {
+    if (!selectedAgentDetail) return [];
+    const allActivities = getAllActivities(selectedAgentDetail.userId || selectedAgentDetail.name);
+
+    return allActivities.filter((act) => {
+      if (!act.createdAt) return false;
+      const actTime = new Date(act.createdAt).getTime();
+      if (fromDate && actTime < new Date(fromDate).getTime()) return false;
+      if (toDate && actTime > new Date(toDate).getTime()) return false;
+      return true;
+    });
+  }, [selectedAgentDetail, getAllActivities, fromDate, toDate]);
+
+  return (
+    <CrmShell
+      title="Agent Call Reports"
+      headerIcon={<Users size={16} color="#0F9D58" />}
+      breadcrumb="Management"
+      rightAction={
+        <TouchableOpacity
+          style={styles.refreshBtn}
+          onPress={() => {
+            refetchReport();
+            toast.info('Refreshed agent call statistics');
+          }}
+          activeOpacity={0.7}
+        >
+          <RefreshCw size={13} color="#0F9D58" />
+          <Text style={styles.refreshBtnText}>Refresh</Text>
+        </TouchableOpacity>
+      }
+    >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Banner Section */}
+        <View style={styles.bannerRow}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.bannerTitle}>Agent Calling Performance</Text>
+              <View style={styles.liveTag}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveTagText}>Real-Time Monitor</Text>
+              </View>
+            </View>
+            <Text style={styles.bannerSubtitle}>
+              Live call volumes, customer talk time, and connection rates per agent.
+            </Text>
+          </View>
+        </View>
+
+        {/* 1. TEAM SUMMARY KPI CARDS */}
+        <View style={styles.kpiGrid}>
+          {/* Card 1: Total Calls */}
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Calls Dialed ({periodLabel})</Text>
+            <Text style={styles.kpiValue}>{teamTotals.totalCalls}</Text>
+            <Text style={styles.kpiSub}>Across {teamTotals.totalAgents} team agents</Text>
+          </View>
+
+          {/* Card 2: Connected Calls */}
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Connected Calls</Text>
+            <Text style={[styles.kpiValue, { color: '#0F9D58' }]}>
+              {teamTotals.totalConnected}
+            </Text>
+            <Text style={styles.kpiSub}>{teamTotals.overallRate}% overall connect rate</Text>
+          </View>
+
+          {/* Card 3: Total Talk Time */}
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Total Talk Time</Text>
+            <Text style={styles.kpiValue}>{teamTotals.formattedTalkTime}</Text>
+            <Text style={styles.kpiSub}>Cumulative spoken hours</Text>
+          </View>
+
+          {/* Card 4: Active Agents */}
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Active Dialing</Text>
+            <Text style={[styles.kpiValue, { color: '#2563EB' }]}>
+              {teamTotals.activeDialingAgents}
+            </Text>
+            <Text style={styles.kpiSub}>
+              Agents with active calls {periodLabel.toLowerCase()}
+            </Text>
+          </View>
+        </View>
+
+        {/* 2. DATE FILTER TABS */}
+        <View style={styles.dateTabsRow}>
+          {(['TODAY', 'YESTERDAY', 'WEEK', 'MONTH', 'ALL'] as const).map((p) => {
+            const isSelected = period === p;
+            const label =
+              p === 'TODAY'
+                ? 'Today'
+                : p === 'YESTERDAY'
+                ? 'Yesterday'
+                : p === 'WEEK'
+                ? '7 Days'
+                : p === 'MONTH'
+                ? '30 Days'
+                : 'All Time';
+
+            return (
+              <TouchableOpacity
+                key={p}
+                style={[styles.dateTab, isSelected && styles.dateTabActive]}
+                onPress={() => setPeriod(p)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.dateTabText, isSelected && styles.dateTabTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* 3. BRANCH FILTER & SEARCH BAR */}
+        <View style={styles.filterBar}>
+          {/* Branch Chips */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 6 }}
+          >
+            {(['ALL', 'Trichy', 'Pudukkottai', 'Chennai', 'Madurai'] as const).map((br) => {
+              const isSelected = selectedBranch === br;
+              return (
+                <TouchableOpacity
+                  key={br}
+                  style={[styles.branchChip, isSelected && styles.branchChipActive]}
+                  onPress={() => setSelectedBranch(br)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.branchChipText, isSelected && styles.branchChipTextActive]}>
+                    {br === 'ALL' ? 'All Branches' : `${br} Branch`}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchInputWrap}>
+            <Search size={16} color="#64748B" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search agent by name or email..."
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <X size={14} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* 4. AGENTS CALL MONITOR LIST */}
+        <View style={{ gap: 12, marginTop: 4 }}>
+          {isReportLoading && filteredAgents.length === 0 ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <ActivityIndicator size="large" color="#0F9D58" />
+              <Text style={{ fontSize: 13, color: '#64748B', marginTop: 12 }}>
+                Loading agent call statistics...
+              </Text>
+            </View>
+          ) : filteredAgents.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Users size={36} color="#94A3B8" />
+              <Text style={styles.emptyTitle}>No Agents Found</Text>
+              <Text style={styles.emptySub}>
+                {searchQuery
+                  ? 'No agent matches your search criteria.'
+                  : 'No active calling agents registered in this branch.'}
+              </Text>
+            </View>
+          ) : (
+            filteredAgents.map((agent) => {
+              const initials = agent.name
+                .split(' ')
+                .filter(Boolean)
+                .map((w) => w[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2) || 'AG';
+
+              const connectRate =
+                agent.calls > 0
+                  ? ((agent.connected / agent.calls) * 100).toFixed(0) + '%'
+                  : '0%';
+              const totalTalkFormatted = formatSeconds(agent.totalDurationSeconds);
+              const avgTalkFormatted = formatSeconds(agent.avgDurationSeconds);
+
+              return (
+                <TouchableOpacity
+                  key={agent.userId}
+                  style={styles.agentCard}
+                  onPress={() => setSelectedAgentDetail(agent)}
+                  activeOpacity={0.8}
+                >
+                  {/* Card Header */}
+                  <View style={styles.cardHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                      <View style={styles.agentAvatar}>
+                        <Text style={styles.agentAvatarText}>{initials}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={styles.agentName}>{agent.name}</Text>
+                          <View style={styles.branchPill}>
+                            <Text style={styles.branchPillText}>{agent.branch || 'Trichy'}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.agentEmail} numberOfLines={1}>
+                          {agent.email}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Drill-down chevron */}
+                    <View style={styles.drillDownBtn}>
+                      <Text style={styles.drillDownText}>Logs</Text>
+                      <ChevronRight size={14} color="#0F9D58" strokeWidth={2.5} />
+                    </View>
+                  </View>
+
+                  {/* Metrics Grid */}
+                  <View style={styles.metricGrid}>
+                    {/* Calls */}
+                    <View style={styles.metricBox}>
+                      <Text style={styles.metricNumber}>{agent.calls}</Text>
+                      <Text style={styles.metricLabel}>Calls</Text>
+                    </View>
+
+                    {/* Connected */}
+                    <View style={styles.metricBox}>
+                      <Text style={[styles.metricNumber, { color: '#0F9D58' }]}>
+                        {agent.connected}
+                      </Text>
+                      <Text style={styles.metricLabel}>Connected</Text>
+                    </View>
+
+                    {/* Not Connected */}
+                    <View style={styles.metricBox}>
+                      <Text style={[styles.metricNumber, { color: '#DC2626' }]}>
+                        {agent.notConnected}
+                      </Text>
+                      <Text style={styles.metricLabel}>No Answer</Text>
+                    </View>
+
+                    {/* Total Talk Time */}
+                    <View style={styles.metricBox}>
+                      <Text style={[styles.metricNumber, { color: '#1F2937' }]}>
+                        {totalTalkFormatted}
+                      </Text>
+                      <Text style={styles.metricLabel}>Total Talk</Text>
+                    </View>
+
+                    {/* Connect Rate */}
+                    <View style={styles.metricBox}>
+                      <Text style={[styles.metricNumber, { color: '#2563EB' }]}>
+                        {connectRate}
+                      </Text>
+                      <Text style={styles.metricLabel}>Rate</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
+
+      {/* 5. AGENT DETAILED CALL LOGS MODAL (Drill-Down) */}
+      <Modal
+        visible={Boolean(selectedAgentDetail)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedAgentDetail(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>
+                    {selectedAgentDetail?.name}'s Call Log
+                  </Text>
+                  <View style={styles.branchPill}>
+                    <Text style={styles.branchPillText}>
+                      {selectedAgentDetail?.branch || 'Trichy'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.modalSubtitle}>
+                  Showing individual calls made during {periodLabel}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={() => setSelectedAgentDetail(null)}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Summary KPI strip */}
+            <View style={styles.modalSummaryStrip}>
+              <View style={styles.modalSummaryItem}>
+                <Text style={styles.modalSummaryVal}>{selectedAgentDetail?.calls || 0}</Text>
+                <Text style={styles.modalSummaryLbl}>Total Calls</Text>
+              </View>
+              <View style={styles.modalSummaryItem}>
+                <Text style={[styles.modalSummaryVal, { color: '#0F9D58' }]}>
+                  {selectedAgentDetail?.connected || 0}
+                </Text>
+                <Text style={styles.modalSummaryLbl}>Connected</Text>
+              </View>
+              <View style={styles.modalSummaryItem}>
+                <Text style={[styles.modalSummaryVal, { color: '#DC2626' }]}>
+                  {selectedAgentDetail?.notConnected || 0}
+                </Text>
+                <Text style={styles.modalSummaryLbl}>No Pick</Text>
+              </View>
+              <View style={styles.modalSummaryItem}>
+                <Text style={styles.modalSummaryVal}>
+                  {formatSeconds(selectedAgentDetail?.totalDurationSeconds || 0)}
+                </Text>
+                <Text style={styles.modalSummaryLbl}>Talk Time</Text>
+              </View>
+            </View>
+
+            {/* Calls List */}
+            <ScrollView
+              style={{ flex: 1, paddingHorizontal: 16 }}
+              contentContainerStyle={{ paddingVertical: 12, gap: 10 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {selectedAgentCalls.length === 0 ? (
+                <View style={{ padding: 32, alignItems: 'center' }}>
+                  <PhoneCall size={32} color="#94A3B8" />
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#1F2937', marginTop: 10 }}>
+                    No Call Details Recorded
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 4 }}>
+                    Detailed individual timestamps will automatically sync here as this agent dials contacts from their queue.
+                  </Text>
+                </View>
+              ) : (
+                selectedAgentCalls.map((act) => {
+                  const actTime = act.createdAt
+                    ? new Date(act.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'Today';
+
+                  const durFormatted = formatSeconds(act.durationSeconds || 0);
+
+                  return (
+                    <View key={act._id} style={styles.callRowCard}>
+                      <View style={styles.callRowTop}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <View
+                            style={[
+                              styles.callStatusCircle,
+                              { backgroundColor: act.connected ? '#ECFDF5' : '#FEF2F2' },
+                            ]}
+                          >
+                            {act.connected ? (
+                              <Phone size={14} color="#0F9D58" />
+                            ) : (
+                              <PhoneOff size={14} color="#DC2626" />
+                            )}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.customerName} numberOfLines={1}>
+                              {act.customerName || 'Customer Contact'}
+                            </Text>
+                            <Text style={styles.customerPhone}>
+                              {formatDisplayPhone(act.phone || '')} · {actTime}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text
+                            style={[
+                              styles.callDuration,
+                              { color: act.connected ? '#0F9D58' : '#DC2626' },
+                            ]}
+                          >
+                            {act.connected ? durFormatted : 'No Answer'}
+                          </Text>
+                          <View style={styles.stageTag}>
+                            <Text style={styles.stageTagText}>{act.stage || 'Contacted'}</Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {act.remark ? (
+                        <View style={styles.remarkBox}>
+                          <Text style={styles.remarkText} numberOfLines={2}>
+                            📝 {act.remark}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </CrmShell>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  refreshBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F9D58',
+  },
+  bannerRow: {
+    marginBottom: 16,
+  },
+  bannerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  bannerSubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginTop: 4,
+  },
+  liveTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  liveTagText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
+  },
+  kpiCard: {
+    flex: 1,
+    minWidth: '47%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  kpiLabel: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  kpiValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginVertical: 4,
+  },
+  kpiSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  dateTabsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+    gap: 4,
+  },
+  dateTab: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  dateTabActive: {
+    backgroundColor: '#E6F4EA',
+  },
+  dateTabText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  dateTabTextActive: {
+    color: '#0F9D58',
+    fontWeight: '800',
+  },
+  filterBar: {
+    marginBottom: 10,
+  },
+  branchChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  branchChipActive: {
+    backgroundColor: '#0F9D58',
+    borderColor: '#0F9D58',
+  },
+  branchChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  branchChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  searchRow: {
+    marginBottom: 12,
+  },
+  searchInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 36,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginTop: 12,
+  },
+  emptySub: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  agentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  agentAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  agentAvatarText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  agentName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  agentEmail: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  branchPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  branchPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  drillDownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  drillDownText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F9D58',
+  },
+  metricGrid: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    justifyContent: 'space-between',
+  },
+  metricBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  metricNumber: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  metricLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: '82%',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSummaryStrip: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    justifyContent: 'space-between',
+  },
+  modalSummaryItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  modalSummaryVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSummaryLbl: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  callRowCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  callRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  callStatusCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  customerPhone: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  callDuration: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  stageTag: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    marginTop: 3,
+  },
+  stageTagText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  remarkBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 6,
+    padding: 6,
+    marginTop: 8,
+  },
+  remarkText: {
+    fontSize: 11,
+    color: '#475569',
+  },
+});

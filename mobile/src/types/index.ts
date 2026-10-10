@@ -172,6 +172,8 @@ export interface Activity {
   leadId: string;
   campaignId: string;
   userId: User | string;
+  agentId?: string;
+  agentName?: string;
   phone?: string;
   customerName?: string;
   branch?: string | null;
@@ -204,6 +206,7 @@ export type RootStackParamList = {
   MyLeads: { campaignId?: string; campaignName?: string } | undefined;
   FollowUps: undefined;
   CallHistory: undefined;
+  AgentReports: undefined;
   Dashboard: undefined;
   Profile: undefined;
   Team: undefined;

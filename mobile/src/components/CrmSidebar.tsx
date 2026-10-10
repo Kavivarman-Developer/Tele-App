@@ -32,6 +32,7 @@ import {
   Bell,
   Info,
   MessageSquare,
+  UserCheck,
 } from 'lucide-react-native';
 
 import { useSidebarStore } from '../store/sidebarStore';
@@ -119,6 +120,7 @@ export const CrmSidebarContent: React.FC<{
   ];
 
   const MANAGEMENT_ITEMS: NavItemConfig[] = [
+    { name: 'AgentReports', route: 'AgentReports', label: 'Agent Report', icon: UserCheck },
     { name: 'Settings', route: 'Settings', label: 'Settings', icon: Settings2 },
     ...(isManagerOrAdmin
       ? [
