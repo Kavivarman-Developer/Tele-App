@@ -45,79 +45,6 @@ interface DisplayMember {
   canReceiveLeads: boolean;
 }
 
-const DEFAULT_MEMBERS: DisplayMember[] = [
-  {
-    _id: 'user-kavin',
-    name: 'Kavin',
-    email: 'kavin@company.com',
-    phone: '9876543220',
-    role: 'AGENT',
-    branch: 'Trichy',
-    isActive: true,
-    canReceiveLeads: true,
-  },
-  {
-    _id: 'user-sarah',
-    name: 'Sarah Telecaller',
-    email: 'sarah@company.com',
-    phone: '9876543211',
-    role: 'AGENT',
-    branch: 'Trichy',
-    isActive: true,
-    canReceiveLeads: true,
-  },
-  {
-    _id: 'user-mgr-trichy',
-    name: 'Trichy Manager',
-    email: 'manager.trichy@company.com',
-    phone: '9876543230',
-    role: 'MANAGER',
-    branch: 'Trichy',
-    isActive: true,
-    canReceiveLeads: false,
-  },
-  {
-    _id: 'user-john',
-    name: 'John Agent',
-    email: 'john@company.com',
-    phone: '9876543210',
-    role: 'AGENT',
-    branch: 'Pudukkottai',
-    isActive: true,
-    canReceiveLeads: true,
-  },
-  {
-    _id: 'user-alex',
-    name: 'Alex Outreach',
-    email: 'alex@company.com',
-    phone: '9876543212',
-    role: 'AGENT',
-    branch: 'Pudukkottai',
-    isActive: true,
-    canReceiveLeads: true,
-  },
-  {
-    _id: 'user-mgr-pudukkottai',
-    name: 'Pudukkottai Manager',
-    email: 'manager.pudukkottai@company.com',
-    phone: '9876543240',
-    role: 'MANAGER',
-    branch: 'Pudukkottai',
-    isActive: true,
-    canReceiveLeads: false,
-  },
-  {
-    _id: 'user-admin',
-    name: 'System Admin',
-    email: 'admin@example.com',
-    phone: '1234567890',
-    role: 'ADMIN',
-    branch: null,
-    isActive: true,
-    canReceiveLeads: true,
-  },
-];
-
 const AVAILABLE_BRANCHES = ['Trichy', 'Pudukkottai', 'Chennai', 'Madurai'];
 
 export const TeamScreen: React.FC = () => {
@@ -195,27 +122,18 @@ export const TeamScreen: React.FC = () => {
   // Combined list
   const combinedMembers: DisplayMember[] = useMemo(() => {
     const realUsers = usersData?.users || [];
-    if (realUsers.length > 0) {
-      return realUsers.map((u: User) => ({
-        _id: u._id,
-        name: u.name,
-        email: u.email,
-        phone: u.phone || '9876543210',
-        role: u.role,
-        branch: u.branch || null,
-        isActive: u.isActive,
-        canReceiveLeads:
-          receiveLeadsOverrides[u._id] !== undefined
-            ? receiveLeadsOverrides[u._id]
-            : u.canReceiveLeads ?? true,
-      }));
-    }
-    return DEFAULT_MEMBERS.map((m) => ({
-      ...m,
+    return realUsers.map((u: User) => ({
+      _id: u._id,
+      name: u.name,
+      email: u.email,
+      phone: u.phone || '',
+      role: u.role,
+      branch: u.branch || null,
+      isActive: u.isActive,
       canReceiveLeads:
-        receiveLeadsOverrides[m._id] !== undefined
-          ? receiveLeadsOverrides[m._id]
-          : m.canReceiveLeads,
+        receiveLeadsOverrides[u._id] !== undefined
+          ? receiveLeadsOverrides[u._id]
+          : u.canReceiveLeads ?? true,
     }));
   }, [usersData, receiveLeadsOverrides]);
 
@@ -415,7 +333,28 @@ export const TeamScreen: React.FC = () => {
 
         {/* Roster Cards List */}
         <View style={{ gap: 12 }}>
-          {filteredMembers.map((item) => {
+          {filteredMembers.length === 0 ? (
+            <View
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 14,
+                padding: 32,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Users size={40} color="#94A3B8" />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#1F2937', marginTop: 12 }}>
+                No Team Members Found
+              </Text>
+              <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 6 }}>
+                {searchQuery ? 'No members match your search criteria.' : 'No members registered yet in this branch.'}
+              </Text>
+            </View>
+          ) : (
+            filteredMembers.map((item) => {
             const initials = item.name
               .split(' ')
               .map((w) => w[0])
@@ -599,7 +538,8 @@ export const TeamScreen: React.FC = () => {
                 </View>
               </View>
             );
-          })}
+          })
+        )}
         </View>
 
         {/* Footer Summary */}

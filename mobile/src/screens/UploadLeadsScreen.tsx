@@ -41,8 +41,8 @@ export const UploadLeadsScreen: React.FC = () => {
   const { user } = useAuthStore();
   const isAgent = user?.role === 'AGENT';
 
-  const [selectedCampaignName, setSelectedCampaignName] = useState('Demo Sales Campaign');
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('camp-1');
+  const [selectedCampaignName, setSelectedCampaignName] = useState('');
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
 
   // Assignment selection: null means "Auto distribute"
@@ -74,7 +74,7 @@ export const UploadLeadsScreen: React.FC = () => {
   const campaignsList: Campaign[] = campaignsData?.campaigns || [];
 
   React.useEffect(() => {
-    if (campaignsList.length > 0 && (!selectedCampaignId || selectedCampaignId.startsWith('camp-'))) {
+    if (campaignsList.length > 0 && !selectedCampaignId) {
       setSelectedCampaignId(campaignsList[0]._id);
       setSelectedCampaignName(campaignsList[0].name);
     }
@@ -89,15 +89,8 @@ export const UploadLeadsScreen: React.FC = () => {
     (u) => u.role === 'AGENT' && u.isActive,
   );
 
-  const defaultAgents = [
-    { id: '6ac74f3279bb9292ad180d49', name: 'Kavin', branch: 'Trichy' },
-    { id: '6ac61d2a7bd428cb381d0e2c', name: 'John Agent', branch: 'General' },
-    { id: '6ac62130f01e376b529ebfa1', name: 'Agent Two', branch: 'General' },
-    { id: '6ac623d96c84a3753e457376', name: 'Agent Three', branch: 'General' },
-  ];
-
   const agentOptions = React.useMemo(() => {
-    const list = agentsList.length > 0 ? agentsList : defaultAgents;
+    const list = agentsList;
     const seen = new Set<string>();
     const unique: Array<{ id: string; name: string; branch?: string }> = [];
     for (const a of list) {
@@ -157,14 +150,10 @@ export const UploadLeadsScreen: React.FC = () => {
         } as any);
       }
 
-      const activeCampId =
-        selectedCampaignId && !selectedCampaignId.startsWith('camp-')
-          ? selectedCampaignId
-          : campaignsList[0]?._id;
+      const activeCampId = selectedCampaignId || campaignsList[0]?._id;
 
       if (!activeCampId) {
-        // Simulated success if in offline / demo mode
-        return { created: 12, merged: 2, skipped: 1, failed: [] };
+        throw new Error('Please select an active campaign before uploading leads.');
       }
 
       return uploadLeadsCsv(activeCampId, formData);
@@ -173,7 +162,7 @@ export const UploadLeadsScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
       queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
       queryClient.invalidateQueries({ queryKey: ['homeUserCalls'] });
-      const createdCount = data.created ?? 10;
+      const createdCount = data.created ?? 0;
       setUploadResult({
         created: createdCount,
         merged: data.merged ?? 0,
@@ -331,33 +320,40 @@ export const UploadLeadsScreen: React.FC = () => {
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.dropdownValueText}>{selectedCampaignName}</Text>
+                <Text style={styles.dropdownValueText}>
+                  {selectedCampaignName || 'Select a campaign'}
+                </Text>
                 <ChevronDown size={16} color="#64748B" />
               </TouchableOpacity>
 
               {showCampaignDropdown && (
                 <View style={styles.dropdownPopover}>
-                  {(campaignsList.length > 0 ? campaignsList.map((c) => c.name) : ['Demo Sales Campaign', 'Q4 Real Estate Outreach']).map((camp) => (
-                    <TouchableOpacity
-                      key={camp}
-                      style={styles.popoverItem}
-                      onPress={() => {
-                        setSelectedCampaignName(camp);
-                        const match = campaignsList.find((c) => c.name === camp);
-                        if (match) setSelectedCampaignId(match._id);
-                        setShowCampaignDropdown(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.popoverItemText,
-                          selectedCampaignName === camp && styles.popoverItemTextActive,
-                        ]}
+                  {campaignsList.length === 0 ? (
+                    <View style={{ padding: 12 }}>
+                      <Text style={{ fontSize: 13, color: '#64748B' }}>No campaigns available</Text>
+                    </View>
+                  ) : (
+                    campaignsList.map((c) => (
+                      <TouchableOpacity
+                        key={c._id}
+                        style={styles.popoverItem}
+                        onPress={() => {
+                          setSelectedCampaignName(c.name);
+                          setSelectedCampaignId(c._id);
+                          setShowCampaignDropdown(false);
+                        }}
                       >
-                        {camp}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.popoverItemText,
+                            selectedCampaignName === c.name && styles.popoverItemTextActive,
+                          ]}
+                        >
+                          {c.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
                 </View>
               )}
             </View>

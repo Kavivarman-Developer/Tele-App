@@ -62,37 +62,6 @@ interface DisplayCampaign {
   iconColor: string;
 }
 
-const DEFAULT_CAMPAIGNS: DisplayCampaign[] = [
-  {
-    _id: 'camp-1',
-    name: 'Demo Sales Campaign',
-    priority: 'High priority',
-    rawPriority: 'HIGH',
-    isActive: true,
-    totalLeads: 840,
-    assignedAgentsCount: 3,
-    assignedAgents: ['John Agent', 'Agent Two', 'Agent Three'],
-    distribution: 'Equal distribution',
-    questionCount: 0,
-    iconBg: '#EFF6FF',
-    iconColor: '#2563EB',
-  },
-  {
-    _id: 'camp-2',
-    name: 'Q4 Real Estate Outreach',
-    priority: 'Medium priority',
-    rawPriority: 'MEDIUM',
-    isActive: true,
-    totalLeads: 1642,
-    assignedAgentsCount: 1,
-    assignedAgents: ['Agent Three'],
-    distribution: 'Equal distribution',
-    questionCount: 0,
-    iconBg: '#FFFBEB',
-    iconColor: '#D97706',
-  },
-];
-
 export const CampaignsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
@@ -185,38 +154,35 @@ export const CampaignsScreen: React.FC = () => {
     toggleCampaignMutation.mutate({ id: campId, isActive: nextStatus });
   };
 
-  // Map backend campaigns or fallback to screenshot defaults
+  // Map backend campaigns
   const displayList: DisplayCampaign[] = useMemo(() => {
     const realCamps = campaignsData?.campaigns || [];
-    if (realCamps.length > 0) {
-      return realCamps.map((c: Campaign, idx: number) => {
-        const pLabel =
-          c.priority === 'HIGH'
-            ? 'High priority'
-            : c.priority === 'LOW'
-            ? 'Low priority'
-            : 'Medium priority';
+    return realCamps.map((c: Campaign, idx: number) => {
+      const pLabel =
+        c.priority === 'HIGH'
+          ? 'High priority'
+          : c.priority === 'LOW'
+          ? 'Low priority'
+          : 'Medium priority';
 
-        return {
-          _id: c._id,
-          name: c.name,
-          priority: pLabel as any,
-          rawPriority: c.priority,
-          isActive: c.isActive !== false,
-          totalLeads: idx === 0 ? 840 : idx === 1 ? 1642 : 500,
-          assignedAgentsCount: c.agentIds?.length || (idx === 0 ? 3 : 1),
-          assignedAgents: (c.agentIds || []).map((id) => {
-            const found = agentsList.find((a) => a._id === id);
-            return found?.name || 'Agent';
-          }),
-          distribution: 'Equal distribution',
-          questionCount: c.engagementForm?.length || 0,
-          iconBg: idx % 2 === 0 ? '#EFF6FF' : '#FFFBEB',
-          iconColor: idx % 2 === 0 ? '#2563EB' : '#D97706',
-        };
-      });
-    }
-    return DEFAULT_CAMPAIGNS;
+      return {
+        _id: c._id,
+        name: c.name,
+        priority: pLabel as any,
+        rawPriority: c.priority,
+        isActive: c.isActive !== false,
+        totalLeads: (c as any).totalLeads ?? (c as any).leadCount ?? 0,
+        assignedAgentsCount: c.agentIds?.length || 0,
+        assignedAgents: (c.agentIds || []).map((id) => {
+          const found = agentsList.find((a) => a._id === id);
+          return found?.name || 'Agent';
+        }),
+        distribution: c.distributionMode === 'CONDITIONAL' ? 'Conditional rules' : 'Equal distribution',
+        questionCount: c.engagementForm?.length || 0,
+        iconBg: idx % 2 === 0 ? '#EFF6FF' : '#FFFBEB',
+        iconColor: idx % 2 === 0 ? '#2563EB' : '#D97706',
+      };
+    });
   }, [campaignsData, agentsList]);
 
   // Overall statistics
@@ -316,10 +282,28 @@ export const CampaignsScreen: React.FC = () => {
 
         {/* Campaign Cards List */}
         <View style={{ gap: 14 }}>
-          {displayList.map((camp, idx) => {
-            const isCampActive = activeStatusOverrides[camp._id] ?? camp.isActive;
-            const progressPercent = idx === 0 ? 68 : idx === 1 ? 42 : 55;
-            const dialedLeads = Math.round((camp.totalLeads * progressPercent) / 100);
+          {displayList.length === 0 ? (
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 14, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <Megaphone size={36} color="#94A3B8" />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1E293B', marginTop: 12 }}>No Campaigns Yet</Text>
+              <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center', marginTop: 4, marginBottom: 16 }}>
+                Create your first calling campaign to start distributing leads to your agents.
+              </Text>
+              {!isAgent && (
+                <TouchableOpacity
+                  onPress={openNew}
+                  style={{ backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>+ Create Campaign</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            displayList.map((camp) => {
+              const isCampActive = activeStatusOverrides[camp._id] ?? camp.isActive;
+              const dialedLeads = (camp as any).dialedLeads ?? 0;
+              const totalLeads = camp.totalLeads;
+              const progressPercent = totalLeads > 0 ? Math.min(100, Math.round((dialedLeads / totalLeads) * 100)) : 0;
 
             return (
               <View
@@ -542,7 +526,7 @@ export const CampaignsScreen: React.FC = () => {
                 </View>
               </View>
             );
-          })}
+          }))}
         </View>
       </ScrollView>
 

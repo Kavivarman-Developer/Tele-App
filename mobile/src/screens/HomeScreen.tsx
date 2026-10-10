@@ -344,12 +344,55 @@ export const HomeScreen: React.FC = () => {
   const connectRatePercent = callsMade > 0 ? ((connectedCalls / callsMade) * 100).toFixed(0) + '%' : '0%';
 
   const avgDurationSeconds =
-    connectedCalls > 0
+    connectedCalls > 0 && localTotalDuration > 0
       ? Math.round(localTotalDuration / connectedCalls)
-      : dashboardData?.connectedCalls && dashboardData.callsMade > 0
-      ? Math.round(dashboardData.callsMade * 12)
-      : 0;
+      : (dashboardData as any)?.averageDurationSeconds || 0;
   const avgDurationFormatted = formatSeconds(avgDurationSeconds);
+
+  // Dynamic daily call report grouped from real activity history
+  const realDailyCallReports = useMemo(() => {
+    const allUserActivities = (useLeadHistoryStore.getState().getAllActivities(user?._id) || [])
+      .filter((a) => a.stage !== 'Call Initiated' && a.stage !== 'Dialing');
+
+    const map = new Map<string, { attempted: number; connected: number; duration: number }>();
+    const todayStr = `Today (${new Date().toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' })})`;
+    map.set(todayStr, {
+      attempted: callsMade,
+      connected: connectedCalls,
+      duration: localTotalDuration,
+    });
+
+    for (const act of allUserActivities) {
+      if (!act.createdAt) continue;
+      const actDate = new Date(act.createdAt);
+      const isToday =
+        actDate.getDate() === now.getDate() &&
+        actDate.getMonth() === now.getMonth() &&
+        actDate.getFullYear() === now.getFullYear();
+
+      if (!isToday) {
+        const dateKey = actDate.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const existing = map.get(dateKey) || { attempted: 0, connected: 0, duration: 0 };
+        existing.attempted += 1;
+        if (act.connected) {
+          existing.connected += 1;
+        }
+        existing.duration += act.durationSeconds || 0;
+        map.set(dateKey, existing);
+      }
+    }
+
+    return Array.from(map.entries()).map(([date, stats]) => {
+      const rate = stats.attempted > 0 ? `${((stats.connected / stats.attempted) * 100).toFixed(0)}%` : '0%';
+      return {
+        date,
+        attempted: stats.attempted,
+        connected: stats.connected,
+        duration: formatDurationHoursMinutes(stats.duration),
+        connectRate: rate,
+      };
+    });
+  }, [callsMade, connectedCalls, localTotalDuration, user?._id]);
 
   // Scheduled callbacks due today
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -639,7 +682,7 @@ export const HomeScreen: React.FC = () => {
   const heroLeadCampaign =
     typeof heroLead?.campaign === 'object' && heroLead?.campaign?.name
       ? heroLead.campaign.name
-      : 'Demo Outreach';
+      : 'General';
 
   const heroLeadTemp = (heroLead?.tag || 'WARM').toUpperCase();
 
@@ -931,66 +974,83 @@ export const HomeScreen: React.FC = () => {
         {/* Content of Sub Tab */}
         {dashboardSubTab === 'CALL_REPORT' ? (
           <View style={{ gap: 10, marginBottom: 16 }}>
-            {[
-              { date: 'Today (10-10-2026)', attempted: callsMade, connected: connectedCalls, duration: formatDurationHoursMinutes(localTotalDuration || (connectedCalls * 68)), connectRate: connectRatePercent },
-              { date: 'Yesterday (09-10-2026)', attempted: Math.max(8, callsMade - 2), connected: Math.max(5, connectedCalls - 1), duration: '00h 42m', connectRate: '71%' },
-              { date: '08-10-2026', attempted: 14, connected: 10, duration: '01h 15m', connectRate: '71%' },
-            ].map((day) => (
-              <View
-                key={day.date}
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: 12,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: '#E5E7EB',
-                }}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ fontWeight: '500', fontSize: 13.5, color: '#1F2937' }}>{day.date}</Text>
-                  <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                    <Text style={{ color: '#0F9D58', fontSize: 11, fontWeight: '500' }}>{day.connectRate} Connected</Text>
+            {realDailyCallReports.length > 0 ? (
+              realDailyCallReports.map((day) => (
+                <View
+                  key={day.date}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 12,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: '#E5E7EB',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontWeight: '500', fontSize: 13.5, color: '#1F2937' }}>{day.date}</Text>
+                    <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ color: '#0F9D58', fontSize: 11, fontWeight: '500' }}>{day.connectRate} Connected</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                    <Text style={{ fontSize: 12, color: '#6B7280' }}>Attempted: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.attempted}</Text></Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280' }}>Connected: <Text style={{ fontWeight: '500', color: '#0F9D58' }}>{day.connected}</Text></Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280' }}>Duration: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.duration}</Text></Text>
                   </View>
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                  <Text style={{ fontSize: 12, color: '#6B7280' }}>Attempted: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.attempted}</Text></Text>
-                  <Text style={{ fontSize: 12, color: '#6B7280' }}>Connected: <Text style={{ fontWeight: '500', color: '#0F9D58' }}>{day.connected}</Text></Text>
-                  <Text style={{ fontSize: 12, color: '#6B7280' }}>Duration: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.duration}</Text></Text>
-                </View>
+              ))
+            ) : (
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }}>
+                <Text style={{ fontSize: 13, color: '#6B7280' }}>No call activity recorded yet today</Text>
               </View>
-            ))}
+            )}
           </View>
         ) : dashboardSubTab === 'LOGIN_REPORT' ? (
           <View style={{ gap: 10, marginBottom: 16 }}>
-            {(userCallsData?.agents || [
-              { userId: user?._id || '1', name: user?.name || 'Agent Caller', branch: user?.branch || 'Trichy', role: user?.role || 'AGENT', calls: callsMade, connected: connectedCalls }
-            ]).map((u: any) => (
-              <View
-                key={u.userId || u._id || u.email}
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: 12,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: '#E5E7EB',
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <View>
-                  <Text style={{ fontWeight: '500', fontSize: 13.5, color: '#1F2937' }}>{u.name}</Text>
-                  <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{u.branch || 'Trichy'} Branch · {u.role || 'AGENT'}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#0F9D58' }} />
-                    <Text style={{ fontSize: 11, fontWeight: '500', color: '#0F9D58' }}>Logged In</Text>
+            {((userCallsData?.agents && userCallsData.agents.length > 0)
+              ? userCallsData.agents
+              : user ? [user] : []
+            ).map((u: any) => {
+              const uName = u.name || 'Agent';
+              const uBranch = u.branch ? `${u.branch} Branch` : 'General';
+              const uRole = u.role || 'AGENT';
+              const isUserActive = u.isActive !== false;
+              const loginTimeStr = u.lastLoginAt
+                ? new Date(u.lastLoginAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Active now';
+
+              return (
+                <View
+                  key={u.userId || u._id || u.email || uName}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 12,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: '#E5E7EB',
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <View>
+                    <Text style={{ fontWeight: '500', fontSize: 13.5, color: '#1F2937' }}>{uName}</Text>
+                    <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+                      {uBranch} · {uRole}
+                    </Text>
                   </View>
-                  <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Today at 09:30 AM</Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isUserActive ? '#0F9D58' : '#9CA3AF' }} />
+                      <Text style={{ fontSize: 11, fontWeight: '500', color: isUserActive ? '#0F9D58' : '#6B7280' }}>
+                        {isUserActive ? 'Logged In' : 'Offline'}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{loginTimeStr}</Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ) : null}
 

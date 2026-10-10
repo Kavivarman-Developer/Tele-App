@@ -91,7 +91,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
   onOpenFullDispose,
 }) => {
   const currentUser = useAuthStore((s) => s.user);
-  const currentUserName = currentUser?.name || 'John Agent';
+  const currentUserName = currentUser?.name || 'Agent';
 
   const { getHistoryForLead, addActivity, loadHistory } = useLeadHistoryStore();
 
@@ -158,7 +158,9 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
   const campaignName =
     typeof lead?.campaign === 'object' && lead?.campaign?.name
       ? lead.campaign.name
-      : 'Outreach Campaign';
+      : typeof lead?.campaign === 'string' && lead?.campaign
+      ? lead.campaign
+      : 'General';
 
   const handleCall = () => {
     if (!lead) return;

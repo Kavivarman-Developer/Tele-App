@@ -101,11 +101,10 @@ export const DashboardScreen: React.FC = () => {
     queryFn: () => fetchUserCallsReport(),
   });
 
-  const callsAttempted = dashboardReportsData?.callsMade ?? 24;
-  const callsConnected = dashboardReportsData?.connectedCalls ?? 18;
+  const callsAttempted = dashboardReportsData?.callsMade ?? 0;
+  const callsConnected = dashboardReportsData?.connectedCalls ?? 0;
   const totalDurationSec =
-    userCallsReportData?.agents?.reduce((sum, a) => sum + (a.totalDurationSeconds || 0), 0) ||
-    (callsConnected > 0 ? callsConnected * 95 : 0);
+    userCallsReportData?.agents?.reduce((sum, a) => sum + (a.totalDurationSeconds || 0), 0) || 0;
   const avgDurationSec = callsConnected > 0 ? Math.round(totalDurationSec / callsConnected) : 0;
 
   const formatHoursMinutes = (sec: number) => {
@@ -908,10 +907,10 @@ export const DashboardScreen: React.FC = () => {
             {/* Horizontal Segments Row */}
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {[
-                { name: 'New', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'New')?.count ?? 120, color: '#3B82F6', flex: 1.2 },
-                { name: 'Contacted', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'Contacted')?.count ?? 85, color: '#F59E0B', flex: 1 },
-                { name: 'Interested', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'Interested')?.count ?? 45, color: '#10B981', flex: 0.8 },
-                { name: 'Converted', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'Converted')?.count ?? 18, color: '#059669', flex: 0.6 },
+                { name: 'New', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'New')?.count ?? 0, color: '#3B82F6', flex: 1.2 },
+                { name: 'Contacted', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'Contacted')?.count ?? 0, color: '#F59E0B', flex: 1 },
+                { name: 'Interested', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'Interested')?.count ?? 0, color: '#10B981', flex: 0.8 },
+                { name: 'Converted', count: dashboardReportsData?.leadsByStage?.find(s => s.stage === 'Converted')?.count ?? 0, color: '#059669', flex: 0.6 },
               ].map((stage, idx, arr) => (
                 <View
                   key={stage.name}

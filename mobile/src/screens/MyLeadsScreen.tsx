@@ -66,141 +66,6 @@ interface ScreenshotLead {
   lastContact: string;
 }
 
-const DEMO_LEADS: ScreenshotLead[] = [
-  {
-    _id: '6ac623d96c84a3753e4573cd',
-    name: 'Rohan Mehta',
-    phone: '+91 9810000081',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Assigned Agent',
-    status: 'New',
-    priority: 'High',
-    lastContact: '04:09 PM',
-  },
-  {
-    _id: '6ac623d96c84a3753e4573ff',
-    name: 'Priya Verma',
-    phone: '+91 9810000129',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 1,
-    assignedAgent: 'Assigned Agent',
-    status: 'Follow-up',
-    priority: 'Medium',
-    lastContact: '02:11 PM',
-  },
-  {
-    _id: '6ac623d96c84a3753e4573ce',
-    name: 'Reyansh Kulkarni',
-    phone: '+91 9810000009',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Assigned Agent',
-    status: 'Follow-up',
-    priority: 'Low',
-    lastContact: '02:50 PM',
-  },
-  {
-    _id: '6ac623d96c84a3753e4573cf',
-    name: 'Sneha Chopra',
-    phone: '+91 9810000057',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 1,
-    assignedAgent: 'Assigned Agent',
-    status: 'New',
-    priority: 'High',
-    lastContact: '02:39 PM',
-  },
-  {
-    _id: '6ac623d96c84a3753e4573f6',
-    name: 'Deepa Kumar',
-    phone: '+91 9810000120',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Assigned Agent',
-    status: 'New',
-    priority: 'Medium',
-    lastContact: '11:56 AM',
-  },
-  {
-    _id: 'lead-6',
-    name: 'Rahul Deshmukh',
-    phone: '+91 9810000084',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 1,
-    assignedAgent: 'Assigned Agent',
-    status: 'Follow-up',
-    priority: 'Low',
-    lastContact: '09:33 AM',
-  },
-  {
-    _id: 'lead-7',
-    name: 'Priya Joshi',
-    phone: '+91 9810000096',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Assigned Agent',
-    status: 'Interested',
-    priority: 'High',
-    lastContact: '08:57 AM',
-  },
-  {
-    _id: 'lead-8',
-    name: 'Karthik Deshmukh',
-    phone: '+91 9810000168',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Assigned Agent',
-    status: 'Interested',
-    priority: 'Medium',
-    lastContact: '09:32 AM',
-  },
-  {
-    _id: 'lead-9',
-    name: 'Kavya Reddy',
-    phone: '+91 9810000108',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Assigned Agent',
-    status: 'Follow-up',
-    priority: 'Low',
-    lastContact: '10:51 AM',
-  },
-  {
-    _id: 'lead-10',
-    name: 'Aarav Sundar',
-    phone: '+91 9810000060',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 1,
-    assignedAgent: 'Assigned Agent',
-    status: 'New',
-    priority: 'High',
-    lastContact: '02:48 PM',
-  },
-  {
-    _id: 'lead-11',
-    name: 'Riya Sundar',
-    phone: '+91 9810000132',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Assigned Agent',
-    status: 'Follow-up',
-    priority: 'Medium',
-    lastContact: '08:50 AM',
-  },
-  {
-    _id: 'lead-12',
-    name: 'Arjun Mehta',
-    phone: '+91 9810000158',
-    campaignName: 'Demo Sales Campaign',
-    attempts: 2,
-    assignedAgent: 'Assigned Agent',
-    status: 'Interested',
-    priority: 'Low',
-    lastContact: '10:47 AM',
-  },
-];
-
 export const MyLeadsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
@@ -304,7 +169,7 @@ export const MyLeadsScreen: React.FC = () => {
         const camp =
           typeof l.campaign === 'object' && l.campaign
             ? l.campaign.name
-            : (l as any).campaignName || 'Testing Campaigns';
+            : (l as any).campaignName || 'General';
         const cId =
           typeof l.campaign === 'object' && l.campaign
             ? l.campaign._id
@@ -331,6 +196,17 @@ export const MyLeadsScreen: React.FC = () => {
             : 'Assigned Agent'
           : 'Assigned Agent';
 
+        const leadPriority: 'High' | 'Medium' | 'Low' =
+          l.tag?.toUpperCase() === 'HOT'
+            ? 'High'
+            : l.tag?.toUpperCase() === 'COLD'
+            ? 'Low'
+            : typeof l.campaign === 'object' && (l.campaign as any)?.priority === 'HIGH'
+            ? 'High'
+            : typeof l.campaign === 'object' && (l.campaign as any)?.priority === 'LOW'
+            ? 'Low'
+            : 'Medium';
+
         return {
           _id: l._id,
           name: l.name,
@@ -340,7 +216,7 @@ export const MyLeadsScreen: React.FC = () => {
           attempts: l.attemptCount || 0,
           assignedAgent: agentDisplay,
           status: stg as any,
-          priority: (idx % 3 === 0 ? 'High' : idx % 3 === 1 ? 'Medium' : 'Low') as any,
+          priority: leadPriority,
           lastContact: new Date(l.updatedAt || Date.now()).toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
