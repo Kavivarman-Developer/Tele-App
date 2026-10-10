@@ -339,7 +339,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
               >
                 <FileEdit
                   size={14}
-                  color={activeTab === 'DISPOSITION' ? '#4F46E5' : '#64748B'}
+                  color={activeTab === 'DISPOSITION' ? '#059669' : '#64748B'}
                 />
                 <Text
                   style={[
@@ -358,7 +358,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
               >
                 <History
                   size={14}
-                  color={activeTab === 'HISTORY' ? '#4F46E5' : '#64748B'}
+                  color={activeTab === 'HISTORY' ? '#059669' : '#64748B'}
                 />
                 <Text
                   style={[
@@ -608,7 +608,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                         onPress={() => setShowCustomDatePicker(true)}
                         activeOpacity={0.8}
                       >
-                        <Calendar size={14} color="#4F46E5" />
+                        <Calendar size={14} color="#059669" />
                         <Text style={styles.customDateBtnText}>
                           {followUpDate ? formatScheduledDate(followUpDate) : 'Pick Custom Date & Time...'}
                         </Text>
@@ -642,7 +642,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                       activeOpacity={0.7}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <UserCheck size={14} color="#4F46E5" />
+                        <UserCheck size={14} color="#059669" />
                         <Text style={styles.fullFormLinkText}>Complete Full Multi-Step Form</Text>
                       </View>
                       <ChevronRight size={14} color="#64748B" />
@@ -807,7 +807,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   tabButtonTextActive: {
-    color: '#4F46E5',
+    color: '#059669',
     fontWeight: '700',
   },
   sheetScrollContent: {
@@ -995,9 +995,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: '#C7D2FE',
+    borderColor: '#A7F3D0',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -1005,7 +1005,7 @@ const styles = StyleSheet.create({
   customDateBtnText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#4F46E5',
+    color: '#059669',
   },
   notesBox: {
     backgroundColor: '#F8FAFC',
@@ -1032,7 +1032,7 @@ const styles = StyleSheet.create({
   fullFormLinkText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#4F46E5',
+    color: '#059669',
   },
   sheetFooter: {
     paddingTop: 10,
@@ -1044,10 +1044,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#059669',
     paddingVertical: 14,
     borderRadius: 12,
-    shadowColor: '#4F46E5',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

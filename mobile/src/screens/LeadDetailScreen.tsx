@@ -685,7 +685,7 @@ export const LeadDetailScreen: React.FC = () => {
                     onPress={() => setShowDatePickerModal(true)}
                     activeOpacity={0.8}
                   >
-                    <Calendar size={15} color="#5B2C82" />
+                    <Calendar size={15} color="#059669" />
                     <Text style={styles.actionSubSelectorText}>
                       {formatDisplayDateTime(followUpDate)}
                     </Text>
@@ -713,7 +713,7 @@ export const LeadDetailScreen: React.FC = () => {
                     onPress={() => setShowReassignPicker(true)}
                     activeOpacity={0.8}
                   >
-                    <Users size={15} color="#5B2C82" />
+                    <Users size={15} color="#059669" />
                     <Text style={styles.actionSubSelectorText}>
                       {selectedReassignUserId
                         ? assignableAgents.find((a) => a._id === selectedReassignUserId)?.name ||
@@ -744,7 +744,7 @@ export const LeadDetailScreen: React.FC = () => {
                     onPress={() => setShowCampaignPicker(true)}
                     activeOpacity={0.8}
                   >
-                    <Megaphone size={15} color="#5B2C82" />
+                    <Megaphone size={15} color="#059669" />
                     <Text style={styles.actionSubSelectorText}>
                       {selectedCopyCampaignId
                         ? campaignsList.find((c) => c._id === selectedCopyCampaignId)?.name ||

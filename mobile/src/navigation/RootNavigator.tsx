@@ -50,7 +50,7 @@ const MainTabs: React.FC = () => {
 
   return (
     <Tab.Navigator
-      initialRouteName={!isManagerOrAdmin ? 'CampaignsHub' : 'Home'}
+      initialRouteName="Home"
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
