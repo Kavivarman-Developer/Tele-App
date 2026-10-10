@@ -53,7 +53,7 @@ import {
   fetchPipeline,
   disposeLead,
 } from '../api/leadApi';
-import { RootStackParamList, Activity, Lead, CustomerTemperature, NotConnectedReason, User, Campaign, PipelineStage } from '../types';
+import { RootStackParamList, Activity, Lead, CustomerTemperature, NotConnectedReason, NotConnectedReasons, User, Campaign, PipelineStage } from '../types';
 import { colors, borderRadius, shadows } from '../theme';
 import { CallPermissionModal } from '../components/CallPermissionModal';
 import { LeadTimeline, deduplicateActivities } from '../components/LeadTimeline';
@@ -78,6 +78,27 @@ const PIPELINE_STATES = [
   'NOT INTERESTED',
   'CONVERTED',
   'CLOSED',
+];
+
+const NOT_CONNECTED_LABELS: Record<NotConnectedReason, string> = {
+  DID_NOT_PICK: 'Ringing / Did Not Pick',
+  BUSY: 'Line Busy',
+  USER_DISCONNECTED: 'Call Cut / Disconnected',
+  SWITCHED_OFF: 'Switched Off',
+  OUT_OF_COVERAGE: 'Out of Coverage / Not Reachable',
+  CALL_NOT_COMPLETED: 'Call Not Completed',
+  INVALID_NUMBER: 'Invalid / Wrong Number',
+  INCOMING_NOT_AVAILABLE: 'Incoming Call Not Available',
+  NUMBER_NOT_IN_USE: 'Number Not in Use',
+  OTHER: 'Other Reason',
+};
+
+const QUICK_NOT_CONNECTED_PRESETS: Array<{ reason: NotConnectedReason; label: string; emoji: string }> = [
+  { reason: 'DID_NOT_PICK', label: 'No Pick', emoji: '🔔' },
+  { reason: 'BUSY', label: 'Busy', emoji: '⏳' },
+  { reason: 'SWITCHED_OFF', label: 'Switched Off', emoji: '📴' },
+  { reason: 'OUT_OF_COVERAGE', label: 'No Coverage', emoji: '📡' },
+  { reason: 'USER_DISCONNECTED', label: 'Call Cut', emoji: '✂️' },
 ];
 
 export const LeadDetailScreen: React.FC = () => {
@@ -110,6 +131,8 @@ export const LeadDetailScreen: React.FC = () => {
     lead.stage?.toUpperCase() || 'IN PROGRESS',
   );
   const [showStatePicker, setShowStatePicker] = useState<boolean>(false);
+  const [selectedNotConnectedReason, setSelectedNotConnectedReason] = useState<NotConnectedReason>('DID_NOT_PICK');
+  const [showNotConnectedReasonPicker, setShowNotConnectedReasonPicker] = useState<boolean>(false);
 
   // Select Tag Radio Buttons: Hot, Cold, Warm
   const [selectedTag, setSelectedTag] = useState<'Hot' | 'Cold' | 'Warm'>(
@@ -265,11 +288,7 @@ export const LeadDetailScreen: React.FC = () => {
         selectedState !== 'BUSY';
 
       const notConnectedReason: NotConnectedReason | undefined = !isConnected
-        ? selectedState === 'SWITCHED OFF'
-          ? 'SWITCHED_OFF'
-          : selectedState === 'BUSY'
-          ? 'BUSY'
-          : 'DID_NOT_PICK'
+        ? selectedNotConnectedReason
         : undefined;
 
       return await disposeLead(currentLead._id, {
@@ -279,7 +298,7 @@ export const LeadDetailScreen: React.FC = () => {
         stage: selectedState,
         tag: selectedTag.toUpperCase() as any,
         followUpAt: actionNextFollowUp ? followUpDate : null,
-        remark: remarks.trim() || undefined,
+        remark: remarks.trim() || (!isConnected ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason]}` : undefined),
         durationSeconds: 0,
         reassignToUserId: actionReassign && selectedReassignUserId ? selectedReassignUserId : undefined,
         copyToCampaignId: actionCopyCampaign && selectedCopyCampaignId ? selectedCopyCampaignId : undefined,
@@ -291,16 +310,25 @@ export const LeadDetailScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
       queryClient.invalidateQueries({ queryKey: ['leadHistory', currentLead._id] });
 
+      const isConnected =
+        selectedState !== 'NOT CONNECTED' &&
+        selectedState !== 'SWITCHED OFF' &&
+        selectedState !== 'BUSY';
+      const notConnectedReason: NotConnectedReason | undefined = !isConnected
+        ? selectedNotConnectedReason
+        : undefined;
+
       useLeadHistoryStore.getState().addActivity(currentLead._id, {
         phone: currentLead.phone,
         customerName: currentLead.name,
         agentName: user?.name,
         agentId: user?._id,
         branch: user?.branch,
-        connected: selectedState !== 'NOT CONNECTED',
+        connected: isConnected,
+        notConnectedReason,
         stage: selectedState,
         tag: selectedTag,
-        remark: remarks.trim() || undefined,
+        remark: remarks.trim() || (!isConnected ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason]}` : undefined),
         followUpAt: actionNextFollowUp ? followUpDate : null,
         durationSeconds: 0,
       });
@@ -601,6 +629,53 @@ export const LeadDetailScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
+            {/* 1.5 Reason for Not Connected* (shown when state is NOT CONNECTED) */}
+            {selectedState === 'NOT CONNECTED' && (
+              <View style={styles.fieldSection}>
+                <Text style={styles.fieldLabel}>
+                  Reason for Not Connected<Text style={styles.asterisk}>*</Text>
+                </Text>
+                <TouchableOpacity
+                  style={styles.dropdownBox}
+                  onPress={() => setShowNotConnectedReasonPicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.dropdownValueText}>
+                    {NOT_CONNECTED_LABELS[selectedNotConnectedReason] || selectedNotConnectedReason}
+                  </Text>
+                  <Text style={styles.dropdownCaret}>▼</Text>
+                </TouchableOpacity>
+
+                {/* 1-Tap Quick Presets */}
+                <View style={styles.quickReasonRow}>
+                  {QUICK_NOT_CONNECTED_PRESETS.map((preset) => {
+                    const isSelected = selectedNotConnectedReason === preset.reason;
+                    return (
+                      <TouchableOpacity
+                        key={preset.reason}
+                        style={[
+                          styles.reasonChip,
+                          isSelected && styles.reasonChipActive,
+                        ]}
+                        onPress={() => setSelectedNotConnectedReason(preset.reason)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontSize: 11 }}>{preset.emoji}</Text>
+                        <Text
+                          style={[
+                            styles.reasonChipText,
+                            isSelected && styles.reasonChipTextActive,
+                          ]}
+                        >
+                          {preset.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
             {/* 2. Select Tag* */}
             <View style={styles.fieldSection}>
               <Text style={styles.fieldLabel}>
@@ -892,7 +967,46 @@ export const LeadDetailScreen: React.FC = () => {
                     <Text style={[styles.pickerItemText, isSelected && styles.pickerItemTextSelected]}>
                       {stg}
                     </Text>
-                    {isSelected ? <Check size={16} color="#5B2C82" strokeWidth={3} /> : null}
+                    {isSelected ? <Check size={16} color="#0F9D58" strokeWidth={3} /> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Not Connected Reason Picker Modal */}
+      <Modal
+        visible={showNotConnectedReasonPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNotConnectedReasonPicker(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Reason for Not Connected</Text>
+              <TouchableOpacity onPress={() => setShowNotConnectedReasonPicker(false)}>
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 380 }}>
+              {NotConnectedReasons.map((reason) => {
+                const isSelected = selectedNotConnectedReason === reason;
+                return (
+                  <TouchableOpacity
+                    key={reason}
+                    style={[styles.pickerItemRow, isSelected && styles.pickerItemRowSelected]}
+                    onPress={() => {
+                      setSelectedNotConnectedReason(reason);
+                      setShowNotConnectedReasonPicker(false);
+                    }}
+                  >
+                    <Text style={[styles.pickerItemText, isSelected && styles.pickerItemTextSelected]}>
+                      {NOT_CONNECTED_LABELS[reason] || reason}
+                    </Text>
+                    {isSelected ? <Check size={16} color="#0F9D58" strokeWidth={3} /> : null}
                   </TouchableOpacity>
                 );
               })}
@@ -1297,6 +1411,36 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 6,
     transform: [{ scaleY: 0.85 }],
+  },
+  quickReasonRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  reasonChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  reasonChipActive: {
+    backgroundColor: '#E6F4EA',
+    borderColor: '#0F9D58',
+  },
+  reasonChipText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#4B5563',
+  },
+  reasonChipTextActive: {
+    color: '#0F9D58',
+    fontWeight: '700',
   },
   radioGroup: {
     gap: 10,

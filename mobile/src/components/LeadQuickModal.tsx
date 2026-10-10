@@ -33,7 +33,7 @@ import {
 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 
-import { Lead, Activity, CustomerTemperature } from '../types';
+import { Lead, Activity, CustomerTemperature, NotConnectedReason } from '../types';
 import { CrmAvatar } from './CrmAvatar';
 import { colors, borderRadius, shadows } from '../theme';
 import { disposeLead, fetchLeadHistory } from '../api/leadApi';
@@ -56,8 +56,21 @@ interface LeadQuickModalProps {
 const OUTCOME_OPTIONS = [
   { stage: 'Interested', label: 'Interested', icon: CheckCircle2, color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0' },
   { stage: 'Follow-up', label: 'Follow-up', icon: CalendarClock, color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
-  { stage: 'Not connected', label: 'Not Connected', icon: PhoneOff, color: '#64748B', bg: '#F1F5F9', border: '#CBD5E1' },
-  { stage: 'Not Interested', label: 'Not Interested', icon: Ban, color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
+  { stage: 'Not connected', label: 'Not Connected', icon: PhoneOff, color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
+  { stage: 'Not Interested', label: 'Not Interested', icon: Ban, color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0' },
+];
+
+const NOT_CONNECTED_REASONS: Array<{ label: string; code: NotConnectedReason; emoji: string }> = [
+  { label: 'Ringing / Did Not Pick', code: 'DID_NOT_PICK', emoji: '🔔' },
+  { label: 'Line Busy', code: 'BUSY', emoji: '⏳' },
+  { label: 'Switched Off', code: 'SWITCHED_OFF', emoji: '📴' },
+  { label: 'Out of Coverage / Not Reachable', code: 'OUT_OF_COVERAGE', emoji: '📡' },
+  { label: 'Call Cut / Disconnected', code: 'USER_DISCONNECTED', emoji: '✂️' },
+  { label: 'Call Not Completed', code: 'CALL_NOT_COMPLETED', emoji: '⚠️' },
+  { label: 'Invalid / Wrong Number', code: 'INVALID_NUMBER', emoji: '📵' },
+  { label: 'Incoming Not Available', code: 'INCOMING_NOT_AVAILABLE', emoji: '🚫' },
+  { label: 'Number Not in Use', code: 'NUMBER_NOT_IN_USE', emoji: '❌' },
+  { label: 'Other Reason', code: 'OTHER', emoji: '📝' },
 ];
 
 const LOST_REASONS = [
@@ -77,20 +90,19 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
   onLeadUpdated,
   onOpenFullDispose,
 }) => {
-  if (!lead) return null;
-
   const currentUser = useAuthStore((s) => s.user);
   const currentUserName = currentUser?.name || 'John Agent';
 
   const { getHistoryForLead, addActivity, loadHistory } = useLeadHistoryStore();
 
   const [activeTab, setActiveTab] = useState<ModalTab>('DISPOSITION');
-  const [selectedStage, setSelectedStage] = useState(lead.stage || 'Interested');
+  const [selectedStage, setSelectedStage] = useState(lead?.stage || 'Interested');
   const [selectedTemperature, setSelectedTemperature] = useState<CustomerTemperature>(
-    (lead.tag?.toUpperCase() as CustomerTemperature) || 'WARM',
+    (lead?.tag?.toUpperCase() as CustomerTemperature) || 'WARM',
   );
+  const [selectedNotConnectedReason, setSelectedNotConnectedReason] = useState<NotConnectedReason>('DID_NOT_PICK');
   const [notes, setNotes] = useState('');
-  const [followUpDate, setFollowUpDate] = useState<string>(lead.nextFollowUpAt || '');
+  const [followUpDate, setFollowUpDate] = useState<string>(lead?.nextFollowUpAt || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
@@ -109,6 +121,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       } else {
         setSelectedTemperature('WARM');
       }
+      setSelectedNotConnectedReason('DID_NOT_PICK');
       setFollowUpDate(lead.nextFollowUpAt || '');
       setNotes('');
       setActiveTab('DISPOSITION');
@@ -117,13 +130,14 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
 
   // Query Backend Lead History
   const { data: backendHistoryData, isLoading: isHistoryLoading, refetch: refetchHistory } = useQuery({
-    queryKey: ['leadHistory', lead._id],
-    queryFn: () => fetchLeadHistory(lead._id),
-    enabled: visible && Boolean(lead._id),
+    queryKey: ['leadHistory', lead?._id],
+    queryFn: () => (lead?._id ? fetchLeadHistory(lead._id) : Promise.resolve({ activities: [] })),
+    enabled: visible && Boolean(lead?._id),
   });
 
   // Combine backend history with local store history
   const combinedActivities: Activity[] = useMemo(() => {
+    if (!lead) return [];
     const backendActivities = backendHistoryData?.activities || [];
     const localActivities = getHistoryForLead(lead._id, lead.phone);
 
@@ -138,15 +152,16 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
     }
 
     return deduplicateActivities(localActivities);
-  }, [backendHistoryData, lead._id, lead.phone, getHistoryForLead]);
+  }, [backendHistoryData, lead?._id, lead?.phone, getHistoryForLead]);
 
-  const cleanPhone = (lead.phone || '').replace(/\D/g, '');
+  const cleanPhone = (lead?.phone || '').replace(/\D/g, '');
   const campaignName =
-    typeof lead.campaign === 'object' && lead.campaign?.name
+    typeof lead?.campaign === 'object' && lead?.campaign?.name
       ? lead.campaign.name
       : 'Outreach Campaign';
 
   const handleCall = () => {
+    if (!lead) return;
     const isSuppressed =
       lead.stage === 'Not Interested' ||
       lead.stage === 'Closed' ||
@@ -213,6 +228,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
   };
 
   const handleQuickSave = async () => {
+    if (!lead) return;
     try {
       setIsSubmitting(true);
       const isClosing = selectedStage === 'Not Interested' || selectedStage === 'Closed';
@@ -223,7 +239,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       try {
         await disposeLead(lead._id, {
           connected: isConnected,
-          notConnectedReason: isConnected ? undefined : 'DID_NOT_PICK',
+          notConnectedReason: isConnected ? undefined : selectedNotConnectedReason,
           stage: selectedStage === 'Follow-up' ? 'Follow Up' : selectedStage,
           tag: selectedTemperature,
           remark: notes.trim() || `Stage set to ${selectedStage} (${selectedTemperature})`,
@@ -245,13 +261,13 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
           agentName: currentUserName,
           agentId: currentUser?._id,
           connected: isConnected,
+          notConnectedReason: isConnected ? undefined : selectedNotConnectedReason,
           stage: selectedStage === 'Follow-up' ? 'Follow Up' : selectedStage,
           tag: selectedTemperature,
           temperature: selectedTemperature,
           remark: notes.trim() || `Stage set to ${selectedStage} (${selectedTemperature})`,
           followUpAt: isClosing ? null : (followUpDate || null),
           durationSeconds: 0,
-          notConnectedReason: isConnected ? undefined : 'DID_NOT_PICK',
         });
       }
 
@@ -278,6 +294,8 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  if (!lead || !visible) return null;
 
   return (
     <>
@@ -509,7 +527,7 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                     </View>
                   </View>
 
-                  {/* 3. Conditional: Lost Reason OR Follow-up Scheduler */}
+                  {/* 3. Conditional: Lost Reason OR Not Connected Reason OR Follow-up Scheduler */}
                   {selectedStage === 'Not Interested' || selectedStage === 'Closed' ? (
                     <View style={styles.suppressionBox}>
                       <View style={styles.suppressionHead}>
@@ -554,6 +572,111 @@ export const LeadQuickModal: React.FC<LeadQuickModalProps> = ({
                             </TouchableOpacity>
                           );
                         })}
+                      </View>
+                    </View>
+                  ) : selectedStage === 'Not connected' ? (
+                    <View>
+                      <View style={styles.notConnectedBox}>
+                        <View style={styles.notConnectedHead}>
+                          <PhoneOff size={15} color="#DC2626" />
+                          <Text style={styles.notConnectedTitle}>REASON FOR NOT CONNECTED (1-TAP):</Text>
+                        </View>
+                        <Text style={styles.notConnectedSub}>
+                          Select why the call was not attended by the customer:
+                        </Text>
+                        <View style={styles.lostReasonsWrap}>
+                          {NOT_CONNECTED_REASONS.map((r) => {
+                            const isReasonActive = selectedNotConnectedReason === r.code;
+                            return (
+                              <TouchableOpacity
+                                key={r.code}
+                                style={[
+                                  styles.notConnectedChip,
+                                  isReasonActive && styles.notConnectedChipActive,
+                                ]}
+                                onPress={() => {
+                                  setSelectedNotConnectedReason(r.code);
+                                  setNotes((prev) => {
+                                    const prefix = `Reason: ${r.label}`;
+                                    if (!prev) return prefix;
+                                    if (prev.includes('Reason:')) {
+                                      return prev.replace(/Reason: [^·]+/, prefix);
+                                    }
+                                    return `${prefix} · ${prev}`;
+                                  });
+                                }}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={{ fontSize: 12 }}>{r.emoji}</Text>
+                                <Text
+                                  style={[
+                                    styles.notConnectedChipText,
+                                    isReasonActive && styles.notConnectedChipTextActive,
+                                  ]}
+                                >
+                                  {r.label}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+
+                      {/* Schedule Retry / Callback */}
+                      <View style={styles.formSection}>
+                        <View style={styles.fieldHeaderWithAction}>
+                          <Text style={styles.fieldSectionTitle}>SCHEDULE RETRY / CALLBACK</Text>
+                          {followUpDate ? (
+                            <TouchableOpacity onPress={() => setFollowUpDate('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                              <Text style={styles.clearDateText}>Clear Date</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+
+                        <View style={styles.quickPresetRow}>
+                          <TouchableOpacity
+                            style={styles.presetChip}
+                            onPress={() => setQuickFollowUp(2)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.presetChipText}>In 2 Hours</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.presetChip}
+                            onPress={() => setQuickFollowUp(4)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.presetChipText}>In 4 Hours</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.presetChip}
+                            onPress={() => setQuickFollowUp(24, 10)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.presetChipText}>Tomorrow 10 AM</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.presetChip}
+                            onPress={() => setQuickFollowUp(24, 15)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.presetChipText}>Tomorrow 3 PM</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.customDateBtn}
+                          onPress={() => setShowCustomDatePicker(true)}
+                          activeOpacity={0.8}
+                        >
+                          <Calendar size={14} color="#059669" />
+                          <Text style={styles.customDateBtnText}>
+                            {followUpDate ? formatScheduledDate(followUpDate) : 'Pick Custom Retry Date & Time...'}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                   ) : (
@@ -958,6 +1081,54 @@ const styles = StyleSheet.create({
     color: '#991B1B',
   },
   lostReasonChipTextActive: {
+    color: '#FFFFFF',
+  },
+  notConnectedBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  notConnectedHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  notConnectedTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  notConnectedSub: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginBottom: 10,
+    lineHeight: 15,
+  },
+  notConnectedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    borderRadius: 8,
+  },
+  notConnectedChipActive: {
+    backgroundColor: '#0F9D58',
+    borderColor: '#0B7A43',
+  },
+  notConnectedChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  notConnectedChipTextActive: {
     color: '#FFFFFF',
   },
   fieldHeaderWithAction: {

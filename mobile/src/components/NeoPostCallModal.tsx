@@ -92,7 +92,11 @@ const NOT_CONNECTED_REASONS = [
   { id: 'SWITCHED_OFF', label: 'Switched Off' },
   { id: 'OUT_OF_COVERAGE', label: 'Not Reachable' },
   { id: 'USER_DISCONNECTED', label: 'Call Cut / Disconnected' },
-  { id: 'OTHER', label: 'Other / Language' },
+  { id: 'CALL_NOT_COMPLETED', label: 'Call Not Completed' },
+  { id: 'INVALID_NUMBER', label: 'Invalid / Wrong Number' },
+  { id: 'INCOMING_NOT_AVAILABLE', label: 'Incoming Not Available' },
+  { id: 'NUMBER_NOT_IN_USE', label: 'Number Not in Use' },
+  { id: 'OTHER', label: 'Other Reason' },
 ];
 
 const QUICK_NOTES = [

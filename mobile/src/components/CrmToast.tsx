@@ -63,9 +63,9 @@ export const CrmToast: React.FC = () => {
               styles.container,
               {
                 top: topOffset,
+                pointerEvents: 'box-none',
               },
             ]}
-            pointerEvents="box-none"
           >
             <TouchableOpacity
               activeOpacity={0.9}

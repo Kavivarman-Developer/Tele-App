@@ -1368,17 +1368,19 @@ export const MyLeadsScreen: React.FC = () => {
       </Modal>
 
       {/* Interactive Lovable Lead Modal */}
-      <LeadQuickModal
-        lead={quickModalLead}
-        visible={Boolean(quickModalLead)}
-        onClose={() => setQuickModalLead(null)}
-        onLeadUpdated={() => {
-          refetch();
-        }}
-        onOpenFullDispose={(leadToDispose) => {
-          navigation.navigate('Dispose', { lead: leadToDispose });
-        }}
-      />
+      {Boolean(quickModalLead) && (
+        <LeadQuickModal
+          lead={quickModalLead}
+          visible={Boolean(quickModalLead)}
+          onClose={() => setQuickModalLead(null)}
+          onLeadUpdated={() => {
+            refetch();
+          }}
+          onOpenFullDispose={(leadToDispose) => {
+            navigation.navigate('Dispose', { lead: leadToDispose });
+          }}
+        />
+      )}
 
       {/* WhatsApp Template Selector Modal */}
       <WhatsAppTemplateModal
