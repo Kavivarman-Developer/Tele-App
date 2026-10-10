@@ -11,6 +11,7 @@ import {
   StatusBar as RNStatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -80,11 +81,13 @@ import { EmptyState } from '../components/EmptyState';
 type AdminTab = 'USERS' | 'CAMPAIGNS' | 'UPLOAD' | 'SETTINGS';
 
 export const DashboardScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
   const isManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
+  const isAgent = user?.role === 'AGENT';
 
   const [activeTab, setActiveTab] = useState<AdminTab>('USERS');
   const [selectedBranch, setSelectedBranch] = useState<'ALL' | 'Trichy' | 'Pudukkottai'>('ALL');
@@ -94,12 +97,37 @@ export const DashboardScreen: React.FC = () => {
   const { data: dashboardReportsData } = useQuery({
     queryKey: ['adminDashboardReports'],
     queryFn: () => fetchDashboardReports({}),
+    enabled: !isAgent,
   });
 
   const { data: userCallsReportData } = useQuery({
     queryKey: ['adminUserCallsReport'],
     queryFn: () => fetchUserCallsReport(),
+    enabled: !isAgent,
   });
+
+  if (isAgent) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: '#FFE4E6', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <AlertCircle size={36} color="#DC2626" />
+        </View>
+        <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>
+          Management Access Restricted
+        </Text>
+        <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 24, maxWidth: 320 }}>
+          The administration dashboard and team management controls are restricted to administrators. You can view your personal calling performance in My Report.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: '#0F9D58', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 }}
+          onPress={() => navigation.navigate('AgentReports')}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Go to My Call Report</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   const callsAttempted = dashboardReportsData?.callsMade ?? 0;
   const callsConnected = dashboardReportsData?.connectedCalls ?? 0;

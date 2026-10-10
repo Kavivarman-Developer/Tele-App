@@ -153,11 +153,38 @@ export const SettingsScreen: React.FC = () => {
     ]);
   };
 
+  if (isAgent) {
+    return (
+      <CrmShell
+        title="Access Restricted"
+        headerIcon={<ShieldAlert size={15} color="#DC2626" />}
+        breadcrumb="Settings"
+      >
+        <View style={styles.restrictedContainer}>
+          <View style={styles.restrictedIconBox}>
+            <ShieldAlert size={36} color="#DC2626" />
+          </View>
+          <Text style={styles.restrictedTitle}>Admin Access Only</Text>
+          <Text style={styles.restrictedSubtitle}>
+            Settings, organization calling policies, and system configuration are restricted to Administrators. Agents do not have permission to access or modify these controls.
+          </Text>
+          <TouchableOpacity
+            style={styles.restrictedBackBtn}
+            onPress={() => navigation.navigate('Home')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.restrictedBackBtnText}>Return to Dashboard</Text>
+          </TouchableOpacity>
+        </View>
+      </CrmShell>
+    );
+  }
+
   return (
     <CrmShell
-      title={isAgent ? 'Preferences & Templates' : 'Organization Settings'}
+      title="Organization Settings"
       headerIcon={<Settings2 size={15} color={colors.textSecondary} />}
-      breadcrumb="Workspace"
+      breadcrumb="Management"
     >
       <ScrollView
         style={styles.container}
@@ -887,11 +914,11 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   restrictedBackBtn: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#0F9D58',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
-    shadowColor: '#4F46E5',
+    shadowColor: '#0F9D58',
     shadowOpacity: 0.2,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },

@@ -109,7 +109,12 @@ export const CrmSidebarContent: React.FC<{
     { name: 'MyLeads', route: 'MyLeads', label: 'My Leads', icon: Users },
     { name: 'CallHistory', route: 'CallHistory', label: 'Call History', icon: History },
     { name: 'MyTasks', route: 'FollowUps', label: 'My Tasks', icon: CalendarCheck2, badge: unreadCount > 0 ? unreadCount : undefined },
-    { name: 'MyReport', route: 'Dashboard', label: 'My Report', icon: BarChart2 },
+    {
+      name: 'MyReport',
+      route: isManagerOrAdmin ? 'Dashboard' : 'AgentReports',
+      label: 'My Report',
+      icon: BarChart2,
+    },
     {
       name: 'GeoTagging',
       route: 'GeoTagging',
@@ -120,10 +125,15 @@ export const CrmSidebarContent: React.FC<{
   ];
 
   const MANAGEMENT_ITEMS: NavItemConfig[] = [
-    { name: 'AgentReports', route: 'AgentReports', label: 'Agent Report', icon: UserCheck },
-    { name: 'Settings', route: 'Settings', label: 'Settings', icon: Settings2 },
+    {
+      name: 'AgentReports',
+      route: 'AgentReports',
+      label: isManagerOrAdmin ? 'Agent Report' : 'My Call Report',
+      icon: UserCheck,
+    },
     ...(isManagerOrAdmin
       ? [
+          { name: 'Settings', route: 'Settings', label: 'Settings', icon: Settings2 },
           { name: 'Campaigns', route: 'Campaigns', label: 'Campaigns', icon: Megaphone },
           { name: 'Team', route: 'Team', label: 'Team Members', icon: Users },
           { name: 'UploadLeads', route: 'UploadLeads', label: 'Upload Leads CSV', icon: Upload },

@@ -120,10 +120,11 @@ export const AgentReportScreen: React.FC = () => {
     refetchInterval: 15000,
   });
 
-  // 2. Fetch Users to ensure all registered agents are listed
+  // 2. Fetch Users to ensure all registered agents are listed (Admins & Managers only)
   const { data: usersData } = useQuery({
     queryKey: ['adminUsersListReport'],
     queryFn: () => fetchUsers({ role: 'AGENT' }),
+    enabled: !isAgent,
   });
 
   // 3. Subscribe to local activity store for instant reactivity
@@ -132,6 +133,69 @@ export const AgentReportScreen: React.FC = () => {
 
   // Combine remote stats with local real-time actions
   const combinedAgentStats = useMemo(() => {
+    // If logged in as AGENT: Strictly isolate and return ONLY own stats
+    if (isAgent && currentUser) {
+      const remoteAgents = userCallsData?.agents || [];
+      const myRemote = remoteAgents.find(
+        (a) =>
+          a.userId === currentUser._id ||
+          (currentUser.email && a.email?.toLowerCase() === currentUser.email.toLowerCase()) ||
+          (currentUser.name && a.name?.toLowerCase() === currentUser.name.toLowerCase()),
+      );
+
+      const myStats: UserCallStats = {
+        userId: currentUser._id,
+        name: currentUser.name || 'My Calls',
+        email: currentUser.email || '',
+        branch: currentUser.branch || 'General',
+        calls: myRemote?.calls || 0,
+        connected: myRemote?.connected || 0,
+        notConnected: myRemote?.notConnected || 0,
+        totalDurationSeconds: myRemote?.totalDurationSeconds || 0,
+        avgDurationSeconds: myRemote?.avgDurationSeconds || 0,
+      };
+
+      // Merge local activities for instant reactivity
+      const allLocalActivities = Object.values(historyMap).flat();
+      let localCalls = 0;
+      let localConnected = 0;
+      let localNotConnected = 0;
+      let localDuration = 0;
+
+      for (const act of allLocalActivities) {
+        if (!act.createdAt) continue;
+        const actTime = new Date(act.createdAt).getTime();
+        if (fromDate && actTime < new Date(fromDate).getTime()) continue;
+        if (toDate && actTime > new Date(toDate).getTime()) continue;
+
+        const isMyAct =
+          act.agentId === currentUser._id ||
+          (act.agentName && currentUser.name && act.agentName.toLowerCase() === currentUser.name.toLowerCase()) ||
+          act.userId === currentUser._id;
+
+        if (isMyAct) {
+          localCalls++;
+          const dur = act.durationSeconds || 0;
+          if (dur > 0 || act.connected || act.stage === 'CONNECTED') {
+            localConnected++;
+            localDuration += dur;
+          } else {
+            localNotConnected++;
+          }
+        }
+      }
+
+      myStats.calls = Math.max(myStats.calls, localCalls);
+      myStats.connected = Math.max(myStats.connected, localConnected);
+      myStats.notConnected = Math.max(myStats.notConnected, localNotConnected);
+      myStats.totalDurationSeconds = Math.max(myStats.totalDurationSeconds, localDuration);
+      myStats.avgDurationSeconds =
+        myStats.connected > 0 ? Math.round(myStats.totalDurationSeconds / myStats.connected) : 0;
+
+      return [myStats];
+    }
+
+    // Admins & Managers: Show all agents
     const remoteAgents = userCallsData?.agents || [];
     const registeredAgents = (usersData?.users || []).filter((u) => u.role === 'AGENT');
 
@@ -184,16 +248,23 @@ export const AgentReportScreen: React.FC = () => {
       );
 
       if (matchedAgent) {
-        // Only increment if local is ahead of remote
-        // Local stores distinct calls
+        const dur = act.durationSeconds || 0;
+        if (dur > 0 && matchedAgent.totalDurationSeconds === 0) {
+          matchedAgent.totalDurationSeconds += dur;
+        }
       }
     }
 
     return Array.from(statsMap.values());
-  }, [userCallsData, usersData, historyMap, fromDate, toDate]);
+  }, [userCallsData, usersData, historyMap, fromDate, toDate, isAgent, currentUser]);
 
   // Filter by branch and search
   const filteredAgents = useMemo(() => {
+    // Agents only ever see themselves
+    if (isAgent) {
+      return combinedAgentStats;
+    }
+
     let list = combinedAgentStats;
 
     if (isManager && currentUser?.branch) {
@@ -214,7 +285,7 @@ export const AgentReportScreen: React.FC = () => {
     }
 
     return list.sort((a, b) => b.calls - a.calls);
-  }, [combinedAgentStats, selectedBranch, searchQuery, isManager, currentUser]);
+  }, [combinedAgentStats, selectedBranch, searchQuery, isManager, isAgent, currentUser]);
 
   // Overall totals for team summary banner
   const teamTotals = useMemo(() => {
@@ -265,15 +336,21 @@ export const AgentReportScreen: React.FC = () => {
 
   return (
     <CrmShell
-      title="Agent Call Reports"
-      headerIcon={<Users size={16} color="#0F9D58" />}
-      breadcrumb="Management"
+      title={isAgent ? 'My Call Report' : 'Agent Call Reports'}
+      headerIcon={
+        isAgent ? (
+          <Clock size={16} color="#0F9D58" />
+        ) : (
+          <Users size={16} color="#0F9D58" />
+        )
+      }
+      breadcrumb={isAgent ? 'Workspace' : 'Management'}
       rightAction={
         <TouchableOpacity
           style={styles.refreshBtn}
           onPress={() => {
             refetchReport();
-            toast.info('Refreshed agent call statistics');
+            toast.info(isAgent ? 'Refreshed your call statistics' : 'Refreshed agent call statistics');
           }}
           activeOpacity={0.7}
         >
@@ -291,30 +368,44 @@ export const AgentReportScreen: React.FC = () => {
         <View style={styles.bannerRow}>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.bannerTitle}>Agent Calling Performance</Text>
+              <Text style={styles.bannerTitle}>
+                {isAgent ? 'My Calling Performance' : 'Agent Calling Performance'}
+              </Text>
               <View style={styles.liveTag}>
                 <View style={styles.liveDot} />
-                <Text style={styles.liveTagText}>Real-Time Monitor</Text>
+                <Text style={styles.liveTagText}>
+                  {isAgent ? 'My Activity' : 'Real-Time Monitor'}
+                </Text>
               </View>
             </View>
             <Text style={styles.bannerSubtitle}>
-              Live call volumes, customer talk time, and connection rates per agent.
+              {isAgent
+                ? 'Track your dialed calls, connected conversations, and personal talk time.'
+                : 'Live call volumes, customer talk time, and connection rates per agent.'}
             </Text>
           </View>
         </View>
 
-        {/* 1. TEAM SUMMARY KPI CARDS */}
+        {/* 1. TEAM / AGENT SUMMARY KPI CARDS */}
         <View style={styles.kpiGrid}>
           {/* Card 1: Total Calls */}
           <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Calls Dialed ({periodLabel})</Text>
+            <Text style={styles.kpiLabel}>
+              {isAgent ? 'My Calls Dialed' : `Calls Dialed (${periodLabel})`}
+            </Text>
             <Text style={styles.kpiValue}>{teamTotals.totalCalls}</Text>
-            <Text style={styles.kpiSub}>Across {teamTotals.totalAgents} team agents</Text>
+            <Text style={styles.kpiSub}>
+              {isAgent
+                ? `Dialed ${periodLabel.toLowerCase()}`
+                : `Across ${teamTotals.totalAgents} team agents`}
+            </Text>
           </View>
 
           {/* Card 2: Connected Calls */}
           <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Connected Calls</Text>
+            <Text style={styles.kpiLabel}>
+              {isAgent ? 'My Connected Calls' : 'Connected Calls'}
+            </Text>
             <Text style={[styles.kpiValue, { color: '#0F9D58' }]}>
               {teamTotals.totalConnected}
             </Text>
@@ -323,19 +414,25 @@ export const AgentReportScreen: React.FC = () => {
 
           {/* Card 3: Total Talk Time */}
           <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Total Talk Time</Text>
+            <Text style={styles.kpiLabel}>
+              {isAgent ? 'My Talk Time' : 'Total Talk Time'}
+            </Text>
             <Text style={styles.kpiValue}>{teamTotals.formattedTalkTime}</Text>
             <Text style={styles.kpiSub}>Cumulative spoken hours</Text>
           </View>
 
-          {/* Card 4: Active Agents */}
+          {/* Card 4: Active Agents / Connect Rate */}
           <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Active Dialing</Text>
-            <Text style={[styles.kpiValue, { color: '#2563EB' }]}>
-              {teamTotals.activeDialingAgents}
+            <Text style={styles.kpiLabel}>
+              {isAgent ? 'Connect Rate' : 'Active Dialing'}
+            </Text>
+            <Text style={[styles.kpiValue, { color: isAgent ? '#0F9D58' : '#2563EB' }]}>
+              {isAgent ? `${teamTotals.overallRate}%` : teamTotals.activeDialingAgents}
             </Text>
             <Text style={styles.kpiSub}>
-              Agents with active calls {periodLabel.toLowerCase()}
+              {isAgent
+                ? 'Successful customer pickups'
+                : `Agents with active calls ${periodLabel.toLowerCase()}`}
             </Text>
           </View>
         </View>
@@ -370,49 +467,63 @@ export const AgentReportScreen: React.FC = () => {
           })}
         </View>
 
-        {/* 3. BRANCH FILTER & SEARCH BAR */}
-        <View style={styles.filterBar}>
-          {/* Branch Chips */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 6 }}
-          >
-            {(['ALL', 'Trichy', 'Pudukkottai', 'Chennai', 'Madurai'] as const).map((br) => {
-              const isSelected = selectedBranch === br;
-              return (
-                <TouchableOpacity
-                  key={br}
-                  style={[styles.branchChip, isSelected && styles.branchChipActive]}
-                  onPress={() => setSelectedBranch(br)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.branchChipText, isSelected && styles.branchChipTextActive]}>
-                    {br === 'ALL' ? 'All Branches' : `${br} Branch`}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
+        {/* 3. BRANCH FILTER & SEARCH BAR (Admins & Managers Only) */}
+        {!isAgent && (
+          <>
+            <View style={styles.filterBar}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 6 }}
+              >
+                {(['ALL', 'Trichy', 'Pudukkottai', 'Chennai', 'Madurai'] as const).map((br) => {
+                  const isSelected = selectedBranch === br;
+                  return (
+                    <TouchableOpacity
+                      key={br}
+                      style={[styles.branchChip, isSelected && styles.branchChipActive]}
+                      onPress={() => setSelectedBranch(br)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.branchChipText, isSelected && styles.branchChipTextActive]}>
+                        {br === 'ALL' ? 'All Branches' : `${br} Branch`}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
-        {/* Search Bar */}
-        <View style={styles.searchRow}>
-          <View style={styles.searchInputWrap}>
-            <Search size={16} color="#64748B" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search agent by name or email..."
-              placeholderTextColor="#94A3B8"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <X size={14} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
-          </View>
+            <View style={styles.searchRow}>
+              <View style={styles.searchInputWrap}>
+                <Search size={16} color="#64748B" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search agent by name or email..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <X size={14} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* Section Heading */}
+        <View style={{ marginBottom: 10, marginTop: isAgent ? 12 : 4 }}>
+          <Text style={styles.sectionHeaderTitle}>
+            {isAgent ? 'MY CALL SUMMARY' : `AGENT ROSTER & CALL LOGS (${filteredAgents.length})`}
+          </Text>
+          <Text style={styles.sectionHeaderSubtitle}>
+            {isAgent
+              ? 'Tap your card below to inspect your detailed customer call logs & notes'
+              : 'Tap any agent to drill into individual customer call logs & timeline'}
+          </Text>
         </View>
 
         {/* 4. AGENTS CALL MONITOR LIST */}
@@ -545,7 +656,9 @@ export const AgentReportScreen: React.FC = () => {
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={styles.modalTitle} numberOfLines={1}>
-                    {selectedAgentDetail?.name}'s Call Log
+                    {selectedAgentDetail?.userId === currentUser?._id
+                      ? 'My Call History & Log'
+                      : `${selectedAgentDetail?.name}'s Call Log`}
                   </Text>
                   <View style={styles.branchPill}>
                     <Text style={styles.branchPillText}>
@@ -835,6 +948,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: '#0F172A',
+  },
+  sectionHeaderTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.6,
+  },
+  sectionHeaderSubtitle: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+    marginTop: 2,
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',
