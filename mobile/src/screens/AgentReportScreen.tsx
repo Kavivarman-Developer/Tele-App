@@ -37,7 +37,7 @@ import {
 } from 'lucide-react-native';
 
 import { CrmShell } from '../components/CrmShell';
-import { fetchUserCallsReport, fetchUsers } from '../api/leadApi';
+import { fetchUserCallsReport, fetchUsers, fetchBranches } from '../api/leadApi';
 import { useAuthStore } from '../store/authStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { UserCallStats, Activity } from '../types';
@@ -62,6 +62,18 @@ export const AgentReportScreen: React.FC = () => {
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAgentDetail, setSelectedAgentDetail] = useState<UserCallStats | null>(null);
+
+  const { data: branchesData } = useQuery({
+    queryKey: ['adminBranches'],
+    queryFn: fetchBranches,
+    enabled: !isAgent,
+  });
+  const branchesList = branchesData?.branches || [];
+  const availableBranchNames = useMemo(() => {
+    const fromApi = (branchesList || []).map((b) => b.name);
+    const defaults = ['Trichy', 'Pudukkottai', 'Chennai', 'Madurai'];
+    return Array.from(new Set([...defaults, ...fromApi])).filter(Boolean);
+  }, [branchesList]);
 
   // Compute ISO date range for query
   const { fromDate, toDate, periodLabel } = useMemo(() => {
@@ -479,8 +491,8 @@ export const AgentReportScreen: React.FC = () => {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ gap: 6 }}
               >
-                {(['ALL', 'Trichy', 'Pudukkottai', 'Chennai', 'Madurai'] as const).map((br) => {
-                  const isSelected = selectedBranch === br;
+                {['ALL', ...availableBranchNames].map((br) => {
+                  const isSelected = selectedBranch.toLowerCase() === br.toLowerCase();
                   return (
                     <TouchableOpacity
                       key={br}

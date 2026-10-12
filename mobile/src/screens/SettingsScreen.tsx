@@ -29,11 +29,21 @@ import {
   Volume2,
   Bell,
   Clock,
+  Building2,
+  MapPin,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 import { useAuthStore } from '../store/authStore';
-import { fetchAdminSettings, updateAdminSettings } from '../api/leadApi';
+import {
+  fetchAdminSettings,
+  updateAdminSettings,
+  fetchBranches,
+  createBranch,
+  deleteBranch,
+  fetchUsers,
+} from '../api/leadApi';
+import { Branch } from '../types';
 import { useTemplateStore, WhatsAppTemplate } from '../store/templateStore';
 import { colors } from '../theme';
 import { CrmShell } from '../components/CrmShell';
@@ -43,6 +53,7 @@ export const SettingsScreen: React.FC = () => {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const isAgent = user?.role === 'AGENT';
+  const isAdmin = user?.role === 'ADMIN';
 
   const { data: settingsData } = useQuery({
     queryKey: ['adminSettings'],
@@ -68,6 +79,83 @@ export const SettingsScreen: React.FC = () => {
   const [templateTitle, setTemplateTitle] = useState('');
   const [templateCategory, setTemplateCategory] = useState('Services');
   const [templateContent, setTemplateContent] = useState('');
+
+  // Branch Management State (Admin Only)
+  const [showBranchModal, setShowBranchModal] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchCode, setNewBranchCode] = useState('');
+  const [newBranchAddress, setNewBranchAddress] = useState('');
+
+  const { data: branchesData } = useQuery({
+    queryKey: ['adminBranches'],
+    queryFn: fetchBranches,
+    enabled: isAdmin,
+  });
+  const branchesList: Branch[] = branchesData?.branches || [];
+
+  const { data: usersData } = useQuery({
+    queryKey: ['adminUsers'],
+    queryFn: () => fetchUsers(),
+    enabled: isAdmin,
+  });
+
+  const createBranchMutation = useMutation({
+    mutationFn: () =>
+      createBranch({
+        name: newBranchName.trim(),
+        code: newBranchCode.trim(),
+        address: newBranchAddress.trim(),
+      }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['adminBranches'] });
+      setShowBranchModal(false);
+      setNewBranchName('');
+      setNewBranchCode('');
+      setNewBranchAddress('');
+      Alert.alert(
+        'Branch Created',
+        `Branch "${res.branch?.name || newBranchName}" created successfully!`,
+      );
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to create branch';
+      Alert.alert('Error', msg);
+    },
+  });
+
+  const deleteBranchMutation = useMutation({
+    mutationFn: (id: string) => deleteBranch(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBranches'] });
+      Alert.alert('Branch Removed', 'Branch has been deleted successfully.');
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to delete branch';
+      Alert.alert('Error', msg);
+    },
+  });
+
+  const handleDeleteBranch = (id: string, name: string, memberCount: number) => {
+    if (memberCount > 0) {
+      Alert.alert(
+        'Cannot Delete Branch',
+        `There are ${memberCount} team member(s) assigned to ${name} Branch. Please reassign them in the Team screen before deleting this branch.`,
+      );
+      return;
+    }
+    Alert.alert(
+      'Delete Branch',
+      `Are you sure you want to remove the ${name} Branch?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteBranchMutation.mutate(id),
+        },
+      ],
+    );
+  };
 
   const handleInsertVariable = (token: string) => {
     setTemplateContent((prev) => `${prev} ${token}`);
@@ -471,6 +559,111 @@ export const SettingsScreen: React.FC = () => {
             </View>
           ))}
         </View>
+
+        {/* Section 3: Branch Management (Admin Only) */}
+        {isAdmin && (
+          <>
+            <View
+              style={[
+                styles.sectionHeaderRow,
+                { marginTop: 28, justifyContent: 'space-between' },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Building2 size={16} color="#0D9488" />
+                <Text style={styles.sectionHeaderTitle}>Branch Management</Text>
+              </View>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#0D9488',
+                  paddingVertical: 7,
+                  paddingHorizontal: 12,
+                  borderRadius: 8,
+                  gap: 6,
+                }}
+                onPress={() => setShowBranchModal(true)}
+                activeOpacity={0.8}
+              >
+                <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                  Add Branch
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.templatesSubtitle}>
+              Create and manage company branches. Calling agents, managers, and leads are assigned to branches.
+            </Text>
+
+            <View style={{ gap: 10 }}>
+              {branchesList.map((br) => {
+                const memberCount = (usersData?.users || []).filter(
+                  (u: any) => (u.branch || '').toLowerCase() === br.name.toLowerCase(),
+                ).length;
+                return (
+                  <View
+                    key={br._id || br.name}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      padding: 14,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#0F172A' }}>
+                          {br.name} Branch
+                        </Text>
+                        {br.code ? (
+                          <View
+                            style={{
+                              backgroundColor: '#F0FDFA',
+                              borderColor: '#99F6E4',
+                              borderWidth: 1,
+                              borderRadius: 5,
+                              paddingHorizontal: 6,
+                              paddingVertical: 1,
+                            }}
+                          >
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#0F766E' }}>
+                              {br.code}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                          👥 {memberCount} member{memberCount === 1 ? '' : 's'} assigned
+                        </Text>
+                        {br.address ? (
+                          <Text style={{ fontSize: 11.5, color: '#94A3B8' }}>
+                            · {br.address}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.iconActionBtn}
+                      onPress={() => handleDeleteBranch(br._id, br.name, memberCount)}
+                      activeOpacity={0.7}
+                    >
+                      <Trash2 size={14} color="#DC2626" />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Add / Edit Template Modal with Tappable Variable Chips */}
@@ -604,6 +797,88 @@ export const SettingsScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Branch Modal (Admin Only) */}
+      <Modal
+        visible={showBranchModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowBranchModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Building2 size={18} color="#0D9488" />
+                <Text style={styles.modalTitle}>Create New Branch</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowBranchModal(false)}>
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>BRANCH NAME *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Coimbatore, Salem, Madurai North"
+                placeholderTextColor="#94A3B8"
+                value={newBranchName}
+                onChangeText={setNewBranchName}
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>BRANCH CODE (OPTIONAL)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. CBE, SLM"
+                placeholderTextColor="#94A3B8"
+                value={newBranchCode}
+                onChangeText={setNewBranchCode}
+                autoCapitalize="characters"
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>OFFICE LOCATION / ADDRESS (OPTIONAL)</Text>
+              <TextInput
+                style={[styles.modalTextarea, { minHeight: 65 }]}
+                placeholder="e.g. 124 Cross Cut Road, Gandhipuram"
+                placeholderTextColor="#94A3B8"
+                value={newBranchAddress}
+                onChangeText={setNewBranchAddress}
+                multiline
+                textAlignVertical="top"
+              />
+            </ScrollView>
+
+            <TouchableOpacity
+              style={{
+                height: 48,
+                backgroundColor: '#0D9488',
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 16,
+              }}
+              onPress={() => {
+                if (!newBranchName.trim()) {
+                  Alert.alert('Required', 'Please enter a branch name.');
+                  return;
+                }
+                createBranchMutation.mutate();
+              }}
+              disabled={createBranchMutation.isPending}
+              activeOpacity={0.8}
+            >
+              {createBranchMutation.isPending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                  Create Branch
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

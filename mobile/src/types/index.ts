@@ -1,5 +1,15 @@
 export type UserRole = 'ADMIN' | 'MANAGER' | 'AGENT';
-export type BranchName = 'Trichy' | 'Pudukkottai' | 'Chennai' | 'Madurai';
+export type BranchName = string;
+
+export interface Branch {
+  _id: string;
+  name: string;
+  code?: string;
+  address?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface User {
   _id: string;

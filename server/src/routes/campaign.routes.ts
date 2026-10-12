@@ -42,7 +42,7 @@ router.post(
 
 router.delete(
   '/:id',
-  authorize('ADMIN', 'MANAGER'),
+  authorize('ADMIN'),
   validate(campaignIdParamSchema),
   CampaignController.deleteCampaign,
 );

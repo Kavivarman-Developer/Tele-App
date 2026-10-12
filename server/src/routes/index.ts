@@ -8,6 +8,7 @@ import { campaignLeadsRouter, leadsRouter } from './lead.routes';
 import settingRoutes from './setting.routes';
 import retryRuleRoutes from './retry-rule.routes';
 import reportRoutes from './report.routes';
+import branchRoutes from './branch.routes';
 
 const router = Router();
 
@@ -21,5 +22,6 @@ router.use('/leads', leadsRouter);
 router.use('/settings', settingRoutes);
 router.use('/retry-rules', retryRuleRoutes);
 router.use('/reports', reportRoutes);
+router.use('/branches', branchRoutes);
 
 export default router;

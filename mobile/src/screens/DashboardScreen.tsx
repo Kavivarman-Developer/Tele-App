@@ -59,6 +59,7 @@ import {
   updateRetryRule,
   fetchDashboardReports,
   fetchUserCallsReport,
+  fetchBranches,
 } from '../api/leadApi';
 import {
   User,
@@ -90,9 +91,21 @@ export const DashboardScreen: React.FC = () => {
   const isAgent = user?.role === 'AGENT';
 
   const [activeTab, setActiveTab] = useState<AdminTab>('USERS');
-  const [selectedBranch, setSelectedBranch] = useState<'ALL' | 'Trichy' | 'Pudukkottai'>('ALL');
+  const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
   const [viewMode, setViewMode] = useState<'REPORT' | 'MANAGEMENT'>('REPORT');
   const [reportSubTab, setReportSubTab] = useState<'CALL_REPORT' | 'LOGIN_REPORT'>('CALL_REPORT');
+
+  const { data: branchesData } = useQuery({
+    queryKey: ['adminBranches'],
+    queryFn: fetchBranches,
+    enabled: !isAgent,
+  });
+  const branchesList = branchesData?.branches || [];
+  const availableBranchNames = useMemo(() => {
+    const fromApi = (branchesList || []).map((b) => b.name);
+    const defaults = ['Trichy', 'Pudukkottai', 'Chennai', 'Madurai'];
+    return Array.from(new Set([...defaults, ...fromApi])).filter(Boolean);
+  }, [branchesList]);
 
   const { data: dashboardReportsData } = useQuery({
     queryKey: ['adminDashboardReports'],
@@ -789,9 +802,13 @@ export const DashboardScreen: React.FC = () => {
           <View style={{ gap: 16 }}>
           <View style={{ marginBottom: 20 }}>
           {/* Branch Pill Selector */}
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-            {(['ALL', 'Trichy', 'Pudukkottai'] as const).map((br) => {
-              const isSelected = selectedBranch === br;
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}
+          >
+            {['ALL', ...availableBranchNames].map((br) => {
+              const isSelected = selectedBranch.toLowerCase() === br.toLowerCase();
               return (
                 <TouchableOpacity
                   key={br}
@@ -818,7 +835,7 @@ export const DashboardScreen: React.FC = () => {
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
 
           {/* 4 KPI Cards Grid */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
@@ -1175,7 +1192,7 @@ export const DashboardScreen: React.FC = () => {
                     </View>
                   ) : (
                     <View className="flex-row flex-wrap gap-2">
-                      {['Trichy', 'Pudukkottai', 'Chennai', 'Madurai'].map((b) => {
+                      {availableBranchNames.map((b) => {
                         const isSelected = newUserBranch === b;
                         return (
                           <TouchableOpacity

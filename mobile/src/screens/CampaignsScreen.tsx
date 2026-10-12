@@ -16,6 +16,7 @@ import {
   Megaphone,
   Plus,
   Edit2,
+  Trash2,
   X,
   Users,
   Check,
@@ -31,6 +32,7 @@ import {
   fetchCampaigns,
   createCampaign,
   updateCampaign,
+  deleteCampaign,
   fetchPipelines,
   fetchUsers,
 } from '../api/leadApi';
@@ -147,6 +149,36 @@ export const CampaignsScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteCampaign(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminCampaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      setShowModal(false);
+      setEditingId(null);
+      Alert.alert('Campaign Deleted', 'The campaign and its leads have been deleted successfully.');
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to delete campaign';
+      Alert.alert('Error', msg);
+    },
+  });
+
+  const handleDeleteCampaign = (campaignId: string, campaignName: string) => {
+    Alert.alert(
+      'Delete Campaign',
+      `Are you sure you want to delete "${campaignName}"?\n\nThis will permanently delete the campaign and all associated leads. This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteMutation.mutate(campaignId),
+        },
+      ],
+    );
+  };
 
   const handleToggleActive = (campId: string, currentStatus: boolean) => {
     const nextStatus = !currentStatus;
@@ -503,26 +535,52 @@ export const CampaignsScreen: React.FC = () => {
                     </Text>
                   </View>
 
-                  <TouchableOpacity
-                    onPress={() => openEdit(camp)}
-                    activeOpacity={0.7}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 5,
-                      paddingHorizontal: 12,
-                      paddingVertical: 7,
-                      borderRadius: 8,
-                      backgroundColor: '#F8FAFC',
-                      borderWidth: 1,
-                      borderColor: '#E2E8F0',
-                    }}
-                  >
-                    <Edit2 size={13} color="#475569" />
-                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569' }}>
-                      Configure
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => openEdit(camp)}
+                      activeOpacity={0.7}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 5,
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 8,
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                      }}
+                    >
+                      <Edit2 size={13} color="#475569" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569' }}>
+                        Configure
+                      </Text>
+                    </TouchableOpacity>
+
+                    {user?.role === 'ADMIN' && (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteCampaign(camp._id, camp.name)}
+                        disabled={deleteMutation.isPending}
+                        activeOpacity={0.7}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          backgroundColor: '#FEF2F2',
+                          borderWidth: 1,
+                          borderColor: '#FECACA',
+                        }}
+                      >
+                        <Trash2 size={13} color="#DC2626" />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#DC2626' }}>
+                          Delete
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               </View>
             );
@@ -660,6 +718,31 @@ export const CampaignsScreen: React.FC = () => {
                 </Text>
               )}
             </TouchableOpacity>
+
+            {editingId && user?.role === 'ADMIN' && (
+              <TouchableOpacity
+                style={{
+                  marginTop: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  backgroundColor: '#FEF2F2',
+                  borderWidth: 1,
+                  borderColor: '#FECACA',
+                }}
+                onPress={() => handleDeleteCampaign(editingId, name)}
+                disabled={deleteMutation.isPending}
+                activeOpacity={0.8}
+              >
+                <Trash2 size={16} color="#DC2626" />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#DC2626' }}>
+                  Delete Campaign
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>

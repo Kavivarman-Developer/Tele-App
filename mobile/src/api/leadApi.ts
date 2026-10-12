@@ -12,7 +12,9 @@ import {
   User,
   DashboardReportResponse,
   UserCallsReportResponse,
+  Branch,
 } from '../types';
+import { BranchRegistry } from '../utils/branchRegistry';
 
 export interface MyLeadsResponse {
   leads: Lead[];
@@ -394,4 +396,85 @@ export const reassignLead = async (
   });
   return response.data;
 };
+
+/**
+ * Deletes a campaign (ADMIN only).
+ */
+export const deleteCampaign = async (id: string): Promise<{ message: string }> => {
+  const response = await apiClient.delete<{ message: string }>(`/api/campaigns/${id}`);
+  return response.data;
+};
+
+/**
+ * Fetches all available branches, with fallback to local persistent branch registry.
+ */
+export const fetchBranches = async (): Promise<{ branches: Branch[] }> => {
+  try {
+    const response = await apiClient.get<{ branches: Branch[] }>('/api/branches');
+    if (response.data && Array.isArray(response.data.branches)) {
+      // Sync to local storage
+      for (const br of response.data.branches) {
+        await BranchRegistry.saveBranch({
+          name: br.name,
+          code: br.code,
+          address: br.address,
+        });
+      }
+      return response.data;
+    }
+  } catch (err) {
+    // Graceful fallback to local registry
+  }
+  const localBranches = await BranchRegistry.getAllBranches();
+  return { branches: localBranches };
+};
+
+/**
+ * Creates a new branch (ADMIN only).
+ */
+export const createBranch = async (data: {
+  name: string;
+  code?: string;
+  address?: string;
+}): Promise<{ branch: Branch; message?: string }> => {
+  try {
+    const response = await apiClient.post<{ branch: Branch; message?: string }>(
+      '/api/branches',
+      data,
+    );
+    if (response.data?.branch) {
+      await BranchRegistry.saveBranch(response.data.branch);
+      return response.data;
+    }
+  } catch (err: any) {
+    // If network error, persist locally as fallback
+    const isNetworkErr = !err.response || err.response.status === 404 || err.response.status === 502;
+    if (isNetworkErr) {
+      const saved = await BranchRegistry.saveBranch(data);
+      return { branch: saved, message: 'Branch created in local registry' };
+    }
+    throw err;
+  }
+  const saved = await BranchRegistry.saveBranch(data);
+  return { branch: saved };
+};
+
+/**
+ * Deletes a branch (ADMIN only).
+ */
+export const deleteBranch = async (id: string): Promise<{ message: string }> => {
+  try {
+    const response = await apiClient.delete<{ message: string }>(`/api/branches/${id}`);
+    await BranchRegistry.deleteBranch(id);
+    return response.data;
+  } catch (err: any) {
+    const isNetworkErr = !err.response || err.response.status === 404 || err.response.status === 502;
+    if (isNetworkErr) {
+      await BranchRegistry.deleteBranch(id);
+      return { message: 'Branch deleted locally' };
+    }
+    throw err;
+  }
+};
+
 

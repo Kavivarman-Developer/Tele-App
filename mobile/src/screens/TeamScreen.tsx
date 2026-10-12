@@ -28,8 +28,15 @@ import {
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
-import { fetchUsers, createUser, updateUser } from '../api/leadApi';
-import { User, UserRole } from '../types';
+import {
+  fetchUsers,
+  createUser,
+  updateUser,
+  fetchBranches,
+  createBranch,
+  deleteBranch,
+} from '../api/leadApi';
+import { User, UserRole, Branch } from '../types';
 import { colors } from '../theme';
 import { CrmShell } from '../components/CrmShell';
 import { useAuthStore } from '../store/authStore';
@@ -45,8 +52,6 @@ interface DisplayMember {
   canReceiveLeads: boolean;
 }
 
-const AVAILABLE_BRANCHES = ['Trichy', 'Pudukkottai', 'Chennai', 'Madurai'];
-
 export const TeamScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
@@ -56,11 +61,17 @@ export const TeamScreen: React.FC = () => {
   const isAdmin = currentUser?.role === 'ADMIN';
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBranch, setSelectedBranch] = useState<'ALL' | 'Trichy' | 'Pudukkottai'>(
-    isManager && currentUser?.branch ? (currentUser.branch as any) : 'ALL',
+  const [selectedBranch, setSelectedBranch] = useState<string>(
+    isManager && currentUser?.branch ? currentUser.branch : 'ALL',
   );
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddBranchModal, setShowAddBranchModal] = useState(false);
   const [editingMember, setEditingMember] = useState<DisplayMember | null>(null);
+
+  // New Branch Form
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchCode, setNewBranchCode] = useState('');
+  const [newBranchAddress, setNewBranchAddress] = useState('');
 
   // New Agent Form
   const [name, setName] = useState('');
@@ -73,6 +84,20 @@ export const TeamScreen: React.FC = () => {
   const [branch, setBranch] = useState<string>(
     currentUser?.branch || 'Trichy',
   );
+
+  // Dynamic Branches Query
+  const { data: branchesData } = useQuery({
+    queryKey: ['adminBranches'],
+    queryFn: fetchBranches,
+    enabled: !isAgent,
+  });
+  const branchesList: Branch[] = branchesData?.branches || [];
+
+  const availableBranchNames = useMemo(() => {
+    const fromApi = branchesList.map((b) => b.name);
+    const defaults = ['Trichy', 'Pudukkottai', 'Chennai', 'Madurai'];
+    return Array.from(new Set([...defaults, ...fromApi])).filter(Boolean);
+  }, [branchesList]);
 
   // Queries
   const { data: usersData, refetch } = useQuery({
@@ -119,6 +144,34 @@ export const TeamScreen: React.FC = () => {
     },
   });
 
+  const createBranchMutation = useMutation({
+    mutationFn: () =>
+      createBranch({
+        name: newBranchName.trim(),
+        code: newBranchCode.trim(),
+        address: newBranchAddress.trim(),
+      }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['adminBranches'] });
+      setShowAddBranchModal(false);
+      setNewBranchName('');
+      setNewBranchCode('');
+      setNewBranchAddress('');
+      Alert.alert(
+        'Branch Created',
+        `Branch "${res.branch?.name || newBranchName}" has been created successfully.`,
+      );
+      if (res.branch?.name) {
+        setSelectedBranch(res.branch.name);
+        setBranch(res.branch.name);
+      }
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to create branch';
+      Alert.alert('Error', msg);
+    },
+  });
+
   // Combined list
   const combinedMembers: DisplayMember[] = useMemo(() => {
     const realUsers = usersData?.users || [];
@@ -145,7 +198,7 @@ export const TeamScreen: React.FC = () => {
       // MANAGER: strictly scoped to own branch and AGENT role only
       list = list.filter((m) => m.branch === currentUser.branch && m.role === 'AGENT');
     } else if (selectedBranch !== 'ALL') {
-      list = list.filter((m) => m.branch === selectedBranch);
+      list = list.filter((m) => (m.branch || '').toLowerCase() === selectedBranch.toLowerCase());
     }
 
     if (searchQuery.trim()) {
@@ -165,8 +218,6 @@ export const TeamScreen: React.FC = () => {
   // Counts
   const totalCount = combinedMembers.length;
   const agentCount = combinedMembers.filter((m) => m.role === 'AGENT').length;
-  const trichyCount = combinedMembers.filter((m) => m.branch === 'Trichy').length;
-  const pudukkottaiCount = combinedMembers.filter((m) => m.branch === 'Pudukkottai').length;
 
   const handleToggleReceiveLeads = (member: DisplayMember) => {
     const newValue = !member.canReceiveLeads;
@@ -180,10 +231,16 @@ export const TeamScreen: React.FC = () => {
   };
 
   const handleOpenAddModal = () => {
-    if (currentUser?.role === 'MANAGER') {
-      setBranch(currentUser.branch || 'Trichy');
-      setRole('AGENT');
-    }
+    setName('');
+    setEmail('');
+    setPhone('');
+    setPassword('');
+    setRole('AGENT');
+    setBranch(
+      currentUser?.role === 'MANAGER'
+        ? currentUser.branch || 'Trichy'
+        : availableBranchNames[0] || 'Trichy',
+    );
     setShowAddModal(true);
   };
 
@@ -240,21 +297,38 @@ export const TeamScreen: React.FC = () => {
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.addAgentBtn}
-            onPress={handleOpenAddModal}
-            activeOpacity={0.8}
-          >
-            <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
-            <Text style={styles.addAgentText}>
-              {isManager ? `Add ${currentUser?.branch || ''} Agent` : 'Add Member'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.addAgentBtn, { backgroundColor: '#0D9488' }]}
+                onPress={() => setShowAddBranchModal(true)}
+                activeOpacity={0.8}
+              >
+                <Building2 size={14} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.addAgentText}>+ Branch</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.addAgentBtn}
+              onPress={handleOpenAddModal}
+              activeOpacity={0.8}
+            >
+              <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.addAgentText}>
+                {isManager ? `Add ${currentUser?.branch || ''} Agent` : 'Add Member'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Branch Filter Tabs Bar (Admin only - Managers are locked to their branch) */}
         {isAdmin && (
-          <View style={styles.branchTabsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.branchTabsRow}
+          >
             <TouchableOpacity
               style={[styles.branchTab, selectedBranch === 'ALL' && styles.branchTabActive]}
               onPress={() => setSelectedBranch('ALL')}
@@ -267,38 +341,42 @@ export const TeamScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.branchTab, selectedBranch === 'Trichy' && styles.branchTabActive]}
-              onPress={() => setSelectedBranch('Trichy')}
-              activeOpacity={0.8}
-            >
-              <MapPin size={12} color={selectedBranch === 'Trichy' ? '#0F766E' : '#64748B'} />
-              <Text
-                style={[
-                  styles.branchTabText,
-                  selectedBranch === 'Trichy' && styles.branchTabTextActive,
-                ]}
-              >
-                Trichy ({trichyCount})
-              </Text>
-            </TouchableOpacity>
+            {availableBranchNames.map((bName) => {
+              const count = combinedMembers.filter(
+                (m) => (m.branch || '').toLowerCase() === bName.toLowerCase(),
+              ).length;
+              const isSelected = selectedBranch.toLowerCase() === bName.toLowerCase();
+              return (
+                <TouchableOpacity
+                  key={bName}
+                  style={[styles.branchTab, isSelected && styles.branchTabActive]}
+                  onPress={() => setSelectedBranch(bName)}
+                  activeOpacity={0.8}
+                >
+                  <MapPin size={12} color={isSelected ? '#0F766E' : '#64748B'} />
+                  <Text
+                    style={[
+                      styles.branchTabText,
+                      isSelected && styles.branchTabTextActive,
+                    ]}
+                  >
+                    {bName} ({count})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
 
             <TouchableOpacity
-              style={[styles.branchTab, selectedBranch === 'Pudukkottai' && styles.branchTabActive]}
-              onPress={() => setSelectedBranch('Pudukkottai')}
+              style={[styles.branchTab, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
+              onPress={() => setShowAddBranchModal(true)}
               activeOpacity={0.8}
             >
-              <MapPin size={12} color={selectedBranch === 'Pudukkottai' ? '#0F766E' : '#64748B'} />
-              <Text
-                style={[
-                  styles.branchTabText,
-                  selectedBranch === 'Pudukkottai' && styles.branchTabTextActive,
-                ]}
-              >
-                Pudukkottai ({pudukkottaiCount})
+              <Plus size={12} color="#16A34A" strokeWidth={2.5} />
+              <Text style={[styles.branchTabText, { color: '#16A34A', fontWeight: '700' }]}>
+                Add Branch
               </Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         )}
 
         {/* Search & Active Status Bar */}
@@ -629,7 +707,7 @@ export const TeamScreen: React.FC = () => {
                 </View>
               ) : (
                 <View style={styles.branchPickerRow}>
-                  {AVAILABLE_BRANCHES.map((b) => (
+                  {availableBranchNames.map((b) => (
                     <TouchableOpacity
                       key={b}
                       style={[styles.branchPickBtn, branch === b && styles.branchPickBtnActive]}
@@ -777,6 +855,92 @@ export const TeamScreen: React.FC = () => {
           </View>
         </Modal>
       )}
+
+      {/* Create New Branch Modal (Admin Only) */}
+      <Modal
+        visible={showAddBranchModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddBranchModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: '#CCFBF1',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Building2 size={18} color="#0F766E" />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Create New Branch</Text>
+                  <Text style={styles.modalSubtitle}>Add a new company branch or office</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowAddBranchModal(false)}>
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>BRANCH NAME *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Coimbatore, Salem, Madurai North"
+                placeholderTextColor="#94A3B8"
+                value={newBranchName}
+                onChangeText={setNewBranchName}
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>BRANCH CODE (OPTIONAL)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. CBE, SLM"
+                placeholderTextColor="#94A3B8"
+                value={newBranchCode}
+                onChangeText={setNewBranchCode}
+                autoCapitalize="characters"
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>LOCATION / ADDRESS (OPTIONAL)</Text>
+              <TextInput
+                style={[styles.modalInput, { height: 64, textAlignVertical: 'top' }]}
+                placeholder="e.g. 124 Cross Cut Road, Gandhipuram"
+                placeholderTextColor="#94A3B8"
+                value={newBranchAddress}
+                onChangeText={setNewBranchAddress}
+                multiline
+              />
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.submitBtn, { backgroundColor: '#0D9488', marginTop: 16 }]}
+              onPress={() => {
+                if (!newBranchName.trim()) {
+                  Alert.alert('Required', 'Please enter a branch name.');
+                  return;
+                }
+                createBranchMutation.mutate();
+              }}
+              disabled={createBranchMutation.isPending}
+              activeOpacity={0.8}
+            >
+              {createBranchMutation.isPending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitBtnText}>Create Branch</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </CrmShell>
   );
 };

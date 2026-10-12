@@ -285,24 +285,27 @@ export class CampaignService {
   }
 
   public static async deleteCampaign(requester: IUserDoc, id: string): Promise<void> {
+    if (requester.role !== 'ADMIN') {
+      throw new AppError('Forbidden: Only administrators can delete campaigns', 403);
+    }
+
     const campaign = await Campaign.findById(id);
     if (!campaign) {
       throw new AppError('Campaign not found', 404);
     }
 
-    if (requester.role === 'MANAGER' && campaign.managerId.toString() !== requester._id.toString()) {
-      throw new AppError('Forbidden: You can only delete your own campaigns', 403);
-    }
-
-    // Block deletion if any leads belong to this campaign
+    // Cascade clean-up: remove all leads and activities associated with this campaign
     if (mongoose.modelNames().includes('Lead')) {
       const Lead = mongoose.model('Lead');
-      const leadCount = await Lead.countDocuments({ campaignId: id });
-      if (leadCount > 0) {
-        throw new AppError(
-          `Cannot delete campaign because it contains ${leadCount} lead(s). Please deactivate the campaign instead.`,
-          400,
-        );
+      const leads = await Lead.find({ campaignId: id }, '_id');
+      const leadIds = leads.map((l: any) => l._id);
+
+      if (leadIds.length > 0) {
+        if (mongoose.modelNames().includes('Activity')) {
+          const Activity = mongoose.model('Activity');
+          await Activity.deleteMany({ leadId: { $in: leadIds } });
+        }
+        await Lead.deleteMany({ campaignId: id });
       }
     }
 
