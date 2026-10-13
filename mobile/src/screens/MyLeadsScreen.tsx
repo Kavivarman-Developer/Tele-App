@@ -151,7 +151,18 @@ export const MyLeadsScreen: React.FC = () => {
 
   // Real backend leads (backend /api/leads/my is already strictly scoped to logged-in user)
   const combinedLeads: ScreenshotLead[] = useMemo(() => {
-    const realLeads = leadsData?.leads || [];
+    const rawLeads = leadsData?.leads || [];
+    const realLeads = [...rawLeads].sort((a: Lead, b: Lead) => {
+      const aCalled = (a.attemptCount && a.attemptCount > 0) || a.lastContactedAt ? 1 : 0;
+      const bCalled = (b.attemptCount && b.attemptCount > 0) || b.lastContactedAt ? 1 : 0;
+      if (aCalled !== bCalled) return aCalled - bCalled;
+      if (aCalled === 1 && bCalled === 1) {
+        const aTime = a.lastContactedAt ? new Date(a.lastContactedAt).getTime() : 0;
+        const bTime = b.lastContactedAt ? new Date(b.lastContactedAt).getTime() : 0;
+        if (aTime !== bTime) return aTime - bTime;
+      }
+      return 0;
+    });
     if (realLeads.length > 0) {
       return realLeads.map((l: Lead, idx: number) => {
         const camp =

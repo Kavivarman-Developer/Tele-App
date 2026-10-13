@@ -171,19 +171,48 @@ export class LeadService {
               default: 4,
             },
           },
+          // Uncontacted leads (attemptCount 0 and no lastContactedAt) have contactedRank = 0 (top)
+          // Contacted leads have contactedRank = 1 (bottom)
+          contactedRank: {
+            $cond: [
+              {
+                $and: [
+                  { $or: [{ $eq: ['$attemptCount', 0] }, { $not: ['$attemptCount'] }] },
+                  { $eq: [{ $ifNull: ['$lastContactedAt', null] }, null] },
+                ],
+              },
+              0,
+              1,
+            ],
+          },
+          // For contacted leads: recently contacted goes to the very bottom
+          lastContactedSort: {
+            $ifNull: ['$lastContactedAt', new Date('1970-01-01T00:00:00.000Z')],
+          },
           // For null nextFollowUpAt, sort them after defined follow-ups
           followUpSortKey: {
             $ifNull: ['$nextFollowUpAt', new Date('9999-12-31T23:59:59.999Z')],
           },
         },
       },
-      // Priority ordering: campaign priority HIGH first, then follow-up due soonest
+      // Priority ordering:
+      // For FOLLOW_UP tab: sort by upcoming followUpSortKey
+      // For general queue (ALL, NEW, etc.): fresh uncalled leads first (contactedRank: 0),
+      // and contacted leads (contactedRank: 1) pushed to bottom with most recently contacted at the very bottom!
       {
-        $sort: {
-          priorityRank: 1,
-          followUpSortKey: 1,
-          createdAt: -1,
-        },
+        $sort:
+          query.type === 'FOLLOW_UP'
+            ? {
+                priorityRank: 1,
+                followUpSortKey: 1,
+                createdAt: -1,
+              }
+            : {
+                contactedRank: 1,
+                priorityRank: 1,
+                lastContactedSort: 1,
+                createdAt: -1,
+              },
       },
       {
         $facet: {

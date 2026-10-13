@@ -118,6 +118,13 @@ const QUICK_NOT_CONNECTED_PRESETS: Array<{
   { reason: 'DID_NOT_PICK', label: 'No Answer', emoji: '🔔' },
   { reason: 'BUSY', label: 'Line Busy', emoji: '⏳' },
   { reason: 'SWITCHED_OFF', label: 'Switched Off', emoji: '📴' },
+  { reason: 'OUT_OF_COVERAGE', label: 'Unreachable', emoji: '📡' },
+  { reason: 'USER_DISCONNECTED', label: 'Call Cut', emoji: '✂️' },
+  { reason: 'CALL_NOT_COMPLETED', label: 'Not Completed', emoji: '⚠️' },
+  { reason: 'INVALID_NUMBER', label: 'Wrong Number', emoji: '📵' },
+  { reason: 'INCOMING_NOT_AVAILABLE', label: 'No Incoming', emoji: '🚫' },
+  { reason: 'NUMBER_NOT_IN_USE', label: 'Not in Use', emoji: '❌' },
+  { reason: 'OTHER', label: 'Other', emoji: '📝' },
 ];
 
 const LOST_REASONS = [
@@ -194,9 +201,13 @@ export const LeadDetailScreen: React.FC = () => {
 
   // Checkboxes for "Select next action*"
   const [actionNextFollowUp, setActionNextFollowUp] = useState<boolean>(true);
-  const [followUpDate, setFollowUpDate] = useState<string | null>(
-    lead.nextFollowUpAt || null,
-  );
+  const defaultFollowUpDate = useMemo(() => {
+    if (lead.nextFollowUpAt) return lead.nextFollowUpAt;
+    const d = new Date();
+    d.setHours(d.getHours() + 2);
+    return d.toISOString();
+  }, [lead.nextFollowUpAt]);
+  const [followUpDate, setFollowUpDate] = useState<string | null>(defaultFollowUpDate);
   const [showDatePickerModal, setShowDatePickerModal] = useState<boolean>(false);
 
   // Clean unselected checkboxes by default
@@ -290,7 +301,7 @@ export const LeadDetailScreen: React.FC = () => {
 
   // AppState Listener: Detect call completion and switch to DISPOSE LEAD tab
   useEffect(() => {
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       const prevAppState = appStateRef.current;
       appStateRef.current = nextAppState;
 
@@ -305,19 +316,38 @@ export const LeadDetailScreen: React.FC = () => {
         callStartTimeRef.current = null;
         setCallActive(false);
         setIsCallAttempt(true);
-        if (startedAt !== null) {
-          setCallDurationSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+
+        let result = { connected: false, durationSeconds: 0 };
+        try {
+          result = await callService.getCallResult(currentLead.phone, startedAt);
+        } catch {
+          result = { connected: false, durationSeconds: 0 };
+        }
+
+        setCallDurationSeconds(result.durationSeconds);
+        if (!result.connected) {
+          setSelectedState('NOT CONNECTED');
+          setSelectedNotConnectedReason('DID_NOT_PICK');
+        } else {
+          if (selectedState === 'NOT CONNECTED' || selectedState === 'NEW') {
+            setSelectedState('FOLLOW UP');
+          }
         }
 
         // Seamlessly switch to DISPOSE LEAD tab
         setActiveTab('DISPOSE LEAD');
-        toast.info('Call ended. Please record the disposition below.', 'Call Completed');
+        toast.info(
+          result.connected
+            ? 'Call completed. Please record the disposition below.'
+            : 'Call not answered. Please update lead state below.',
+          'Call Ended',
+        );
       }
     };
 
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub.remove();
-  }, []);
+  }, [currentLead.phone, selectedState]);
 
   const initiateCall = async () => {
     isCallingRef.current = true;
@@ -387,6 +417,11 @@ export const LeadDetailScreen: React.FC = () => {
         isLeadLostOrSuppressed({ stage: selectedState }) ||
         selectedState === 'CONVERTED';
 
+      const finalFollowUp =
+        !isClosing && actionNextFollowUp
+          ? followUpDate || new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+          : null;
+
       return await disposeLead(currentLead._id, {
         phone: currentLead.phone,
         connected: isConnected,
@@ -394,20 +429,18 @@ export const LeadDetailScreen: React.FC = () => {
         notConnectedReason,
         stage: selectedState,
         tag: selectedTag.toUpperCase() as any,
-        followUpAt: !isClosing && actionNextFollowUp ? followUpDate : null,
-        remark: remarks.trim() || (!isConnected ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason]}` : undefined),
+        followUpAt: finalFollowUp,
+        remark:
+          remarks.trim() ||
+          (!isConnected
+            ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason] || selectedNotConnectedReason}`
+            : undefined),
         durationSeconds: callDurationSeconds,
         reassignToUserId: actionReassign && selectedReassignUserId ? selectedReassignUserId : undefined,
         copyToCampaignId: actionCopyCampaign && selectedCopyCampaignId ? selectedCopyCampaignId : undefined,
       });
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['myLeads'] });
-      queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
-      queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
-      queryClient.invalidateQueries({ queryKey: ['leadHistory', currentLead._id] });
-
       const isConnected =
         selectedState !== 'NOT CONNECTED' &&
         selectedState !== 'SWITCHED OFF' &&
@@ -418,6 +451,52 @@ export const LeadDetailScreen: React.FC = () => {
 
       const isLost = isLeadLostOrSuppressed({ stage: selectedState });
       const isClosing = data.lead.status === 'CLOSED' || isLost;
+
+      const finalFollowUp =
+        !isClosing && actionNextFollowUp
+          ? followUpDate || new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+          : null;
+
+      // Optimistically push dialed lead to the BOTTOM of active queue
+      queryClient.setQueryData(['homeMyLeadsQueue'], (old: any) => {
+        if (!old?.leads) return old;
+        const remaining = old.leads.filter((l: Lead) => l._id !== currentLead._id);
+        const updatedCurrent: Lead = {
+          ...currentLead,
+          stage: selectedState,
+          tag: selectedTag.toUpperCase(),
+          attemptCount: (currentLead.attemptCount || 0) + 1,
+          lastContactedAt: new Date().toISOString(),
+          nextFollowUpAt: finalFollowUp,
+        };
+        return {
+          ...old,
+          leads: isClosing ? remaining : [...remaining, updatedCurrent],
+        };
+      });
+
+      queryClient.setQueryData(['myLeadsList'], (old: any) => {
+        if (!old?.leads) return old;
+        const remaining = old.leads.filter((l: Lead) => l._id !== currentLead._id);
+        const updatedCurrent: Lead = {
+          ...currentLead,
+          stage: selectedState,
+          tag: selectedTag.toUpperCase(),
+          attemptCount: (currentLead.attemptCount || 0) + 1,
+          lastContactedAt: new Date().toISOString(),
+          nextFollowUpAt: finalFollowUp,
+        };
+        return {
+          ...old,
+          leads: isClosing ? remaining : [...remaining, updatedCurrent],
+        };
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['myLeads'] });
+      queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
+      queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
+      queryClient.invalidateQueries({ queryKey: ['leadHistory', currentLead._id] });
 
       useLeadHistoryStore.getState().addActivity(currentLead._id, {
         phone: currentLead.phone,
@@ -430,15 +509,19 @@ export const LeadDetailScreen: React.FC = () => {
         notConnectedReason: isCallAttempt ? notConnectedReason : undefined,
         stage: selectedState,
         tag: selectedTag,
-        remark: remarks.trim() || (isCallAttempt && !isConnected ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason]}` : undefined),
-        followUpAt: !isClosing && actionNextFollowUp ? followUpDate : null,
+        remark:
+          remarks.trim() ||
+          (isCallAttempt && !isConnected
+            ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason] || selectedNotConnectedReason}`
+            : undefined),
+        followUpAt: finalFollowUp,
         durationSeconds: isCallAttempt ? callDurationSeconds : 0,
       });
 
-      if (!isClosing && actionNextFollowUp && followUpDate) {
+      if (!isClosing && actionNextFollowUp && finalFollowUp) {
         notificationService.scheduleFollowUpReminder(
-          { ...currentLead, nextFollowUpAt: followUpDate },
-          followUpDate,
+          { ...currentLead, nextFollowUpAt: finalFollowUp },
+          finalFollowUp,
         );
       } else {
         notificationService.cancelFollowUpReminder(currentLead._id);
@@ -841,16 +924,38 @@ export const LeadDetailScreen: React.FC = () => {
                 </TouchableOpacity>
 
                 {actionNextFollowUp && (
-                  <TouchableOpacity
-                    style={styles.dropdownBoxSub}
-                    onPress={() => setShowDatePickerModal(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.dropdownValueText, !followUpDate && styles.placeholderText]}>
-                      {followUpDate ? formatDisplayDateTime(followUpDate) : ''}
-                    </Text>
-                    <Text style={styles.dropdownCaret}>▼</Text>
-                  </TouchableOpacity>
+                  <View style={{ gap: 6 }}>
+                    <TouchableOpacity
+                      style={styles.dropdownBoxSub}
+                      onPress={() => setShowDatePickerModal(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.dropdownValueText, !followUpDate && styles.placeholderText]}>
+                        {followUpDate ? formatDisplayDateTime(followUpDate) : 'Select date & time'}
+                      </Text>
+                      <Text style={styles.dropdownCaret}>▼</Text>
+                    </TouchableOpacity>
+
+                    {/* Quick follow up presets */}
+                    <View style={styles.quickReasonRow}>
+                      {[
+                        { label: '+1 Hr', hours: 1 },
+                        { label: '+2 Hrs', hours: 2 },
+                        { label: 'Tomorrow 10 AM', hours: 24, hour: 10 },
+                        { label: 'Tomorrow 3 PM', hours: 24, hour: 15 },
+                      ].map((preset) => (
+                        <TouchableOpacity
+                          key={preset.label}
+                          style={styles.reasonChip}
+                          onPress={() => setQuickFollowUp(preset.hours, preset.hour)}
+                          activeOpacity={0.7}
+                        >
+                          <Clock size={11} color="#4B5563" />
+                          <Text style={styles.reasonChipText}>{preset.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
                 )}
               </View>
 

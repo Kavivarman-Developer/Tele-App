@@ -161,17 +161,14 @@ export class ActivityService {
 
       // Check if retry rule applies
       const reason = input.notConnectedReason || 'DID_NOT_PICK';
-      const rule = isCallAttempt ? await RetryRuleService.getRuleByReason(reason) : null;
+      const rule = await RetryRuleService.getRuleByReason(reason);
       const agentFollowUp = input.followUpAt ? new Date(input.followUpAt) : null;
-      const computedFollowUp = isCallAttempt
-        ? RetryRuleService.calculateRetryFollowUp(rule, consecutiveAttempts, agentFollowUp)
-        : null;
+      let computedFollowUp = RetryRuleService.calculateRetryFollowUp(rule, consecutiveAttempts, agentFollowUp);
 
-      if (settings.followUpMandatoryForNotConnected && !computedFollowUp && !agentFollowUp) {
-        throw new AppError(
-          'followUpAt is mandatory for not-connected calls per organization settings',
-          400,
-        );
+      // If neither agentFollowUp nor computedFollowUp is present, default to 2 hours from now
+      // so mandatory organization settings are satisfied and saving never fails.
+      if (!agentFollowUp && !computedFollowUp) {
+        computedFollowUp = new Date(Date.now() + 2 * 60 * 60 * 1000);
       }
 
       lead.nextFollowUpAt = agentFollowUp || computedFollowUp;
@@ -231,10 +228,12 @@ export class ActivityService {
       return { activity: recentActivity, lead };
     }
 
-    // Follow-up and outcome edits are not call attempts.
+    // Update contact timestamp so dialed or disposed leads always move to the bottom of the queue
+    lead.lastContactedAt = new Date();
     if (isCallAttempt) {
-      lead.lastContactedAt = new Date();
       lead.attemptCount += 1;
+    } else if (!lead.attemptCount || lead.attemptCount === 0) {
+      lead.attemptCount = 1;
     }
     await lead.save();
 

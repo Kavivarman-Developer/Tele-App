@@ -419,7 +419,21 @@ export const HomeScreen: React.FC = () => {
 
   // Immediate queue (top leads ready to call - strictly excludes Not Interested / Closed / Lost)
   const queueLeads = useMemo(() => {
-    return (myLeadsData?.leads || []).filter((l) => !isLeadLostOrSuppressed(l));
+    const raw = (myLeadsData?.leads || []).filter((l) => !isLeadLostOrSuppressed(l));
+    return [...raw].sort((a, b) => {
+      // 1. Uncontacted leads (attemptCount 0 and no lastContactedAt) first
+      const aCalled = (a.attemptCount && a.attemptCount > 0) || a.lastContactedAt ? 1 : 0;
+      const bCalled = (b.attemptCount && b.attemptCount > 0) || b.lastContactedAt ? 1 : 0;
+      if (aCalled !== bCalled) return aCalled - bCalled;
+
+      // 2. For contacted leads: recently contacted goes to the very bottom
+      if (aCalled === 1 && bCalled === 1) {
+        const aTime = a.lastContactedAt ? new Date(a.lastContactedAt).getTime() : 0;
+        const bTime = b.lastContactedAt ? new Date(b.lastContactedAt).getTime() : 0;
+        if (aTime !== bTime) return aTime - bTime;
+      }
+      return 0;
+    });
   }, [myLeadsData]);
 
   // Hero Lead to Call (accounts for skipped leads in current session)
