@@ -64,6 +64,40 @@ interface ScreenshotLead {
   lastContact: string;
 }
 
+// ======================================================================
+// DESIGN TOKENS — shared palette/rhythm with the rest of the app
+// ======================================================================
+const T = {
+  radius: { sm: 10, md: 14, lg: 16 },
+  space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 20 },
+  color: {
+    bg: '#F6F8FA',
+    surface: '#FFFFFF',
+    surfaceSunken: '#F8FAFC',
+    border: '#E7EAEE',
+    borderStrong: '#D7DCE3',
+    text: '#111827',
+    textMuted: '#6B7280',
+    textFaint: '#9CA3AF',
+    primary: '#0F9D58',
+    primaryDark: '#0B7A44',
+    primaryTint: '#E6F4EA',
+    danger: '#DC2626',
+    dangerTint: '#FEF2F2',
+    info: '#2563EB',
+    infoTint: '#EFF6FF',
+    warn: '#D97706',
+    warnTint: '#FFFBEB',
+  },
+  shadowCard: {
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
+  },
+};
+
 export const MyLeadsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
@@ -493,20 +527,20 @@ export const MyLeadsScreen: React.FC = () => {
     switch (status) {
       case 'Interested':
         return (
-          <View style={[styles.statusPill, { backgroundColor: '#ECFDF5' }]}>
-            <Text style={[styles.statusPillText, { color: '#047857' }]}>Interested</Text>
+          <View style={[styles.statusPill, { backgroundColor: T.color.primaryTint }]}>
+            <Text style={[styles.statusPillText, { color: T.color.primaryDark }]}>Interested</Text>
           </View>
         );
       case 'Follow-up':
         return (
-          <View style={[styles.statusPill, { backgroundColor: '#FFFBEB' }]}>
-            <Text style={[styles.statusPillText, { color: '#B45309' }]}>Follow-up</Text>
+          <View style={[styles.statusPill, { backgroundColor: T.color.warnTint }]}>
+            <Text style={[styles.statusPillText, { color: T.color.warn }]}>Follow-up</Text>
           </View>
         );
       case 'New':
         return (
-          <View style={[styles.statusPill, { backgroundColor: '#EFF6FF' }]}>
-            <Text style={[styles.statusPillText, { color: '#1D4ED8' }]}>New</Text>
+          <View style={[styles.statusPill, { backgroundColor: T.color.infoTint }]}>
+            <Text style={[styles.statusPillText, { color: T.color.info }]}>New</Text>
           </View>
         );
       case 'Not Interested':
@@ -525,72 +559,36 @@ export const MyLeadsScreen: React.FC = () => {
       case 'Not connected':
       default:
         return (
-          <View style={[styles.statusPill, { backgroundColor: '#F1F5F9' }]}>
-            <Text style={[styles.statusPillText, { color: '#475569' }]}>Not connected</Text>
+          <View style={[styles.statusPill, { backgroundColor: T.color.surfaceSunken }]}>
+            <Text style={[styles.statusPillText, { color: T.color.textMuted }]}>Not connected</Text>
           </View>
         );
     }
   };
 
-  // Render Temperature / Customer Importance Badge (NeoDove style)
+  // Render Temperature / Customer Importance Badge
   const renderPriorityBadge = (priority: ScreenshotLead['priority']) => {
     switch (priority) {
       case 'High':
         return (
-          <View
-            style={[
-              styles.priorityPill,
-              {
-                backgroundColor: '#FEF2F2',
-                borderWidth: 1,
-                borderColor: '#FECACA',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 3,
-              },
-            ]}
-          >
-            <Flame size={10} color="#DC2626" fill="#DC2626" />
-            <Text style={[styles.priorityPillText, { color: '#DC2626', fontWeight: '800' }]}>Hot</Text>
+          <View style={[styles.priorityPill, styles.priorityPillHot]}>
+            <Flame size={10} color={T.color.danger} fill={T.color.danger} />
+            <Text style={[styles.priorityPillText, { color: T.color.danger }]}>Hot</Text>
           </View>
         );
       case 'Medium':
         return (
-          <View
-            style={[
-              styles.priorityPill,
-              {
-                backgroundColor: '#FFFBEB',
-                borderWidth: 1,
-                borderColor: '#FDE68A',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 3,
-              },
-            ]}
-          >
-            <Sun size={10} color="#D97706" />
-            <Text style={[styles.priorityPillText, { color: '#D97706', fontWeight: '700' }]}>Warm</Text>
+          <View style={[styles.priorityPill, styles.priorityPillWarm]}>
+            <Sun size={10} color={T.color.warn} />
+            <Text style={[styles.priorityPillText, { color: T.color.warn }]}>Warm</Text>
           </View>
         );
       case 'Low':
       default:
         return (
-          <View
-            style={[
-              styles.priorityPill,
-              {
-                backgroundColor: '#EFF6FF',
-                borderWidth: 1,
-                borderColor: '#BFDBFE',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 3,
-              },
-            ]}
-          >
-            <Snowflake size={10} color="#2563EB" />
-            <Text style={[styles.priorityPillText, { color: '#2563EB', fontWeight: '700' }]}>Cold</Text>
+          <View style={[styles.priorityPill, styles.priorityPillCold]}>
+            <Snowflake size={10} color={T.color.info} />
+            <Text style={[styles.priorityPillText, { color: T.color.info }]}>Cold</Text>
           </View>
         );
     }
@@ -613,16 +611,16 @@ export const MyLeadsScreen: React.FC = () => {
               refetch();
               refetchCampaigns();
             }}
-            colors={['#10B981']}
+            colors={[T.color.primary]}
           />
         }
       >
         {/* Campaign Workspace Context Banner */}
         {selectedCampaign !== 'All campaigns' ? (
           <View style={styles.activeWorkspaceBanner}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: T.space.sm, flex: 1 }}>
               <View style={styles.activeWorkspaceIcon}>
-                <Megaphone size={16} color="#047857" />
+                <Megaphone size={16} color={T.color.primaryDark} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.activeWorkspaceTitle} numberOfLines={1}>
@@ -638,7 +636,7 @@ export const MyLeadsScreen: React.FC = () => {
               onPress={() => navigation.navigate('CampaignSelect' as any)}
               activeOpacity={0.7}
             >
-              <Text style={styles.switchCampBtnText}>Change ➔</Text>
+              <Text style={styles.switchCampBtnText}>Change</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -647,7 +645,7 @@ export const MyLeadsScreen: React.FC = () => {
         <View style={[styles.bannerRow, !isWide && styles.bannerRowMobile]}>
           <View style={!isWide ? styles.bannerTitleBlockMobile : { flex: 1 }}>
             <Text style={styles.bannerTitle}>
-              {isAgent ? 'My Telecalling Queue' : 'Your lead queue'}
+              {isAgent ? 'My telecalling queue' : 'Your lead queue'}
             </Text>
             <Text style={styles.bannerSubtitle}>
               {isAgent
@@ -662,7 +660,7 @@ export const MyLeadsScreen: React.FC = () => {
               onPress={() => setShowWalkInModal(true)}
               activeOpacity={0.7}
             >
-              <Plus size={14} color="#0F172A" strokeWidth={2.5} />
+              <Plus size={14} color={T.color.text} strokeWidth={2.5} />
               <Text style={styles.walkInText}>Walk-in</Text>
             </TouchableOpacity>
 
@@ -672,7 +670,7 @@ export const MyLeadsScreen: React.FC = () => {
               activeOpacity={0.8}
             >
               <PhoneCall size={14} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.startCallingText}>Start Calling</Text>
+              <Text style={styles.startCallingText}>Start calling</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -680,17 +678,17 @@ export const MyLeadsScreen: React.FC = () => {
         {/* Search & Filter Bar */}
         <View style={[styles.searchBarRow, !isWide && styles.searchBarRowMobile]}>
           <View style={[styles.searchInputWrap, isWide ? { flex: 1 } : styles.searchInputWrapMobile]}>
-            <Search size={16} color="#64748B" />
+            <Search size={16} color={T.color.textFaint} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by name or phone number..."
-              placeholderTextColor="#94A3B8"
+              placeholder="Search by name or phone number"
+              placeholderTextColor={T.color.textFaint}
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <X size={14} color="#94A3B8" />
+                <X size={14} color={T.color.textFaint} />
               </TouchableOpacity>
             )}
           </View>
@@ -703,7 +701,7 @@ export const MyLeadsScreen: React.FC = () => {
               activeOpacity={0.7}
             >
               <Text style={styles.campaignSelectText} numberOfLines={1}>{selectedCampaign}</Text>
-              <ChevronDown size={14} color="#64748B" />
+              <ChevronDown size={14} color={T.color.textMuted} />
             </TouchableOpacity>
 
             {/* Export Icon Button */}
@@ -714,9 +712,9 @@ export const MyLeadsScreen: React.FC = () => {
               activeOpacity={0.7}
             >
               {isExporting ? (
-                <ActivityIndicator size="small" color="#10B981" />
+                <ActivityIndicator size="small" color={T.color.primary} />
               ) : (
-                <Download size={15} color="#64748B" />
+                <Download size={15} color={T.color.textMuted} />
               )}
             </TouchableOpacity>
           </View>
@@ -855,7 +853,7 @@ export const MyLeadsScreen: React.FC = () => {
               <View
                 style={[
                   styles.filterCountBadge,
-                  selectedFilter === 'Not Interested' && { backgroundColor: '#DC2626' },
+                  selectedFilter === 'Not Interested' && { backgroundColor: T.color.danger },
                 ]}
               >
                 <Text
@@ -876,23 +874,23 @@ export const MyLeadsScreen: React.FC = () => {
           <View style={styles.mobileListContainer}>
             {isLeadsLoading && !combinedLeads.length ? (
               <View style={styles.loadingCard}>
-                <ActivityIndicator size="large" color="#10B981" />
+                <ActivityIndicator size="large" color={T.color.primary} />
                 <Text style={styles.loadingCardText}>Loading lead queue from server...</Text>
               </View>
             ) : isLeadsError && !combinedLeads.length ? (
               <View style={styles.errorCard}>
-                <RotateCcw size={32} color="#EF4444" />
-                <Text style={styles.errorTitle}>Server Reconnecting</Text>
+                <RotateCcw size={32} color={T.color.danger} />
+                <Text style={styles.errorTitle}>Server reconnecting</Text>
                 <Text style={styles.errorSub}>
                   {(leadsError as any)?.response?.data?.message || (leadsError as any)?.message || 'Connecting to Render cloud backend. Please tap below to retry.'}
                 </Text>
                 <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()} activeOpacity={0.8}>
-                  <Text style={styles.retryBtnText}>Retry Fetching Leads</Text>
+                  <Text style={styles.retryBtnText}>Retry fetching leads</Text>
                 </TouchableOpacity>
               </View>
             ) : filteredLeads.length === 0 ? (
               <View style={styles.emptyStateCard}>
-                <Users size={36} color="#94A3B8" />
+                <Users size={36} color={T.color.textFaint} />
                 <Text style={styles.emptyStateTitle}>No leads found</Text>
                 <Text style={styles.emptyStateSubtitle}>
                   {selectedCampaign !== 'All campaigns'
@@ -909,27 +907,16 @@ export const MyLeadsScreen: React.FC = () => {
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.emptyResetBtnText}>Reset to All Campaigns</Text>
+                    <Text style={styles.emptyResetBtnText}>Reset to all campaigns</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
-                  style={{
-                    marginTop: 12,
-                    backgroundColor: '#2563EB',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingVertical: 9,
-                    paddingHorizontal: 14,
-                    borderRadius: 8,
-                  }}
+                  style={styles.emptyUploadBtn}
                   onPress={() => navigation.navigate('UploadLeads')}
                   activeOpacity={0.8}
                 >
                   <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
-                    Upload Leads CSV
-                  </Text>
+                  <Text style={styles.emptyUploadBtnText}>Upload leads CSV</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -946,8 +933,8 @@ export const MyLeadsScreen: React.FC = () => {
                   <View key={item._id} style={styles.mobileLeadCard}>
                     {/* Header Row: Avatar, Name & Phone, Badges */}
                     <View style={styles.cardHeaderRow}>
-                      <View style={[styles.avatarCircle, { backgroundColor: '#EEF2FF', width: 42, height: 42, borderRadius: 21 }]}>
-                        <Text style={[styles.avatarText, { color: '#3730A3', fontSize: 13 }]}>{initials}</Text>
+                      <View style={styles.avatarCircleLg}>
+                        <Text style={styles.avatarTextLg}>{initials}</Text>
                       </View>
 
                       <View style={styles.cardLeadInfo}>
@@ -959,7 +946,7 @@ export const MyLeadsScreen: React.FC = () => {
                           activeOpacity={0.7}
                           style={styles.cardPhoneTouch}
                         >
-                          <Phone size={12} color="#047857" strokeWidth={2} />
+                          <Phone size={12} color={T.color.primaryDark} strokeWidth={2} />
                           <Text style={styles.cardPhoneText}>{item.phone}</Text>
                         </TouchableOpacity>
                       </View>
@@ -997,7 +984,7 @@ export const MyLeadsScreen: React.FC = () => {
                     {/* Assigned Agent Row */}
                     {item.assignedAgent ? (
                       <View style={styles.cardAgentRow}>
-                        <Users size={12} color="#94A3B8" />
+                        <Users size={12} color={T.color.textFaint} />
                         <Text style={styles.cardAgentText} numberOfLines={1}>
                           {item.assignedAgent}
                         </Text>
@@ -1022,7 +1009,7 @@ export const MyLeadsScreen: React.FC = () => {
                         onPress={() => handleOpenWhatsApp(item)}
                         activeOpacity={0.8}
                       >
-                        <MessageCircle size={13} color="#15803D" strokeWidth={2.5} />
+                        <MessageCircle size={13} color={T.color.primaryDark} strokeWidth={2.5} />
                         <Text style={styles.cardWhatsAppBtnText} numberOfLines={1}>WhatsApp</Text>
                       </TouchableOpacity>
 
@@ -1032,8 +1019,8 @@ export const MyLeadsScreen: React.FC = () => {
                         onPress={() => handleOpenLead(item)}
                         activeOpacity={0.8}
                       >
-                        <Text style={styles.cardOpenLeadBtnText} numberOfLines={1}>Open Lead</Text>
-                        <ArrowUpRight size={12} color="#2563EB" />
+                        <Text style={styles.cardOpenLeadBtnText} numberOfLines={1}>Open lead</Text>
+                        <ArrowUpRight size={12} color={T.color.info} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1056,12 +1043,12 @@ export const MyLeadsScreen: React.FC = () => {
               <View style={{ minWidth: 920 }}>
                 {/* Table Header */}
                 <View style={styles.tableHeaderRow}>
-                  <Text style={[styles.thCell, { width: 230 }]}>LEAD</Text>
-                  <Text style={[styles.thCell, { width: 220 }]}>CAMPAIGN</Text>
-                  <Text style={[styles.thCell, { width: 120 }]}>STATUS</Text>
-                  <Text style={[styles.thCell, { width: 100 }]}>PRIORITY</Text>
-                  <Text style={[styles.thCell, { width: 110 }]}>LAST CONTACT</Text>
-                  <Text style={[styles.thCell, { width: 140, textAlign: 'right' }]}>ACTION</Text>
+                  <Text style={[styles.thCell, { width: 230 }]}>Lead</Text>
+                  <Text style={[styles.thCell, { width: 220 }]}>Campaign</Text>
+                  <Text style={[styles.thCell, { width: 120 }]}>Status</Text>
+                  <Text style={[styles.thCell, { width: 100 }]}>Priority</Text>
+                  <Text style={[styles.thCell, { width: 110 }]}>Last contact</Text>
+                  <Text style={[styles.thCell, { width: 140, textAlign: 'right' }]}>Action</Text>
                 </View>
 
                 {/* Table Rows */}
@@ -1081,9 +1068,9 @@ export const MyLeadsScreen: React.FC = () => {
                       style={[styles.tableDataRow, isLast && { borderBottomWidth: 0 }]}
                     >
                       {/* Lead Cell: Avatar + Name + Phone */}
-                      <View style={[styles.tdCell, { width: 230, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
-                        <View style={[styles.avatarCircle, { backgroundColor: '#EEF2FF' }]}>
-                          <Text style={[styles.avatarText, { color: '#3730A3' }]}>{initials}</Text>
+                      <View style={[styles.tdCell, { width: 230, flexDirection: 'row', alignItems: 'center', gap: T.space.sm + 2 }]}>
+                        <View style={styles.avatarCircle}>
+                          <Text style={styles.avatarText}>{initials}</Text>
                         </View>
                         <View style={{ flex: 1, paddingRight: 8 }}>
                           <Text style={styles.leadNameText} numberOfLines={1}>
@@ -1119,14 +1106,14 @@ export const MyLeadsScreen: React.FC = () => {
                       </View>
 
                       {/* Actions: Direct Call | Direct WhatsApp | Open Lead */}
-                      <View style={[styles.tdCell, { width: 140, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }]}>
+                      <View style={[styles.tdCell, { width: 140, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: T.space.sm - 2 }]}>
                         <TouchableOpacity
                           style={styles.directCallBtn}
                           onPress={() => handleDirectCall(item.phone, item.name, item._id, item.status)}
                           activeOpacity={0.7}
                           accessibilityLabel="Call Lead"
                         >
-                          <Phone size={13} color="#047857" strokeWidth={2.5} />
+                          <Phone size={13} color={T.color.primaryDark} strokeWidth={2.5} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -1135,7 +1122,7 @@ export const MyLeadsScreen: React.FC = () => {
                           activeOpacity={0.7}
                           accessibilityLabel="WhatsApp Lead"
                         >
-                          <MessageCircle size={13} color="#16A34A" strokeWidth={2.5} />
+                          <MessageCircle size={13} color={T.color.primaryDark} strokeWidth={2.5} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -1144,7 +1131,7 @@ export const MyLeadsScreen: React.FC = () => {
                           activeOpacity={0.7}
                         >
                           <Text style={styles.openLeadText}>Open lead</Text>
-                          <ArrowUpRight size={11} color="#2563EB" />
+                          <ArrowUpRight size={11} color={T.color.info} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1172,34 +1159,34 @@ export const MyLeadsScreen: React.FC = () => {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Walk-in Lead</Text>
+              <Text style={styles.modalTitle}>Add walk-in lead</Text>
               <TouchableOpacity onPress={() => setShowWalkInModal(false)}>
-                <X size={18} color="#64748B" />
+                <X size={18} color={T.color.textMuted} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>FULL NAME</Text>
+              <Text style={styles.inputLabel}>Full name</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="e.g. Rahul Sharma"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={T.color.textFaint}
                 value={walkInName}
                 onChangeText={setWalkInName}
               />
 
-              <Text style={[styles.inputLabel, { marginTop: 12 }]}>PHONE NUMBER</Text>
+              <Text style={[styles.inputLabel, { marginTop: T.space.md }]}>Phone number</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="e.g. 9876543210"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={T.color.textFaint}
                 keyboardType="phone-pad"
                 value={walkInPhone}
                 onChangeText={setWalkInPhone}
               />
 
               <TouchableOpacity
-                style={styles.submitBtn}
+                style={styles.modalSubmitBtn}
                 onPress={() => {
                   if (!walkInName.trim() || !walkInPhone.trim()) {
                     Alert.alert('Required Fields', 'Please enter both name and phone number.');
@@ -1216,7 +1203,7 @@ export const MyLeadsScreen: React.FC = () => {
                 {walkInMutation.isPending ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.submitBtnText}>Add to Queue</Text>
+                  <Text style={styles.modalSubmitBtnText}>Add to queue</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1254,68 +1241,63 @@ export const MyLeadsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: T.color.bg,
   },
   contentContainer: {
-    padding: 16,
+    padding: T.space.lg,
     paddingBottom: 110,
   },
   bannerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: T.space.lg,
     flexWrap: 'wrap',
-    gap: 12,
+    gap: T.space.md,
   },
   bannerTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.color.text,
     letterSpacing: -0.4,
   },
   bannerSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: T.color.textMuted,
     marginTop: 2,
   },
   bannerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: T.space.sm,
   },
   walkInBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 6,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: T.color.border,
+    paddingVertical: T.space.sm - 1,
+    paddingHorizontal: T.space.md,
+    borderRadius: T.radius.sm - 2,
+    gap: T.space.sm - 2,
   },
   walkInText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0F172A',
+    color: T.color.text,
   },
   startCallingBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2563EB',
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    gap: 6,
-    shadowColor: '#2563EB',
+    backgroundColor: T.color.primary,
+    paddingVertical: T.space.sm - 1,
+    paddingHorizontal: T.space.md + 2,
+    borderRadius: T.radius.sm - 2,
+    gap: T.space.sm - 2,
+    shadowColor: T.color.primary,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 3,
     elevation: 2,
   },
@@ -1327,112 +1309,108 @@ const styles = StyleSheet.create({
   searchBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
+    gap: T.space.sm,
+    marginBottom: T.space.md + 2,
   },
   searchInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 42,
-    minHeight: 42,
-    gap: 10,
+    borderColor: T.color.border,
+    borderRadius: T.radius.sm - 2,
+    paddingHorizontal: T.space.md,
+    height: 44,
+    minHeight: 44,
+    gap: T.space.sm + 2,
   },
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
+    color: T.color.text,
     paddingVertical: 0,
     height: '100%',
   },
   campaignSelectBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 42,
-    minHeight: 42,
-    gap: 6,
+    borderColor: T.color.border,
+    borderRadius: T.radius.sm - 2,
+    paddingHorizontal: T.space.md,
+    height: 44,
+    minHeight: 44,
+    gap: T.space.sm - 2,
   },
   campaignSelectText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
+    color: T.color.text,
   },
   exportIconBtn: {
-    width: 42,
-    height: 42,
-    minHeight: 42,
-    backgroundColor: '#FFFFFF',
+    width: 44,
+    height: 44,
+    minHeight: 44,
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
+    borderColor: T.color.border,
+    borderRadius: T.radius.sm - 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
   dropdownMenu: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingVertical: 6,
-    marginBottom: 12,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: T.color.border,
+    borderRadius: T.radius.sm - 2,
+    paddingVertical: T.space.sm - 2,
+    marginBottom: T.space.md,
+    ...T.shadowCard,
   },
   dropdownItem: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: T.space.sm,
+    paddingHorizontal: T.space.md,
   },
   dropdownText: {
     fontSize: 12,
-    color: '#475569',
+    color: T.color.text,
   },
   dropdownTextActive: {
     fontWeight: '700',
-    color: '#2563EB',
+    color: T.color.info,
   },
   filterPillsRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
+    gap: T.space.sm,
+    marginBottom: T.space.md + 2,
   },
   filterPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-    gap: 6,
+    borderColor: T.color.border,
+    paddingVertical: T.space.xs + 1,
+    paddingHorizontal: T.space.sm + 2,
+    borderRadius: 999,
+    gap: T.space.sm - 2,
   },
   filterPillActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: T.color.infoTint,
     borderColor: '#BFDBFE',
   },
   filterPillLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748B',
+    color: T.color.textMuted,
   },
   filterPillLabelActive: {
-    color: '#2563EB',
+    color: T.color.info,
     fontWeight: '700',
   },
   filterCountBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: T.color.surfaceSunken,
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 10,
@@ -1443,94 +1421,122 @@ const styles = StyleSheet.create({
   filterCountText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#64748B',
+    color: T.color.textMuted,
   },
   filterCountTextActive: {
     color: '#1D4ED8',
   },
+
+  // Desktop table
   tableCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderColor: T.color.border,
+    borderRadius: T.radius.md,
     overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    ...T.shadowCard,
   },
   tableHeaderRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: T.space.lg,
+    paddingVertical: T.space.sm + 3,
+    backgroundColor: T.color.surfaceSunken,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: T.color.border,
   },
   thCell: {
-    fontSize: 9,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.4,
+    color: T.color.textMuted,
   },
   tableDataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: T.space.lg,
+    paddingVertical: T.space.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: T.color.surfaceSunken,
   },
   tdCell: {
     justifyContent: 'center',
   },
   avatarCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: T.color.infoTint,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 11,
     fontWeight: '700',
+    color: T.color.info,
+  },
+  avatarCircleLg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: T.color.infoTint,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarTextLg: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: T.color.info,
   },
   leadNameText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
-    color: '#0F172A',
+    color: T.color.text,
   },
   leadPhoneText: {
-    fontSize: 10,
-    color: '#64748B',
+    fontSize: 10.5,
+    color: T.color.textMuted,
     marginTop: 1,
   },
   campaignTitleText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '600',
-    color: '#0F172A',
+    color: T.color.text,
   },
   campaignSubtitleText: {
-    fontSize: 9,
-    color: '#94A3B8',
+    fontSize: 9.5,
+    color: T.color.textFaint,
     marginTop: 2,
   },
   statusPill: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
+    paddingHorizontal: T.space.sm,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 999,
   },
   statusPillText: {
     fontSize: 10,
     fontWeight: '700',
   },
   priorityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
+    paddingHorizontal: T.space.sm,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  priorityPillHot: {
+    backgroundColor: T.color.dangerTint,
+    borderColor: '#FECACA',
+  },
+  priorityPillWarm: {
+    backgroundColor: T.color.warnTint,
+    borderColor: '#FDE68A',
+  },
+  priorityPillCold: {
+    backgroundColor: T.color.infoTint,
+    borderColor: '#BFDBFE',
   },
   priorityPillText: {
     fontSize: 10,
@@ -1539,77 +1545,79 @@ const styles = StyleSheet.create({
   lastContactText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#475569',
+    color: T.color.textMuted,
   },
   directCallBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#ECFDF5',
+    width: 30,
+    height: 30,
+    borderRadius: T.radius.sm - 3,
+    backgroundColor: T.color.primaryTint,
     borderWidth: 1,
     borderColor: '#A7F3D0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   directWhatsAppBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#DCFCE7',
+    width: 30,
+    height: 30,
+    borderRadius: T.radius.sm - 3,
+    backgroundColor: T.color.primaryTint,
     borderWidth: 1,
-    borderColor: '#86EFAC',
+    borderColor: '#A7F3D0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   openLeadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: T.color.infoTint,
     borderWidth: 1,
     borderColor: '#BFDBFE',
     paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    paddingHorizontal: T.space.sm,
+    borderRadius: T.radius.sm - 3,
     gap: 3,
-    height: 28,
+    height: 30,
   },
   openLeadText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#2563EB',
+    color: T.color.info,
   },
   tableFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: T.space.lg,
+    paddingVertical: T.space.md,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FAFAFA',
+    borderTopColor: T.color.surfaceSunken,
+    backgroundColor: T.color.surfaceSunken,
   },
   tableFooterCount: {
     fontSize: 11,
-    color: '#64748B',
+    color: T.color.textMuted,
     fontWeight: '600',
   },
   tableFooterStatus: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: T.color.textFaint,
   },
+
+  // Walk-in modal
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: T.space.lg,
   },
   modalCard: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md,
+    padding: T.space.lg + 4,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -1620,48 +1628,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: T.space.lg,
   },
   modalTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.color.text,
   },
   modalBody: {
     gap: 4,
   },
   inputLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.4,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: T.color.textMuted,
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    borderColor: T.color.border,
+    backgroundColor: T.color.surfaceSunken,
+    borderRadius: T.radius.sm - 2,
+    paddingHorizontal: T.space.md,
+    paddingVertical: T.space.sm + 1,
     fontSize: 13,
-    color: '#0F172A',
-    marginTop: 4,
+    color: T.color.text,
+    marginTop: T.space.xs + 2,
   },
-  submitBtn: {
-    backgroundColor: '#2563EB',
-    borderRadius: 8,
-    paddingVertical: 12,
+  modalSubmitBtn: {
+    backgroundColor: T.color.primary,
+    borderRadius: T.radius.sm - 2,
+    paddingVertical: T.space.md,
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: T.space.lg + 2,
   },
-  submitBtnText: {
+  modalSubmitBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
   },
+
+  // Mobile responsive variants
   bannerRowMobile: {
     flexDirection: 'column',
     alignItems: 'stretch',
-    gap: 12,
+    gap: T.space.md,
   },
   bannerTitleBlockMobile: {
     width: '100%',
@@ -1669,7 +1679,7 @@ const styles = StyleSheet.create({
   bannerActionsMobile: {
     width: '100%',
     flexDirection: 'row',
-    gap: 8,
+    gap: T.space.sm,
   },
   walkInBtnMobile: {
     flex: 1,
@@ -1682,17 +1692,17 @@ const styles = StyleSheet.create({
   searchBarRowMobile: {
     flexDirection: 'column',
     alignItems: 'stretch',
-    gap: 8,
+    gap: T.space.sm,
   },
   searchInputWrapMobile: {
     width: '100%',
-    height: 42,
-    minHeight: 42,
+    height: 44,
+    minHeight: 44,
   },
   filterControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: T.space.sm,
   },
   filterControlsRowMobile: {
     width: '100%',
@@ -1701,26 +1711,24 @@ const styles = StyleSheet.create({
   campaignSelectBtnMobile: {
     flex: 1,
   },
+
+  // Mobile card list
   mobileListContainer: {
-    gap: 12,
+    gap: T.space.md,
     marginTop: 2,
   },
   mobileLeadCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    borderColor: T.color.border,
+    padding: T.space.md + 2,
+    ...T.shadowCard,
   },
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: T.space.md,
   },
   cardLeadInfo: {
     flex: 1,
@@ -1730,7 +1738,7 @@ const styles = StyleSheet.create({
   cardLeadName: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.color.text,
     letterSpacing: -0.2,
   },
   cardPhoneTouch: {
@@ -1742,7 +1750,7 @@ const styles = StyleSheet.create({
   cardPhoneText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#047857',
+    color: T.color.primaryDark,
   },
   cardBadgesCol: {
     alignItems: 'flex-end',
@@ -1752,18 +1760,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 12,
-    paddingTop: 10,
+    gap: T.space.sm - 2,
+    marginTop: T.space.md,
+    paddingTop: T.space.sm + 2,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: T.color.surfaceSunken,
   },
   cardCampaignBadge: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: T.color.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
-    paddingHorizontal: 8,
+    borderColor: T.color.border,
+    borderRadius: T.radius.sm - 4,
+    paddingHorizontal: T.space.sm,
     paddingVertical: 2,
   },
   cardCampaignBadgeText: {
@@ -1773,47 +1781,47 @@ const styles = StyleSheet.create({
   },
   cardMetaDot: {
     fontSize: 11,
-    color: '#CBD5E1',
+    color: T.color.textFaint,
   },
   cardMetaText: {
     fontSize: 11,
-    color: '#64748B',
+    color: T.color.textMuted,
     fontWeight: '500',
   },
   cardAgentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
+    gap: T.space.sm - 2,
+    marginTop: T.space.sm,
   },
   cardAgentText: {
     fontSize: 11,
-    color: '#64748B',
+    color: T.color.textMuted,
     fontWeight: '500',
   },
   cardActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingTop: 12,
+    gap: T.space.sm - 2,
+    marginTop: T.space.md,
+    paddingTop: T.space.md,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: T.color.surfaceSunken,
   },
   cardCallBtn: {
     flex: 1,
     minWidth: 0,
-    height: 38,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
-    borderRadius: 8,
+    backgroundColor: T.color.primary,
+    borderRadius: T.radius.sm - 2,
     paddingHorizontal: 4,
     gap: 4,
-    shadowColor: '#10B981',
+    shadowColor: T.color.primary,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.22,
     shadowRadius: 2,
     elevation: 2,
   },
@@ -1825,100 +1833,117 @@ const styles = StyleSheet.create({
   cardWhatsAppBtn: {
     flex: 1.15,
     minWidth: 0,
-    height: 38,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: T.color.primaryTint,
     borderWidth: 1,
     borderColor: '#BBF7D0',
-    borderRadius: 8,
+    borderRadius: T.radius.sm - 2,
     paddingHorizontal: 4,
     gap: 4,
   },
   cardWhatsAppBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#15803D',
+    color: T.color.primaryDark,
   },
   cardOpenLeadBtn: {
     flex: 1.15,
     minWidth: 0,
-    height: 38,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: T.color.infoTint,
     borderWidth: 1,
     borderColor: '#BFDBFE',
-    borderRadius: 8,
+    borderRadius: T.radius.sm - 2,
     paddingHorizontal: 4,
     gap: 3,
   },
   cardOpenLeadBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#2563EB',
+    color: T.color.info,
   },
   mobileFooterSummary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: T.space.md,
     paddingHorizontal: 4,
   },
+
+  // Empty / loading / error states
   emptyStateCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 32,
+    borderColor: T.color.border,
+    padding: T.space.xl + 8,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: T.space.sm,
   },
   emptyStateTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 8,
+    color: T.color.text,
+    marginTop: T.space.sm,
   },
   emptyStateSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: T.color.textMuted,
     textAlign: 'center',
     maxWidth: 260,
   },
   emptyResetBtn: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#EFF6FF',
-    borderRadius: 8,
+    marginTop: T.space.sm,
+    paddingHorizontal: T.space.md,
+    paddingVertical: T.space.sm,
+    backgroundColor: T.color.infoTint,
+    borderRadius: T.radius.sm - 2,
     borderWidth: 1,
     borderColor: '#BFDBFE',
   },
   emptyResetBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#2563EB',
+    color: T.color.info,
+  },
+  emptyUploadBtn: {
+    marginTop: T.space.sm + 2,
+    backgroundColor: T.color.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: T.space.sm - 2,
+    paddingVertical: T.space.sm + 1,
+    paddingHorizontal: T.space.md + 2,
+    borderRadius: T.radius.sm - 2,
+  },
+  emptyUploadBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   activeWorkspaceBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: T.color.primaryTint,
     borderWidth: 1,
     borderColor: '#A7F3D0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 12,
+    borderRadius: T.radius.md,
+    paddingHorizontal: T.space.md + 2,
+    paddingVertical: T.space.sm + 2,
+    marginBottom: T.space.md,
   },
   activeWorkspaceIcon: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: T.radius.sm - 2,
     backgroundColor: '#D1FAE5',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1926,18 +1951,18 @@ const styles = StyleSheet.create({
   activeWorkspaceTitle: {
     fontSize: 13.5,
     fontWeight: '800',
-    color: '#065F46',
+    color: T.color.primaryDark,
   },
   activeWorkspaceSub: {
     fontSize: 11,
-    color: '#047857',
+    color: T.color.primaryDark,
     marginTop: 1,
   },
   switchCampBtn: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    backgroundColor: T.color.primary,
+    paddingHorizontal: T.space.md,
+    paddingVertical: T.space.sm - 2,
+    borderRadius: T.radius.sm - 2,
   },
   switchCampBtnText: {
     fontSize: 11.5,
@@ -1945,34 +1970,34 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   loadingCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 36,
+    borderColor: T.color.border,
+    padding: T.space.xl + 16,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: T.space.md,
   },
   loadingCardText: {
     fontSize: 13,
-    color: '#64748B',
+    color: T.color.textMuted,
     fontWeight: '600',
   },
   errorCard: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 14,
+    backgroundColor: T.color.dangerTint,
+    borderRadius: T.radius.md,
     borderWidth: 1,
     borderColor: '#FECACA',
-    padding: 24,
+    padding: T.space.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: T.space.sm,
   },
   errorTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#DC2626',
+    color: T.color.danger,
   },
   errorSub: {
     fontSize: 12,
@@ -1982,11 +2007,11 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   retryBtn: {
-    marginTop: 8,
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    marginTop: T.space.sm,
+    backgroundColor: T.color.danger,
+    paddingHorizontal: T.space.md,
+    paddingVertical: T.space.sm,
+    borderRadius: T.radius.sm - 2,
   },
   retryBtnText: {
     fontSize: 12,

@@ -169,7 +169,7 @@ export const DashboardScreen: React.FC = () => {
     return [...filtered].sort((a, b) => (b.calls || 0) - (a.calls || 0)).slice(0, 3);
   }, [userCallsReportData, selectedBranch]);
 
-  // ==========================================
+  // ========================================== 
   // 1. USERS SECTION STATE
   // ==========================================
   const [showAddUserModal, setShowAddUserModal] = useState<boolean>(false);

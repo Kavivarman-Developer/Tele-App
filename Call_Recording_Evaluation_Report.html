@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Call Recording Architecture & Evaluation Proposal - Hi Talk CRM</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+      @bottom-right {
+        content: counter(page);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      background-color: #ffffff;
+      line-height: 1.55;
+      font-size: 10.2pt;
+    }
+
+    .header-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      color: #ffffff;
+      padding: 24px 28px;
+      border-radius: 10px;
+      margin-bottom: 22px;
+    }
+
+    .badge-doc {
+      display: inline-block;
+      background-color: rgba(59, 130, 246, 0.25);
+      color: #93c5fd;
+      border: 1px solid rgba(147, 197, 253, 0.4);
+      padding: 3px 10px;
+      border-radius: 9999px;
+      font-size: 8.5pt;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .header-title {
+      font-size: 20pt;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      line-height: 1.25;
+      margin-bottom: 6px;
+    }
+
+    .header-subtitle {
+      font-size: 11pt;
+      color: #cbd5e1;
+      font-weight: 400;
+      margin-bottom: 16px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      font-size: 8.8pt;
+    }
+
+    .meta-item strong {
+      display: block;
+      color: #94a3b8;
+      font-size: 7.8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+
+    .meta-item span {
+      color: #f8fafc;
+      font-weight: 600;
+    }
+
+    h2 {
+      font-size: 13.5pt;
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h2 .section-num {
+      background: #2563eb;
+      color: white;
+      font-size: 9.5pt;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    h3 {
+      font-size: 11pt;
+      font-weight: 600;
+      color: #1e3a8a;
+      margin-top: 14px;
+      margin-bottom: 6px;
+    }
+
+    p {
+      margin-bottom: 10px;
+      color: #334155;
+      text-align: justify;
+    }
+
+    .highlight-card {
+      background-color: #f8fafc;
+      border-left: 4px solid #2563eb;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 12px 0;
+      font-size: 9.8pt;
+    }
+
+    .highlight-card strong {
+      color: #0f172a;
+    }
+
+    .alert-card {
+      background-color: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 12px 0;
+      font-size: 9.5pt;
+      color: #1e40af;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin: 14px 0;
+    }
+
+    .option-box {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 14px;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .option-box.recommended {
+      border: 2px solid #2563eb;
+      position: relative;
+      background: #f0f7ff;
+    }
+
+    .ribbon {
+      position: absolute;
+      top: -10px;
+      right: 14px;
+      background: #2563eb;
+      color: white;
+      font-size: 7.5pt;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .option-title {
+      font-size: 12pt;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+
+    .option-subtitle {
+      font-size: 8.8pt;
+      color: #64748b;
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+
+    .cost-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 9.5pt;
+      margin-bottom: 10px;
+    }
+
+    .cost-free {
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #86efac;
+    }
+
+    .cost-paid {
+      background: #fef3c7;
+      color: #b45309;
+      border: 1px solid #fde68a;
+    }
+
+    ul {
+      margin-left: 18px;
+      margin-bottom: 10px;
+      color: #334155;
+    }
+
+    li {
+      margin-bottom: 4px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 9pt;
+    }
+
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f1f5f9;
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f8fafc;
+    }
+
+    .workflow-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .wf-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      font-size: 9.2pt;
+    }
+
+    .wf-num {
+      background: #1e3a8a;
+      color: white;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 8pt;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .page-break {
+      page-break-before: always;
+    }
+
+    .approval-section {
+      border: 2px dashed #94a3b8;
+      border-radius: 8px;
+      padding: 16px 20px;
+      background: #fafafa;
+      margin-top: 24px;
+    }
+
+    .sign-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-top: 30px;
+    }
+
+    .sign-line {
+      border-top: 1px solid #475569;
+      padding-top: 6px;
+      font-size: 9pt;
+      color: #334155;
+    }
+
+    .checkbox-box {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid #334155;
+      margin-right: 6px;
+      vertical-align: middle;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER BANNER -->
+  <div class="header-banner">
+    <span class="badge-doc">Technical Architecture & Business Proposal</span>
+    <h1 class="header-title">Call Recording Implementation Strategy</h1>
+    <div class="header-subtitle">Feasibility Study, Architecture Comparison & Implementation Proposal for Hi Talk CRM</div>
+    
+    <div class="meta-grid">
+      <div class="meta-item">
+        <strong>Application</strong>
+        <span>Hi Talk Telecalling CRM</span>
+      </div>
+      <div class="meta-item">
+        <strong>Prepared For</strong>
+        <span>Management & Approvals</span>
+      </div>
+      <div class="meta-item">
+        <strong>Date & Version</strong>
+        <span>October 14, 2026 | v1.0</span>
+      </div>
+      <div class="meta-item">
+        <strong>Status</strong>
+        <span>Pending Management Review</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXECUTIVE SUMMARY -->
+  <h2><span class="section-num">1</span> Executive Summary</h2>
+  <p>
+    This report provides a comprehensive technical evaluation and financial feasibility study for enabling <strong>Call Audio Recording</strong> across the <strong>Hi Talk CRM Mobile Application</strong>. Call recording is essential for our telecalling operations to ensure call quality monitoring, agent sales pitch training, customer dispute resolution, and regulatory compliance.
+  </p>
+  <div class="highlight-card">
+    <strong>Key Finding:</strong> Modern mobile operating systems (Android 10 through Android 15) strictly disallow third-party applications from directly tapping into cellular voice streams via internal audio APIs. In response, enterprise CRM systems utilize one of two industry-proven models: <strong>Option A (Local Auto-Sync via Existing Infrastructure at ₹0 extra cost)</strong> or <strong>Option B (Cloud Telephony Integration via Exotel with per-minute billing)</strong>.
+  </div>
+
+  <!-- ANDROID TECHNICAL LANDSCAPE -->
+  <h2><span class="section-num">2</span> Technical Landscape & Operating System Constraints</h2>
+  <p>
+    To make an informed decision, it is critical to understand why standard mobile apps cannot simply record phone calls out-of-the-box:
+  </p>
+  <ul>
+    <li><strong>Google Android Policy & Privacy Restrictions (Android 10 - 15):</strong> Starting in Android 9 and fully enforced in Android 10+, Google deprecated and blocked the <code>VOICE_CALL</code> audio stream for third-party apps. Regular apps cannot access incoming caller audio during cellular calls.</li>
+    <li><strong>Microphone Exclusivity:</strong> When a phone call is connected, the Android Telecom Subsystem claims exclusive priority over the microphone hardware. Conventional audio recorder packages (like <code>react-native-audio-recorder-player</code>) will fail, crash, or capture only silence.</li>
+    <li><strong>Play Store Compliance:</strong> In May 2022, Google barred the use of the Accessibility API for call recording purposes.</li>
+  </ul>
+  <p>
+    To achieve reliable audio capture, industry leaders such as <em>Runo, LeadSquared, and TeleCRM</em> rely on the two viable strategies detailed below.
+  </p>
+
+  <!-- TWO ARCHITECTURAL OPTIONS -->
+  <h2><span class="section-num">3</span> Architectural Options for Hi Talk</h2>
+
+  <div class="grid-2">
+    <!-- OPTION A -->
+    <div class="option-box recommended">
+      <div class="ribbon">Recommended for Phase 1</div>
+      <div class="option-title">Option A: Local Call Recording Sync</div>
+      <div class="option-subtitle">Native Phone Recording + Automatic Server Upload</div>
+      <span class="cost-badge cost-free">₹0 Recurring Telecom Cost (100% Free)</span>
+      
+      <p style="font-size: 9pt; margin-bottom: 8px;">
+        Agents utilize the built-in "Auto Call Recording" feature available in Android handsets. Upon call completion, the Hi Talk app automatically identifies the audio file and uploads it to our Hostinger Server.
+      </p>
+
+      <strong style="font-size: 8.8pt; color: #0f172a;">Key Advantages:</strong>
+      <ul style="font-size: 8.6pt; margin-top: 4px;">
+        <li>Zero monthly subscription or per-minute call charges.</li>
+        <li>100% crystal-clear two-sided audio (Caller + Agent).</li>
+        <li>Utilizes existing Hostinger VPS/SSD storage without extra servers.</li>
+        <li>Rapid 2-day implementation lifecycle.</li>
+      </ul>
+
+      <strong style="font-size: 8.8pt; color: #0f172a;">Limitations:</strong>
+      <ul style="font-size: 8.6pt; margin-top: 4px;">
+        <li>Requires telecallers to enable "Auto Call Record" once in device settings.</li>
+        <li>Telecallers place calls from their physical SIM cards (no number masking).</li>
+      </ul>
+    </div>
+
+    <!-- OPTION B -->
+    <div class="option-box">
+      <div class="option-title">Option B: Cloud Telephony (Exotel)</div>
+      <div class="option-subtitle">Virtual Number Bridge & Centralized Cloud Recording</div>
+      <span class="cost-badge cost-paid">Paid (₹1,500/mo + ₹0.75/min)</span>
+      
+      <p style="font-size: 9pt; margin-bottom: 8px;">
+        When the agent taps "Call", Exotel's cloud telephony servers bridge the call between the agent and customer. The call is recorded entirely on Exotel's servers and streamed to our CRM via webhooks.
+      </p>
+
+      <strong style="font-size: 8.8pt; color: #0f172a;">Key Advantages:</strong>
+      <ul style="font-size: 8.6pt; margin-top: 4px;">
+        <li><strong>Number Masking:</strong> Protects lead numbers; agents cannot harvest customer contacts.</li>
+        <li>Single corporate Caller ID builds brand trust and minimizes spam flags.</li>
+        <li>100% device independent (works on Android, iOS, and landlines).</li>
+        <li>Live call listening and manager whispering capabilities.</li>
+      </ul>
+
+      <strong style="font-size: 8.8pt; color: #0f172a;">Limitations:</strong>
+      <ul style="font-size: 8.6pt; margin-top: 4px;">
+        <li>Recurring monthly bill + per-minute call pulse costs.</li>
+        <li>Mandatory telecom paperwork (GST, company KYC, DLT registration).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- DEEP DIVE OPTION A WORKFLOW & STORAGE -->
+  <h2><span class="section-num">4</span> Deep Dive: Option A Workflow & Storage Feasibility</h2>
+
+  <p>
+    Option A transforms the existing Android architecture into an automated recording sync pipeline with zero third-party software cost:
+  </p>
+
+  <div class="workflow-steps">
+    <div class="wf-step">
+      <div class="wf-num">1</div>
+      <div><strong>Native Call Recording:</strong> Agent initiates a call via Hi Talk. The device's native dialer (Samsung, Xiaomi, Realme, Vivo, Oppo) automatically records both voices to local internal storage (<code>/Recordings/Call</code>).</div>
+    </div>
+    <div class="wf-step">
+      <div class="wf-num">2</div>
+      <div><strong>Call Termination Detection:</strong> The existing <code>android-call.service.ts</code> in our mobile app captures call end events and verifies the call duration.</div>
+    </div>
+    <div class="wf-step">
+      <div class="wf-num">3</div>
+      <div><strong>Background File Identification & Upload:</strong> The app immediately queries the recording folder for the newest audio file matching the lead's phone number and initiates a background multipart upload to <code>POST /api/leads/:id/recordings</code>.</div>
+    </div>
+    <div class="wf-step">
+      <div class="wf-num">4</div>
+      <div><strong>Admin CRM Playback:</strong> The Hostinger server links the audio file to the lead history. Administrators and managers can stream or download the call recording directly from the Admin Portal.</div>
+    </div>
+  </div>
+
+  <h3>Storage Impact Analysis on Current Hostinger Server</h3>
+  <p>
+    Standard mobile call recordings are encoded in compressed <code>.m4a</code> or <code>.aac</code> format at 32 kbps, requiring negligible disk space:
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>Single Agent</th>
+        <th>5 Agents Team</th>
+        <th>10 Agents Team</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Daily Call Duration</strong></td>
+        <td>100 minutes / day</td>
+        <td>500 minutes / day</td>
+        <td>1,000 minutes / day</td>
+      </tr>
+      <tr>
+        <td><strong>Daily Storage Consumption</strong></td>
+        <td>~24 MB</td>
+        <td>~120 MB</td>
+        <td>~240 MB</td>
+      </tr>
+      <tr>
+        <td><strong>Monthly Storage (25 Days)</strong></td>
+        <td>~600 MB</td>
+        <td><strong>~3.0 GB</strong></td>
+        <td><strong>~6.0 GB</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Annual Storage Impact</strong></td>
+        <td>~7.2 GB</td>
+        <td>~36 GB</td>
+        <td>~72 GB</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="alert-card">
+    <strong>Infrastructure Feasibility:</strong> Our Hostinger Server plan includes substantial SSD storage capacity. With a 5-agent team, an entire year of continuous call recordings consumes approximately <strong>36 GB</strong>. This fits comfortably within our current hosting quota without purchasing additional storage.
+  </div>
+
+  <!-- COMPARISON MATRIX -->
+  <h2><span class="section-num">5</span> Comprehensive Feature & Operational Comparison</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">Evaluation Parameter</th>
+        <th style="width: 37%;">Option A: Local Sync (In-House)</th>
+        <th style="width: 38%;">Option B: Exotel Cloud Telephony</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Telephony Setup Cost</strong></td>
+        <td><strong style="color: #15803d;">₹0</strong> (Zero)</td>
+        <td>₹1,500 – ₹3,000 (One-time + Virtual DID)</td>
+      </tr>
+      <tr>
+        <td><strong>Recurring Monthly Cost</strong></td>
+        <td><strong style="color: #15803d;">₹0 / month</strong></td>
+        <td>₹1,500/mo DID rent + call usage</td>
+      </tr>
+      <tr>
+        <td><strong>Outgoing Call Rate</strong></td>
+        <td>Free (Existing Unlimited SIM Plans)</td>
+        <td>₹0.60 – ₹0.85 per minute</td>
+      </tr>
+      <tr>
+        <td><strong>Audio Storage Location</strong></td>
+        <td>Hostinger Server (Existing SSD)</td>
+        <td>Exotel Cloud & Hostinger Webhooks</td>
+      </tr>
+      <tr>
+        <td><strong>Admin Remote Playback</strong></td>
+        <td>Yes (Instant stream via Admin Portal)</td>
+        <td>Yes (Instant stream via Admin Portal)</td>
+      </tr>
+      <tr>
+        <td><strong>Number Masking (Lead Privacy)</strong></td>
+        <td>No (Lead number visible on dialer)</td>
+        <td><strong style="color: #15803d;">Yes (Complete Masking / Protection)</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Agent Device Setup</strong></td>
+        <td>Enable Auto-Record in Phone Settings</td>
+        <td>Zero setup (Works on any handset)</td>
+      </tr>
+      <tr>
+        <td><strong>Handset Compatibility</strong></td>
+        <td>Samsung, Xiaomi, Realme, Vivo, Oppo</td>
+        <td>100% all devices (Android, iOS)</td>
+      </tr>
+      <tr>
+        <td><strong>Inbound IVR & Call Routing</strong></td>
+        <td>Not available</td>
+        <td>Yes (Multi-level IVR greeting)</td>
+      </tr>
+      <tr>
+        <td><strong>Time to Production</strong></td>
+        <td><strong>2 to 3 Business Days</strong></td>
+        <td>10 to 14 Days (due to KYC & DLT)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <!-- FINANCIAL PROJECTION -->
+  <h2><span class="section-num">6</span> 12-Month Financial Cost Forecast (Team of 5 Telecallers)</h2>
+  <p>
+    The cost projection assumes 5 telecallers, each handling 40 connected calls/day with an average duration of 2 minutes (400 minutes/day $\times$ 25 days = <strong>10,000 minutes/month</strong>):
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Expense Component</th>
+        <th>Option A (Local Sync on Hostinger)</th>
+        <th>Option B (Exotel Cloud Telephony)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Virtual DID Numbers (1 Line)</td>
+        <td>₹0</td>
+        <td>₹24,000 / year (₹2,000/mo)</td>
+      </tr>
+      <tr>
+        <td>Call Minute Charges (120,000 mins/yr @ ₹0.75)</td>
+        <td>₹0 (Covered by agent SIM unlimited plans)</td>
+        <td>₹90,000 / year</td>
+      </tr>
+      <tr>
+        <td>Server Storage & Maintenance</td>
+        <td>₹0 (Covered under current Hostinger plan)</td>
+        <td>₹0</td>
+      </tr>
+      <tr>
+        <td>Implementation / Setup Fee</td>
+        <td>In-house development</td>
+        <td>₹3,000 (Account onboarding)</td>
+      </tr>
+      <tr style="background: #e2e8f0; font-size: 10pt;">
+        <td><strong>Total Estimated Annual Expenditure</strong></td>
+        <td><strong style="color: #15803d;">₹0 / Year</strong></td>
+        <td><strong style="color: #b91c1c;">₹1,17,000 / Year</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- STRATEGIC RECOMMENDATION -->
+  <h2><span class="section-num">7</span> Strategic Recommendation & Roadmap</h2>
+
+  <div class="highlight-card">
+    <strong>Strategic Consensus: A Two-Phase Rollout Plan</strong>
+    <p style="margin-top: 6px;">
+      Given the budget parameters and operational readiness of our team, we recommend a <strong>phased approach</strong> that delivers immediate value while providing a future upgrade path.
+    </p>
+  </div>
+
+  <div class="grid-2">
+    <div class="option-box" style="border-top: 3px solid #16a34a;">
+      <strong style="color: #16a34a; font-size: 10.5pt;">Phase 1: Immediate Implementation (Option A)</strong>
+      <p style="font-size: 8.8pt; margin-top: 4px;">
+        Implement <strong>Local Call Recording Sync</strong> immediately on the current Hostinger infrastructure.
+      </p>
+      <ul style="font-size: 8.5pt;">
+        <li>Immediate cost savings: saves <strong>₹1.17 Lakhs</strong> in year one.</li>
+        <li>Provides instant call monitoring and QA playback for managers.</li>
+        <li>Go-live achievable within <strong>2 to 3 days</strong>.</li>
+      </ul>
+    </div>
+
+    <div class="option-box" style="border-top: 3px solid #2563eb;">
+      <strong style="color: #2563eb; font-size: 10.5pt;">Phase 2: Enterprise Transition (Option B)</strong>
+      <p style="font-size: 8.8pt; margin-top: 4px;">
+        Upgrade to <strong>Exotel Cloud Telephony</strong> when the business scales to the following trigger points:
+      </p>
+      <ul style="font-size: 8.5pt;">
+        <li>Telecaller team grows beyond 15–20 active agents.</li>
+        <li>Lead data poaching / customer number masking becomes legally mandatory.</li>
+        <li>Requirement for corporate toll-free numbers and IVR customer routing.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- MANAGEMENT APPROVAL BLOCK -->
+  <h2><span class="section-num">8</span> Action Requested & Management Approval</h2>
+  <p>
+    Kindly review the proposed options and signify approval to initiate development:
+  </p>
+
+  <div class="approval-section">
+    <div style="font-weight: 700; margin-bottom: 12px; font-size: 10.5pt;">Management Decision:</div>
+    <div style="margin-bottom: 8px;"><span class="checkbox-box"></span> <strong>[APPROVED] Option A:</strong> Implement In-House Local Recording Sync (Hostinger Server - ₹0 cost).</div>
+    <div style="margin-bottom: 8px;"><span class="checkbox-box"></span> <strong>[APPROVED] Option B:</strong> Proceed with Exotel Cloud Telephony Integration (Procure DID & API credentials).</div>
+    <div style="margin-bottom: 14px;"><span class="checkbox-box"></span> <strong>[REVISE]:</strong> Request additional details / schedule review meeting.</div>
+
+    <div class="sign-row">
+      <div>
+        <div style="height: 40px;"></div>
+        <div class="sign-line">
+          <strong>Prepared By:</strong> Engineering Team (Hi Talk CRM)<br>
+          <strong>Date:</strong> October 14, 2026
+        </div>
+      </div>
+      <div>
+        <div style="height: 40px;"></div>
+        <div class="sign-line">
+          <strong>Approving Manager:</strong> ____________________________________<br>
+          <strong>Signature & Date:</strong> ____________________________________
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
