@@ -69,6 +69,49 @@ import { storage } from '../utils/storage';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+// ======================================================================
+// DESIGN TOKENS
+// Single source of truth so every card/box shares the same rhythm
+// instead of each block inventing its own padding/radius/shadow.
+// ======================================================================
+const T = {
+  radius: { sm: 8, md: 12, lg: 16 },
+  space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 20 },
+  color: {
+    bg: '#FFFFFF',
+    surface: '#FFFFFF',
+    surfaceSunken: '#F8FAFC',
+    border: '#E7EAEE',
+    borderStrong: '#D7DCE3',
+    text: '#111827',
+    textMuted: '#6B7280',
+    textFaint: '#9CA3AF',
+    primary: '#0F9D58',
+    primaryDark: '#0B7A44',
+    primaryTint: '#E6F4EA',
+    danger: '#DC2626',
+    dangerTint: '#FEF2F2',
+    info: '#2563EB',
+    infoTint: '#EFF6FF',
+    warn: '#D97706',
+    warnTint: '#FFFBEB',
+  },
+  shadowCard: {
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  shadowHero: {
+    shadowColor: '#0F9D58',
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+};
+
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
@@ -262,22 +305,22 @@ export const HomeScreen: React.FC = () => {
   };
 
   const formatDurationHoursMinutes = (totalSec: number) => {
-    if (!totalSec || isNaN(totalSec) || totalSec <= 0) return '00:00:00 Hrs';
+    if (!totalSec || isNaN(totalSec) || totalSec <= 0) return '00:00:00';
     const hrs = Math.floor(totalSec / 3600);
     const mins = Math.floor((totalSec % 3600) / 60);
     const secs = totalSec % 60;
     if (hrs > 0) {
-      return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} Hrs`;
+      return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
-    return `00:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} Hrs`;
+    return `00:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
   const formatAvgDurationMins = (avgSec: number) => {
-    if (!avgSec || isNaN(avgSec) || avgSec <= 0) return '0 mins';
+    if (!avgSec || isNaN(avgSec) || avgSec <= 0) return '0s';
     const mins = Math.floor(avgSec / 60);
     const secs = avgSec % 60;
-    if (mins === 0) return `${secs} secs`;
-    if (secs === 0) return `${mins} mins`;
+    if (mins === 0) return `${secs}s`;
+    if (secs === 0) return `${mins}m`;
     return `${mins}m ${secs}s`;
   };
 
@@ -288,8 +331,8 @@ export const HomeScreen: React.FC = () => {
       const fromStr = startOfWeek.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
       const toStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
       return {
-        fromTo: `FROM ${fromStr}  -  TO ${toStr}`,
-        duration: 'Duration : 7 Day(s)',
+        fromTo: `${fromStr}  →  ${toStr}`,
+        duration: '7 days',
       };
     }
     if (period === '30 Days') {
@@ -297,8 +340,8 @@ export const HomeScreen: React.FC = () => {
       const fromStr = startOfMonth.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
       const toStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
       return {
-        fromTo: `FROM ${fromStr}  -  TO ${toStr}`,
-        duration: 'Duration : 30 Day(s)',
+        fromTo: `${fromStr}  →  ${toStr}`,
+        duration: '30 days',
       };
     }
     if (period === 'Custom' && customDate) {
@@ -307,14 +350,14 @@ export const HomeScreen: React.FC = () => {
       const toStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
       const days = Math.max(1, Math.ceil((today.getTime() - cd.getTime()) / (24 * 3600 * 1000)));
       return {
-        fromTo: `FROM ${fromStr}  -  TO ${toStr}`,
-        duration: `Duration : ${days} Day(s)`,
+        fromTo: `${fromStr}  →  ${toStr}`,
+        duration: `${days} day(s)`,
       };
     }
     const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
     return {
-      fromTo: `FROM ${todayStr}  -  TO ${todayStr}`,
-      duration: 'Duration : 1 Day(s)',
+      fromTo: todayStr,
+      duration: 'Today',
     };
   }, [period, customDate]);
 
@@ -329,7 +372,9 @@ export const HomeScreen: React.FC = () => {
   );
   const localCallsCount = realLocalActivities.length;
   const localConnectedCount = realLocalActivities.filter((a) => a.connected).length;
-  const localTotalDuration = realLocalActivities.reduce((sum, a) => sum + (a.durationSeconds || 0), 0);
+  const localTotalDuration = realLocalActivities
+    .filter((a) => a.connected)
+    .reduce((sum, a) => sum + (a.durationSeconds || 0), 0);
 
   const callsMade = Math.max(dashboardData?.callsMade ?? 0, localCallsCount);
   const connectedCalls = Math.max(dashboardData?.connectedCalls ?? 0, localConnectedCount);
@@ -568,7 +613,7 @@ export const HomeScreen: React.FC = () => {
         navigation.navigate('Dispose', {
           lead: dialedLead,
           initialTab: 'DISPOSE LEAD',
-          callDurationSeconds: result.durationSeconds,
+          callDurationSeconds: result.connected ? result.durationSeconds : 0,
           isCallConnected: result.connected,
           callAttempt: true,
           detectionMethod: 'AUTOMATIC',
@@ -626,17 +671,17 @@ export const HomeScreen: React.FC = () => {
   return (
     <CrmShell
       title="Hi Talk"
-      headerIcon={<LayoutGrid size={15} color="#6B7280" />}
+      headerIcon={<LayoutGrid size={15} color={T.color.textMuted} />}
       customSubtitleNode={
         <TouchableOpacity
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+          style={styles.campaignSwitch}
           onPress={() => navigation.navigate('CampaignSelect')}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 13, color: '#6B7280', fontWeight: '400' }} numberOfLines={1}>
+          <Text style={styles.campaignSwitchText} numberOfLines={1}>
             {selectedCampaignName || 'All campaigns'}
           </Text>
-          <ChevronDown size={14} color="#6B7280" />
+          <ChevronDown size={14} color={T.color.textMuted} />
         </TouchableOpacity>
       }
       showPeriodControl
@@ -657,7 +702,7 @@ export const HomeScreen: React.FC = () => {
             onPress={() => navigation.navigate('Campaigns')}
             activeOpacity={0.8}
           >
-            <Plus size={13} color="#0F9D58" strokeWidth={2.5} />
+            <Plus size={13} color={T.color.primary} strokeWidth={2.5} />
             <Text style={styles.headerAddBtnText}>Campaign</Text>
           </TouchableOpacity>
         ) : null
@@ -671,7 +716,7 @@ export const HomeScreen: React.FC = () => {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefreshAll}
-            colors={['#0F9D58']}
+            colors={[T.color.primary]}
           />
         }
       >
@@ -692,11 +737,13 @@ export const HomeScreen: React.FC = () => {
         {/* Assigned Leads Notification Alert Banner */}
         {isAgent && assignedLeadAlert && (
           <View style={styles.alertBanner}>
-            <Sparkles size={16} color="#0F9D58" />
-            <View style={{ flex: 1, paddingHorizontal: 6 }}>
-              <Text style={styles.alertTitle}>New Leads Assigned!</Text>
+            <View style={styles.alertIconBubble}>
+              <Sparkles size={15} color={T.color.info} />
+            </View>
+            <View style={{ flex: 1, paddingHorizontal: 10 }}>
+              <Text style={styles.alertTitle}>New leads assigned</Text>
               <Text style={styles.alertSubtitle}>
-                {assignedLeadAlert.count} new leads added by {assignedLeadAlert.assignedBy || 'Admin'}.
+                {assignedLeadAlert.count} new leads added by {assignedLeadAlert.assignedBy || 'Admin'}
               </Text>
             </View>
             <TouchableOpacity
@@ -712,197 +759,93 @@ export const HomeScreen: React.FC = () => {
         )}
 
         {/* =========================================================================
-            CLEAN MINIMAL "MY REPORT" TOP SECTION
+            PERFORMANCE SUMMARY — date banner + 2x2 metric grid, unified card
            ========================================================================= */}
-        {/* Top Date Range Banner */}
-        <TouchableOpacity
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: '#E5E7EB',
-            paddingVertical: 12,
-            paddingHorizontal: 16,
-            marginBottom: 16,
-            alignItems: 'center',
-          }}
-          onPress={() => setShowDatePicker(true)}
-          activeOpacity={0.7}
-        >
-          <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 13.5, letterSpacing: 0.2, textAlign: 'center' }}>
-            {bannerDateInfo.fromTo}
-          </Text>
-          <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12, marginTop: 3 }}>
-            {bannerDateInfo.duration}
-          </Text>
-        </TouchableOpacity>
-
-        {/* 4 Clean Minimal Metric Cards (2x2 Grid) */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
-          {/* Card 1: Calls Attempted */}
-          <View
-            style={{
-              flex: 1,
-              minWidth: '46%',
-              backgroundColor: '#FFFFFF',
-              borderRadius: 12,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#E5E7EB',
-            }}
+        <View style={styles.summaryCard}>
+          <TouchableOpacity
+            style={styles.summaryDateRow}
+            onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.7}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12 }}>
-                Calls Attempted
-              </Text>
-              <Phone size={18} color="#6B7280" />
-            </View>
-            <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 20, marginTop: 8 }}>
-              {callsMade}
+            <Calendar size={13} color={T.color.textMuted} />
+            <Text style={styles.summaryDateText} numberOfLines={1}>
+              {bannerDateInfo.fromTo}
             </Text>
-          </View>
+            <View style={styles.summaryDurationPill}>
+              <Text style={styles.summaryDurationText}>{bannerDateInfo.duration}</Text>
+            </View>
+          </TouchableOpacity>
 
-          {/* Card 2: Calls Connected */}
-          <View
-            style={{
-              flex: 1,
-              minWidth: '46%',
-              backgroundColor: '#FFFFFF',
-              borderRadius: 12,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#E5E7EB',
-            }}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12 }}>
-                Calls Connected
-              </Text>
-              <PhoneCall size={18} color="#6B7280" />
+          <View style={styles.metricGrid}>
+            <View style={styles.metricCell}>
+              <View style={styles.metricTopRow}>
+                <Text style={styles.metricLabel}>Attempted</Text>
+                <Phone size={14} color={T.color.textFaint} />
+              </View>
+              <Text style={styles.metricValue}>{callsMade}</Text>
             </View>
-            <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 20, marginTop: 8 }}>
-              {connectedCalls}
-            </Text>
-          </View>
 
-          {/* Card 3: Call Time */}
-          <View
-            style={{
-              flex: 1,
-              minWidth: '46%',
-              backgroundColor: '#FFFFFF',
-              borderRadius: 12,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#E5E7EB',
-            }}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12 }}>
-                Call Time
-              </Text>
-              <Clock3 size={18} color="#6B7280" />
-            </View>
-            <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 20, marginTop: 8 }}>
-              {formatDurationHoursMinutes(localTotalDuration || (connectedCalls * 68))}
-            </Text>
-          </View>
+            <View style={styles.metricDividerV} />
 
-          {/* Card 4: Avg Call Duration */}
-          <View
-            style={{
-              flex: 1,
-              minWidth: '46%',
-              backgroundColor: '#FFFFFF',
-              borderRadius: 12,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: '#E5E7EB',
-            }}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12 }}>
-                Avg Call Duration
-              </Text>
-              <Clock size={18} color="#6B7280" />
+            <View style={styles.metricCell}>
+              <View style={styles.metricTopRow}>
+                <Text style={styles.metricLabel}>Connected</Text>
+                <PhoneCall size={14} color={T.color.textFaint} />
+              </View>
+              <Text style={[styles.metricValue, { color: T.color.primaryDark }]}>{connectedCalls}</Text>
             </View>
-            <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 20, marginTop: 8 }}>
-              {formatAvgDurationMins(avgDurationSeconds || 68)}
-            </Text>
+
+            <View style={styles.metricDividerV} />
+
+            <View style={styles.metricCell}>
+              <View style={styles.metricTopRow}>
+                <Text style={styles.metricLabel}>Call time</Text>
+                <Clock3 size={14} color={T.color.textFaint} />
+              </View>
+              <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
+                {formatDurationHoursMinutes(localTotalDuration)}
+              </Text>
+            </View>
+
+            <View style={styles.metricDividerV} />
+
+            <View style={styles.metricCell}>
+              <View style={styles.metricTopRow}>
+                <Text style={styles.metricLabel}>Avg. duration</Text>
+                <Clock size={14} color={T.color.textFaint} />
+              </View>
+              <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
+                {formatAvgDurationMins(avgDurationSeconds)}
+              </Text>
+            </View>
           </View>
         </View>
 
         {/* Segmented Bottom Tabs: Calling Queues | Login Report | Call Report */}
-        <View
-          style={{
-            flexDirection: 'row',
-            backgroundColor: '#F9FAFB',
-            borderRadius: 8,
-            padding: 3,
-            marginBottom: 16,
-            borderWidth: 1,
-            borderColor: '#E5E7EB',
-          }}
-        >
+        <View style={styles.segmentWrap}>
           <TouchableOpacity
-            style={{
-              flex: 1,
-              paddingVertical: 8,
-              alignItems: 'center',
-              borderRadius: 6,
-              backgroundColor: dashboardSubTab === 'QUEUES' ? '#E6F4EA' : 'transparent',
-            }}
+            style={[styles.segmentBtn, dashboardSubTab === 'QUEUES' && styles.segmentBtnActive]}
             onPress={() => setDashboardSubTab('QUEUES')}
           >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: dashboardSubTab === 'QUEUES' ? '500' : '400',
-                color: dashboardSubTab === 'QUEUES' ? '#0F9D58' : '#6B7280',
-              }}
-            >
+            <Text style={[styles.segmentText, dashboardSubTab === 'QUEUES' && styles.segmentTextActive]}>
               Calling Queues
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={{
-              flex: 1,
-              paddingVertical: 8,
-              alignItems: 'center',
-              borderRadius: 6,
-              backgroundColor: dashboardSubTab === 'LOGIN_REPORT' ? '#E6F4EA' : 'transparent',
-            }}
+            style={[styles.segmentBtn, dashboardSubTab === 'LOGIN_REPORT' && styles.segmentBtnActive]}
             onPress={() => setDashboardSubTab('LOGIN_REPORT')}
           >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: dashboardSubTab === 'LOGIN_REPORT' ? '500' : '400',
-                color: dashboardSubTab === 'LOGIN_REPORT' ? '#0F9D58' : '#6B7280',
-              }}
-            >
+            <Text style={[styles.segmentText, dashboardSubTab === 'LOGIN_REPORT' && styles.segmentTextActive]}>
               Login Report
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={{
-              flex: 1,
-              paddingVertical: 8,
-              alignItems: 'center',
-              borderRadius: 6,
-              backgroundColor: dashboardSubTab === 'CALL_REPORT' ? '#E6F4EA' : 'transparent',
-            }}
+            style={[styles.segmentBtn, dashboardSubTab === 'CALL_REPORT' && styles.segmentBtnActive]}
             onPress={() => setDashboardSubTab('CALL_REPORT')}
           >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: dashboardSubTab === 'CALL_REPORT' ? '500' : '400',
-                color: dashboardSubTab === 'CALL_REPORT' ? '#0F9D58' : '#6B7280',
-              }}
-            >
+            <Text style={[styles.segmentText, dashboardSubTab === 'CALL_REPORT' && styles.segmentTextActive]}>
               Call Report
             </Text>
           </TouchableOpacity>
@@ -910,40 +853,37 @@ export const HomeScreen: React.FC = () => {
 
         {/* Content of Sub Tab */}
         {dashboardSubTab === 'CALL_REPORT' ? (
-          <View style={{ gap: 10, marginBottom: 16 }}>
+          <View style={{ gap: T.space.sm, marginBottom: T.space.lg }}>
             {realDailyCallReports.length > 0 ? (
               realDailyCallReports.map((day) => (
-                <View
-                  key={day.date}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 12,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: '#E5E7EB',
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={{ fontWeight: '500', fontSize: 13.5, color: '#1F2937' }}>{day.date}</Text>
-                    <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                      <Text style={{ color: '#0F9D58', fontSize: 11, fontWeight: '500' }}>{day.connectRate} Connected</Text>
+                <View key={day.date} style={styles.listCard}>
+                  <View style={styles.listCardTopRow}>
+                    <Text style={styles.listCardTitle}>{day.date}</Text>
+                    <View style={styles.connectRatePill}>
+                      <Text style={styles.connectRatePillText}>{day.connectRate} connected</Text>
                     </View>
                   </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                    <Text style={{ fontSize: 12, color: '#6B7280' }}>Attempted: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.attempted}</Text></Text>
-                    <Text style={{ fontSize: 12, color: '#6B7280' }}>Connected: <Text style={{ fontWeight: '500', color: '#0F9D58' }}>{day.connected}</Text></Text>
-                    <Text style={{ fontSize: 12, color: '#6B7280' }}>Duration: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.duration}</Text></Text>
+                  <View style={styles.listCardStatsRow}>
+                    <Text style={styles.listCardStatText}>
+                      Attempted <Text style={styles.listCardStatStrong}>{day.attempted}</Text>
+                    </Text>
+                    <Text style={styles.listCardStatText}>
+                      Connected <Text style={[styles.listCardStatStrong, { color: T.color.primaryDark }]}>{day.connected}</Text>
+                    </Text>
+                    <Text style={styles.listCardStatText}>
+                      Duration <Text style={styles.listCardStatStrong}>{day.duration}</Text>
+                    </Text>
                   </View>
                 </View>
               ))
             ) : (
-              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }}>
-                <Text style={{ fontSize: 13, color: '#6B7280' }}>No call activity recorded yet today</Text>
+              <View style={styles.inlineEmptyCard}>
+                <Text style={styles.inlineEmptyText}>No call activity recorded yet today</Text>
               </View>
             )}
           </View>
         ) : dashboardSubTab === 'LOGIN_REPORT' ? (
-          <View style={{ gap: 10, marginBottom: 16 }}>
+          <View style={{ gap: T.space.sm, marginBottom: T.space.lg }}>
             {((userCallsData?.agents && userCallsData.agents.length > 0)
               ? userCallsData.agents
               : user ? [user] : []
@@ -957,33 +897,21 @@ export const HomeScreen: React.FC = () => {
                 : 'Active now';
 
               return (
-                <View
-                  key={u.userId || u._id || u.email || uName}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 12,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: '#E5E7EB',
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
+                <View key={u.userId || u._id || u.email || uName} style={[styles.listCard, styles.loginRow]}>
                   <View>
-                    <Text style={{ fontWeight: '500', fontSize: 13.5, color: '#1F2937' }}>{uName}</Text>
-                    <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+                    <Text style={styles.listCardTitle}>{uName}</Text>
+                    <Text style={styles.loginSubText}>
                       {uBranch} · {uRole}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isUserActive ? '#0F9D58' : '#9CA3AF' }} />
-                      <Text style={{ fontSize: 11, fontWeight: '500', color: isUserActive ? '#0F9D58' : '#6B7280' }}>
-                        {isUserActive ? 'Logged In' : 'Offline'}
+                    <View style={styles.loginStatusRow}>
+                      <View style={[styles.statusDot, { backgroundColor: isUserActive ? T.color.primary : T.color.textFaint }]} />
+                      <Text style={[styles.loginStatusText, { color: isUserActive ? T.color.primaryDark : T.color.textMuted }]}>
+                        {isUserActive ? 'Logged in' : 'Offline'}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{loginTimeStr}</Text>
+                    <Text style={styles.loginTimeText}>{loginTimeStr}</Text>
                   </View>
                 </View>
               );
@@ -991,539 +919,542 @@ export const HomeScreen: React.FC = () => {
           </View>
         ) : null}
 
-        {/* 3 NEODOVE QUEUE CARDS (Exact match of Image 3) */}
+        {/* 3 NEODOVE QUEUE CARDS */}
         {dashboardSubTab === 'QUEUES' && (
-          <View style={{ gap: 14 }}>
-            <View style={{ gap: 14, marginBottom: 16 }}>
+          <View>
+            <View style={{ gap: T.space.md, marginBottom: T.space.lg }}>
               {/* Card 1: New/Un-attempted Leads */}
               <View style={styles.neoQueueCard}>
-            <View style={styles.neoQueueCardHeader}>
-              <Text style={styles.neoQueueCardTitle}>New/Un-attempted Leads</Text>
-              <View style={styles.neoQueueCountBadge}>
-                <Text style={styles.neoQueueCountBadgeText}>{newUnattemptedLeads.length} Leads</Text>
-              </View>
-            </View>
-            <Text style={styles.neoQueueCardSub}>Leads, which haven't been called so far</Text>
-            <View style={styles.neoQueueActionsRow}>
-              <TouchableOpacity
-                style={styles.neoQueueViewBtn}
-                onPress={() => {
-                  setActiveTab('queue');
-                  navigation.navigate('MyLeads');
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.neoQueueViewBtnText}>View</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.neoQueueCallBtn}
-                onPress={() => handleStartCallingQueue(newUnattemptedLeads, 'New/Un-attempted Leads')}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.neoQueueCallBtnText}>Start Calling</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Card 2: Follow-up Leads */}
-          <View style={styles.neoQueueCard}>
-            <View style={styles.neoQueueCardHeader}>
-              <Text style={styles.neoQueueCardTitle}>Follow-up Leads</Text>
-              <View style={styles.neoQueueCountBadge}>
-                <Text style={styles.neoQueueCountBadgeText}>{followUpLeads.length} Leads</Text>
-              </View>
-            </View>
-            <Text style={styles.neoQueueCardSub}>Leads, which are scheduled to be called later</Text>
-            <View style={styles.neoQueueActionsRow}>
-              <TouchableOpacity
-                style={styles.neoQueueViewBtn}
-                onPress={() => {
-                  setActiveTab('callbacks');
-                  navigation.navigate('FollowUps');
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.neoQueueViewBtnText}>View</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.neoQueueCallBtn}
-                onPress={() => handleStartCallingQueue(followUpLeads, 'Follow-up Leads')}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.neoQueueCallBtnText}>Start Calling</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Card 3: Not Connected Leads */}
-          <View style={styles.neoQueueCard}>
-            <View style={styles.neoQueueCardHeader}>
-              <Text style={styles.neoQueueCardTitle}>Not Connected Leads</Text>
-              <View style={styles.neoQueueCountBadge}>
-                <Text style={styles.neoQueueCountBadgeText}>{notConnectedLeads.length} Leads</Text>
-              </View>
-            </View>
-            <Text style={styles.neoQueueCardSub}>Leads, which were not connected in previous attempt</Text>
-            <View style={styles.neoQueueActionsRow}>
-              <TouchableOpacity
-                style={styles.neoQueueViewBtn}
-                onPress={() => {
-                  navigation.navigate('MyLeads');
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.neoQueueViewBtnText}>View</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.neoQueueCallBtn}
-                onPress={() => handleStartCallingQueue(notConnectedLeads, 'Not Connected Leads')}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.neoQueueCallBtnText}>Start Calling</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* 3. PRIMARY CALLING DECK (HERO LEAD) */}
-        {heroLead ? (
-          <View style={styles.heroCard}>
-            {/* Top Tag Bar */}
-            <View style={styles.heroTopRow}>
-              <View style={styles.queueOrderPill}>
-                <Text style={styles.queueOrderText}>NEXT IN LINE</Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                {heroLeadTemp === 'HOT' ? (
-                  <View style={[styles.tempPill, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
-                    <Flame size={10} color="#DC2626" fill="#DC2626" />
-                    <Text style={[styles.tempPillText, { color: '#DC2626' }]}>Hot</Text>
+                <View style={styles.neoQueueCardHeader}>
+                  <Text style={styles.neoQueueCardTitle}>New / un-attempted leads</Text>
+                  <View style={styles.neoQueueCountBadge}>
+                    <Text style={styles.neoQueueCountBadgeText}>{newUnattemptedLeads.length}</Text>
                   </View>
-                ) : heroLeadTemp === 'COLD' ? (
-                  <View style={[styles.tempPill, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
-                    <Snowflake size={10} color="#2563EB" />
-                    <Text style={[styles.tempPillText, { color: '#2563EB' }]}>Cold</Text>
-                  </View>
-                ) : (
-                  <View style={[styles.tempPill, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
-                    <Sun size={10} color="#D97706" />
-                    <Text style={[styles.tempPillText, { color: '#D97706' }]}>Warm</Text>
-                  </View>
-                )}
+                </View>
+                <Text style={styles.neoQueueCardSub}>Haven't been called yet</Text>
+                <View style={styles.neoQueueActionsRow}>
+                  <TouchableOpacity
+                    style={styles.neoQueueViewBtn}
+                    onPress={() => {
+                      setActiveTab('queue');
+                      navigation.navigate('MyLeads');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.neoQueueViewBtnText}>View</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.neoQueueCallBtn}
+                    onPress={() => handleStartCallingQueue(newUnattemptedLeads, 'New/Un-attempted Leads')}
+                    activeOpacity={0.85}
+                  >
+                    <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                    <Text style={styles.neoQueueCallBtnText}>Start Calling</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
 
-                <View style={styles.stagePill}>
-                  <Text style={styles.stagePillText}>{heroLead.stage || 'New'}</Text>
+              {/* Card 2: Follow-up Leads */}
+              <View style={styles.neoQueueCard}>
+                <View style={styles.neoQueueCardHeader}>
+                  <Text style={styles.neoQueueCardTitle}>Follow-up leads</Text>
+                  <View style={styles.neoQueueCountBadge}>
+                    <Text style={styles.neoQueueCountBadgeText}>{followUpLeads.length}</Text>
+                  </View>
+                </View>
+                <Text style={styles.neoQueueCardSub}>Scheduled to be called later</Text>
+                <View style={styles.neoQueueActionsRow}>
+                  <TouchableOpacity
+                    style={styles.neoQueueViewBtn}
+                    onPress={() => {
+                      setActiveTab('callbacks');
+                      navigation.navigate('FollowUps');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.neoQueueViewBtnText}>View</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.neoQueueCallBtn}
+                    onPress={() => handleStartCallingQueue(followUpLeads, 'Follow-up Leads')}
+                    activeOpacity={0.85}
+                  >
+                    <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                    <Text style={styles.neoQueueCallBtnText}>Start Calling</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Card 3: Not Connected Leads */}
+              <View style={styles.neoQueueCard}>
+                <View style={styles.neoQueueCardHeader}>
+                  <Text style={styles.neoQueueCardTitle}>Not connected leads</Text>
+                  <View style={styles.neoQueueCountBadge}>
+                    <Text style={styles.neoQueueCountBadgeText}>{notConnectedLeads.length}</Text>
+                  </View>
+                </View>
+                <Text style={styles.neoQueueCardSub}>Not reached on previous attempt</Text>
+                <View style={styles.neoQueueActionsRow}>
+                  <TouchableOpacity
+                    style={styles.neoQueueViewBtn}
+                    onPress={() => {
+                      navigation.navigate('MyLeads');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.neoQueueViewBtnText}>View</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.neoQueueCallBtn}
+                    onPress={() => handleStartCallingQueue(notConnectedLeads, 'Not Connected Leads')}
+                    activeOpacity={0.85}
+                  >
+                    <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                    <Text style={styles.neoQueueCallBtnText}>Start Calling</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
 
-            {/* Lead Details */}
-            <View style={styles.leadDetailsRow}>
-              <View style={styles.leadAvatarBox}>
-                <Text style={styles.leadAvatarText}>{heroLeadInitials}</Text>
-              </View>
-              <View style={{ flex: 1, paddingLeft: 10 }}>
-                <Text style={styles.leadNameText} numberOfLines={1}>
-                  {heroLead.name}
-                </Text>
-                <Text style={styles.leadPhoneText}>{formatDisplayPhone(heroLead.phone)}</Text>
-                <Text style={styles.leadCampaignText} numberOfLines={1}>
-                  {heroLeadCampaign} · Attempt #{heroLead.attemptCount || 1}
-                </Text>
-              </View>
-            </View>
+            {/* 3. PRIMARY CALLING DECK (HERO LEAD) */}
+            {heroLead ? (
+              <View style={styles.heroCard}>
+                {/* Top Tag Bar */}
+                <View style={styles.heroTopRow}>
+                  <View style={styles.queueOrderPill}>
+                    <Text style={styles.queueOrderText}>Next in line</Text>
+                  </View>
 
-            {/* Note / Property Preview */}
-            <View style={styles.notePreviewRow}>
-              <Clock3 size={11} color="#64748B" />
-              <Text style={styles.notePreviewText} numberOfLines={1}>
-                {heroLead.customProperties?.lastRemark ||
-                  (heroLead.attemptCount && heroLead.attemptCount > 0
-                    ? 'Prior conversation recorded · Callback ready'
-                    : 'New lead · Ready for pitch')}
-              </Text>
-            </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {heroLeadTemp === 'HOT' ? (
+                      <View style={[styles.tempPill, { backgroundColor: T.color.dangerTint, borderColor: '#FECACA' }]}>
+                        <Flame size={10} color={T.color.danger} fill={T.color.danger} />
+                        <Text style={[styles.tempPillText, { color: T.color.danger }]}>Hot</Text>
+                      </View>
+                    ) : heroLeadTemp === 'COLD' ? (
+                      <View style={[styles.tempPill, { backgroundColor: T.color.infoTint, borderColor: '#BFDBFE' }]}>
+                        <Snowflake size={10} color={T.color.info} />
+                        <Text style={[styles.tempPillText, { color: T.color.info }]}>Cold</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.tempPill, { backgroundColor: T.color.warnTint, borderColor: '#FDE68A' }]}>
+                        <Sun size={10} color={T.color.warn} />
+                        <Text style={[styles.tempPillText, { color: T.color.warn }]}>Warm</Text>
+                      </View>
+                    )}
 
-            {/* High-Contrast Large CALL NOW Button */}
-            <TouchableOpacity
-              style={styles.callNowBtn}
-              onPress={() => handleDirectDial(heroLead)}
-              activeOpacity={0.85}
-            >
-              <Phone size={17} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.callNowBtnText}>CALL NOW</Text>
-            </TouchableOpacity>
-
-            {/* Secondary Action Row: WhatsApp, Note, Skip */}
-            <View style={styles.heroActionRow}>
-              <TouchableOpacity
-                style={styles.heroMiniBtn}
-                onPress={() => handleOpenWhatsApp(heroLead)}
-                activeOpacity={0.8}
-              >
-                <MessageCircle size={13} color="#15803D" strokeWidth={2.5} />
-                <Text style={[styles.heroMiniBtnText, { color: '#15803D' }]}>WhatsApp</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.heroMiniBtn}
-                onPress={() => setSelectedLeadForQuickModal(heroLead)}
-                activeOpacity={0.8}
-              >
-                <FileEdit size={13} color="#2563EB" strokeWidth={2.5} />
-                <Text style={[styles.heroMiniBtnText, { color: '#2563EB' }]}>Note</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.heroMiniBtn}
-                onPress={handleSkipHeroLead}
-                activeOpacity={0.8}
-              >
-                <SkipForward size={13} color="#64748B" strokeWidth={2} />
-                <Text style={[styles.heroMiniBtnText, { color: '#64748B' }]}>Skip</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.emptyQueueCard}>
-            <CheckCircle2 size={32} color="#10B981" />
-            <Text style={styles.emptyQueueTitle}>All caught up! 🎉</Text>
-            <Text style={styles.emptyQueueSub}>
-              All active leads in this queue have been reached. Browse all leads or upload new contacts.
-            </Text>
-            <TouchableOpacity
-              style={styles.emptyQueueBtn}
-              onPress={() => navigation.navigate('MyLeads')}
-            >
-              <Text style={styles.emptyQueueBtnText}>Browse All {myAssignedLeadsCount} Leads</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* 4. NEODOVE SEGMENTED TABS (Compact, No Vertical Clutter) */}
-        <View style={styles.tabsContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
-            <TouchableOpacity
-              style={[styles.tabChip, activeTab === 'queue' && styles.tabChipActive]}
-              onPress={() => setActiveTab('queue')}
-            >
-              <ListOrdered size={12} color={activeTab === 'queue' ? '#FFFFFF' : '#475569'} />
-              <Text style={[styles.tabChipText, activeTab === 'queue' && styles.tabChipTextActive]}>
-                Queue ({queueLeads.length})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabChip, activeTab === 'callbacks' && styles.tabChipActive]}
-              onPress={() => setActiveTab('callbacks')}
-            >
-              <CalendarClock size={12} color={activeTab === 'callbacks' ? '#FFFFFF' : '#475569'} />
-              <Text style={[styles.tabChipText, activeTab === 'callbacks' && styles.tabChipTextActive]}>
-                Callbacks Due ({callbacksDueTodayCount})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabChip, activeTab === 'calls' && styles.tabChipActive]}
-              onPress={() => setActiveTab('calls')}
-            >
-              <Clock3 size={12} color={activeTab === 'calls' ? '#FFFFFF' : '#475569'} />
-              <Text style={[styles.tabChipText, activeTab === 'calls' && styles.tabChipTextActive]}>
-                Today's Calls ({periodCallActivities.length})
-              </Text>
-            </TouchableOpacity>
-
-            {isManagerOrAdmin && (
-              <TouchableOpacity
-                style={[styles.tabChip, activeTab === 'team' && styles.tabChipActive]}
-                onPress={() => setActiveTab('team')}
-              >
-                <Users size={12} color={activeTab === 'team' ? '#FFFFFF' : '#475569'} />
-                <Text style={[styles.tabChipText, activeTab === 'team' && styles.tabChipTextActive]}>
-                  Team ({agentCallsList.length})
-                </Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        </View>
-
-        {/* TAB 1: QUEUE LIST */}
-        {activeTab === 'queue' && (
-          <View style={styles.tabContentBox}>
-            {nextInQueueLeads.length === 0 ? (
-              <Text style={styles.tabEmptyText}>No other leads in queue. Ready for new list!</Text>
-            ) : (
-              nextInQueueLeads.map((item, idx) => {
-                const initials = item.name
-                  .split(' ')
-                  .filter(Boolean)
-                  .map((w) => w[0])
-                  .join('')
-                  .toUpperCase()
-                  .slice(0, 2) || 'LD';
-
-                return (
-                  <View key={item._id} style={styles.queueItemRow}>
-                    <View style={styles.itemAvatar}>
-                      <Text style={styles.itemAvatarText}>{initials}</Text>
-                    </View>
-                    <View style={{ flex: 1, paddingHorizontal: 8 }}>
-                      <Text style={styles.itemNameText} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.itemPhoneText}>{formatDisplayPhone(item.phone)}</Text>
-                    </View>
-
-                    <View style={styles.itemActionGroup}>
-                      <TouchableOpacity
-                        style={styles.itemCallBtn}
-                        onPress={() => handleDirectDial(item)}
-                        activeOpacity={0.8}
-                      >
-                        <Phone size={12} color="#FFFFFF" strokeWidth={2.5} />
-                        <Text style={styles.itemCallBtnText}>Call</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.itemIconBtn}
-                        onPress={() => handleOpenWhatsApp(item)}
-                        activeOpacity={0.8}
-                      >
-                        <MessageCircle size={13} color="#15803D" strokeWidth={2.5} />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.itemIconBtn}
-                        onPress={() => setSelectedLeadForQuickModal(item)}
-                        activeOpacity={0.8}
-                      >
-                        <FileEdit size={13} color="#4F46E5" strokeWidth={2} />
-                      </TouchableOpacity>
+                    <View style={styles.stagePill}>
+                      <Text style={styles.stagePillText}>{heroLead.stage || 'New'}</Text>
                     </View>
                   </View>
-                );
-              })
-            )}
+                </View>
 
-            <TouchableOpacity
-              style={styles.viewAllFooterBtn}
-              onPress={() => navigation.navigate('MyLeads')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.viewAllFooterText}>View All ({myAssignedLeadsCount}) Leads</Text>
-              <ChevronRight size={13} color="#2563EB" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* TAB 2: CALLBACKS DUE TODAY */}
-        {activeTab === 'callbacks' && (
-          <View style={styles.tabContentBox}>
-            {dueTodayFollowUps.length === 0 ? (
-              <View style={styles.tabEmptyBox}>
-                <CheckCircle2 size={24} color="#10B981" />
-                <Text style={styles.tabEmptyTitle}>No callbacks due right now</Text>
-                <Text style={styles.tabEmptySub}>
-                  When you schedule callbacks from the post-call modal, they will show up here automatically.
-                </Text>
-              </View>
-            ) : (
-              dueTodayFollowUps.map((item) => {
-                const timeStr = item.nextFollowUpAt
-                  ? new Date(item.nextFollowUpAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : 'Today';
-
-                return (
-                  <View key={item._id} style={styles.queueItemRow}>
-                    <View style={[styles.itemAvatar, { backgroundColor: '#FFFBEB' }]}>
-                      <CalendarClock size={14} color="#D97706" />
-                    </View>
-                    <View style={{ flex: 1, paddingHorizontal: 8 }}>
-                      <Text style={styles.itemNameText} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.itemPhoneText}>
-                        {formatDisplayPhone(item.phone)} · <Text style={{ color: '#D97706', fontWeight: '700' }}>{timeStr}</Text>
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.itemCallBtn}
-                      onPress={() => handleDirectDial(item)}
-                      activeOpacity={0.8}
-                    >
-                      <Phone size={12} color="#FFFFFF" strokeWidth={2.5} />
-                      <Text style={styles.itemCallBtnText}>Call</Text>
-                    </TouchableOpacity>
+                {/* Lead Details */}
+                <View style={styles.leadDetailsRow}>
+                  <View style={styles.leadAvatarBox}>
+                    <Text style={styles.leadAvatarText}>{heroLeadInitials}</Text>
                   </View>
-                );
-              })
-            )}
-          </View>
-        )}
-
-        {/* TAB 3: TODAY'S CALLS ACTIVITY */}
-        {activeTab === 'calls' && (
-          <View style={styles.tabContentBox}>
-            {periodCallActivities.length === 0 ? (
-              <View style={styles.tabEmptyBox}>
-                <Clock3 size={24} color="#94A3B8" />
-                <Text style={styles.tabEmptyTitle}>No calls logged today yet</Text>
-                <Text style={styles.tabEmptySub}>
-                  Calls you dial will appear here with detected duration and connection status.
-                </Text>
-              </View>
-            ) : (
-              periodCallActivities.slice(0, 10).map((act, index) => {
-                const isLast = index === Math.min(periodCallActivities.length, 10) - 1;
-                const durText = act.connected ? formatSeconds(act.durationSeconds || 0) : 'Missed';
-                const timeStr = new Date(act.createdAt).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
-
-                return (
-                  <View
-                    key={act._id}
-                    style={[styles.historyRow, isLast && { borderBottomWidth: 0 }]}
-                  >
-                    <View
-                      style={[
-                        styles.historyIconBox,
-                        { backgroundColor: act.connected ? '#ECFDF5' : '#FEF2F2' },
-                      ]}
-                    >
-                      {act.connected ? (
-                        <Phone size={12} color="#059669" />
-                      ) : (
-                        <PhoneOff size={12} color="#DC2626" />
-                      )}
-                    </View>
-
-                    <View style={{ flex: 1, paddingHorizontal: 8 }}>
-                      <Text style={styles.historyNameText} numberOfLines={1}>
-                        {act.customerName || (act.phone ? formatDisplayPhone(act.phone) : 'Contact')}
-                      </Text>
-                      <Text style={styles.historyPhoneText}>
-                        {act.phone ? formatDisplayPhone(act.phone) : 'No phone'} · {timeStr}
-                      </Text>
-                    </View>
-
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text
-                        style={[
-                          styles.historyDurText,
-                          { color: act.connected ? '#059669' : '#DC2626' },
-                        ]}
-                      >
-                        {durText}
-                      </Text>
-                      <Text style={styles.historyStageText}>{act.stage}</Text>
-                    </View>
+                  <View style={{ flex: 1, paddingLeft: 12 }}>
+                    <Text style={styles.leadNameText} numberOfLines={1}>
+                      {heroLead.name}
+                    </Text>
+                    <Text style={styles.leadPhoneText}>{formatDisplayPhone(heroLead.phone)}</Text>
+                    <Text style={styles.leadCampaignText} numberOfLines={1}>
+                      {heroLeadCampaign} · Attempt #{heroLead.attemptCount || 1}
+                    </Text>
                   </View>
-                );
-              })
-            )}
+                </View>
 
-            <TouchableOpacity
-              style={styles.viewAllFooterBtn}
-              onPress={() => navigation.navigate('CallHistory')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.viewAllFooterText}>View Full Call History</Text>
-              <ChevronRight size={13} color="#2563EB" />
-            </TouchableOpacity>
-          </View>
-        )}
+                {/* Note / Property Preview */}
+                <View style={styles.notePreviewRow}>
+                  <Clock3 size={12} color={T.color.textMuted} />
+                  <Text style={styles.notePreviewText} numberOfLines={1}>
+                    {heroLead.customProperties?.lastRemark ||
+                      (heroLead.attemptCount && heroLead.attemptCount > 0
+                        ? 'Prior conversation recorded · Callback ready'
+                        : 'New lead · Ready for pitch')}
+                  </Text>
+                </View>
 
-        {/* TAB 4: TEAM PERFORMANCE (Manager & Admin) */}
-        {isManagerOrAdmin && activeTab === 'team' && (
-          <View style={styles.tabContentBox}>
-            {/* Branch Filter Selector */}
-            <View style={styles.branchFilterRow}>
-              {(['ALL', 'Trichy', 'Pudukkottai'] as const).map((br) => {
-                const isSelected = selectedBranch === br;
-                return (
+                {/* High-Contrast Large CALL NOW Button */}
+                <TouchableOpacity
+                  style={styles.callNowBtn}
+                  onPress={() => handleDirectDial(heroLead)}
+                  activeOpacity={0.85}
+                >
+                  <Phone size={18} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={styles.callNowBtnText}>Call now</Text>
+                </TouchableOpacity>
+
+                {/* Secondary Action Row: WhatsApp, Note, Skip */}
+                <View style={styles.heroActionRow}>
                   <TouchableOpacity
-                    key={br}
-                    style={[styles.branchFilterChip, isSelected && styles.branchFilterChipActive]}
-                    onPress={() => setSelectedBranch(br)}
+                    style={styles.heroMiniBtn}
+                    onPress={() => handleOpenWhatsApp(heroLead)}
+                    activeOpacity={0.8}
                   >
-                    <Text
-                      style={[
-                        styles.branchFilterText,
-                        isSelected && styles.branchFilterTextActive,
-                      ]}
-                    >
-                      {br === 'ALL' ? 'All' : br}
+                    <MessageCircle size={14} color={T.color.primaryDark} strokeWidth={2.5} />
+                    <Text style={[styles.heroMiniBtnText, { color: T.color.primaryDark }]}>WhatsApp</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.heroMiniBtn}
+                    onPress={() => setSelectedLeadForQuickModal(heroLead)}
+                    activeOpacity={0.8}
+                  >
+                    <FileEdit size={14} color={T.color.info} strokeWidth={2.5} />
+                    <Text style={[styles.heroMiniBtnText, { color: T.color.info }]}>Note</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.heroMiniBtn}
+                    onPress={handleSkipHeroLead}
+                    activeOpacity={0.8}
+                  >
+                    <SkipForward size={14} color={T.color.textMuted} strokeWidth={2} />
+                    <Text style={[styles.heroMiniBtnText, { color: T.color.textMuted }]}>Skip</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.emptyQueueCard}>
+                <CheckCircle2 size={32} color={T.color.primary} />
+                <Text style={styles.emptyQueueTitle}>All caught up! 🎉</Text>
+                <Text style={styles.emptyQueueSub}>
+                  All active leads in this queue have been reached. Browse all leads or upload new contacts.
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyQueueBtn}
+                  onPress={() => navigation.navigate('MyLeads')}
+                >
+                  <Text style={styles.emptyQueueBtnText}>Browse all {myAssignedLeadsCount} leads</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* 4. NEODOVE SEGMENTED TABS (Compact, No Vertical Clutter) */}
+            <View style={styles.tabsContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
+                <TouchableOpacity
+                  style={[styles.tabChip, activeTab === 'queue' && styles.tabChipActive]}
+                  onPress={() => setActiveTab('queue')}
+                >
+                  <ListOrdered size={12} color={activeTab === 'queue' ? '#FFFFFF' : T.color.textMuted} />
+                  <Text style={[styles.tabChipText, activeTab === 'queue' && styles.tabChipTextActive]}>
+                    Queue ({queueLeads.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.tabChip, activeTab === 'callbacks' && styles.tabChipActive]}
+                  onPress={() => setActiveTab('callbacks')}
+                >
+                  <CalendarClock size={12} color={activeTab === 'callbacks' ? '#FFFFFF' : T.color.textMuted} />
+                  <Text style={[styles.tabChipText, activeTab === 'callbacks' && styles.tabChipTextActive]}>
+                    Callbacks ({callbacksDueTodayCount})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.tabChip, activeTab === 'calls' && styles.tabChipActive]}
+                  onPress={() => setActiveTab('calls')}
+                >
+                  <Clock3 size={12} color={activeTab === 'calls' ? '#FFFFFF' : T.color.textMuted} />
+                  <Text style={[styles.tabChipText, activeTab === 'calls' && styles.tabChipTextActive]}>
+                    Today's calls ({periodCallActivities.length})
+                  </Text>
+                </TouchableOpacity>
+
+                {isManagerOrAdmin && (
+                  <TouchableOpacity
+                    style={[styles.tabChip, activeTab === 'team' && styles.tabChipActive]}
+                    onPress={() => setActiveTab('team')}
+                  >
+                    <Users size={12} color={activeTab === 'team' ? '#FFFFFF' : T.color.textMuted} />
+                    <Text style={[styles.tabChipText, activeTab === 'team' && styles.tabChipTextActive]}>
+                      Team ({agentCallsList.length})
                     </Text>
                   </TouchableOpacity>
-                );
-              })}
+                )}
+              </ScrollView>
             </View>
 
-            {agentCallsList.length === 0 ? (
-              <Text style={styles.tabEmptyText}>No agents active in this branch.</Text>
-            ) : (
-              agentCallsList.map((agentItem) => {
-                const initials = agentItem.name
-                  .split(' ')
-                  .filter(Boolean)
-                  .map((w) => w[0])
-                  .join('')
-                  .toUpperCase()
-                  .slice(0, 2) || 'AG';
+            {/* TAB 1: QUEUE LIST */}
+            {activeTab === 'queue' && (
+              <View style={styles.tabContentBox}>
+                {nextInQueueLeads.length === 0 ? (
+                  <Text style={styles.tabEmptyText}>No other leads in queue. Ready for new list!</Text>
+                ) : (
+                  nextInQueueLeads.map((item, idx) => {
+                    const initials = item.name
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((w) => w[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2) || 'LD';
 
-                const cRate =
-                  agentItem.calls > 0
-                    ? ((agentItem.connected / agentItem.calls) * 100).toFixed(0) + '%'
-                    : '0%';
-                const avgDur = formatSeconds(agentItem.avgDurationSeconds || 0);
+                    return (
+                      <View key={item._id} style={styles.queueItemRow}>
+                        <View style={styles.itemAvatar}>
+                          <Text style={styles.itemAvatarText}>{initials}</Text>
+                        </View>
+                        <View style={{ flex: 1, paddingHorizontal: 10 }}>
+                          <Text style={styles.itemNameText} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <Text style={styles.itemPhoneText}>{formatDisplayPhone(item.phone)}</Text>
+                        </View>
 
-                return (
-                  <View key={agentItem.userId || agentItem.email} style={styles.agentCard}>
-                    <View style={styles.agentHeader}>
-                      <View style={styles.itemAvatar}>
-                        <Text style={styles.itemAvatarText}>{initials}</Text>
-                      </View>
-                      <View style={{ flex: 1, paddingLeft: 8 }}>
-                        <Text style={styles.itemNameText}>{agentItem.name}</Text>
-                        <Text style={styles.itemPhoneText}>
-                          {agentItem.branch || 'Trichy'} Branch
-                        </Text>
-                      </View>
-                    </View>
+                        <View style={styles.itemActionGroup}>
+                          <TouchableOpacity
+                            style={styles.itemCallBtn}
+                            onPress={() => handleDirectDial(item)}
+                            activeOpacity={0.8}
+                          >
+                            <Phone size={12} color="#FFFFFF" strokeWidth={2.5} />
+                            <Text style={styles.itemCallBtnText}>Call</Text>
+                          </TouchableOpacity>
 
-                    <View style={styles.agentMetricsGrid}>
-                      <View style={styles.agentMetricItem}>
-                        <Text style={styles.agentMetricVal}>{agentItem.calls}</Text>
-                        <Text style={styles.agentMetricLbl}>Calls</Text>
+                          <TouchableOpacity
+                            style={styles.itemIconBtn}
+                            onPress={() => handleOpenWhatsApp(item)}
+                            activeOpacity={0.8}
+                          >
+                            <MessageCircle size={13} color={T.color.primaryDark} strokeWidth={2.5} />
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.itemIconBtn}
+                            onPress={() => setSelectedLeadForQuickModal(item)}
+                            activeOpacity={0.8}
+                          >
+                            <FileEdit size={13} color={T.color.info} strokeWidth={2} />
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                      <View style={styles.agentMetricItem}>
-                        <Text style={[styles.agentMetricVal, { color: '#059669' }]}>
-                          {agentItem.connected}
-                        </Text>
-                        <Text style={styles.agentMetricLbl}>Connected</Text>
-                      </View>
-                      <View style={styles.agentMetricItem}>
-                        <Text style={styles.agentMetricVal}>{cRate}</Text>
-                        <Text style={styles.agentMetricLbl}>Rate</Text>
-                      </View>
-                      <View style={styles.agentMetricItem}>
-                        <Text style={styles.agentMetricVal}>{avgDur}</Text>
-                        <Text style={styles.agentMetricLbl}>Avg Talk</Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })
+                    );
+                  })
+                )}
+
+                <TouchableOpacity
+                  style={styles.viewAllFooterBtn}
+                  onPress={() => navigation.navigate('MyLeads')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.viewAllFooterText}>View all ({myAssignedLeadsCount}) leads</Text>
+                  <ChevronRight size={13} color={T.color.info} />
+                </TouchableOpacity>
+              </View>
             )}
-          </View>
-        )}
+
+            {/* TAB 2: CALLBACKS DUE TODAY */}
+            {activeTab === 'callbacks' && (
+              <View style={styles.tabContentBox}>
+                {dueTodayFollowUps.length === 0 ? (
+                  <View style={styles.tabEmptyBox}>
+                    <CheckCircle2 size={24} color={T.color.primary} />
+                    <Text style={styles.tabEmptyTitle}>No callbacks due right now</Text>
+                    <Text style={styles.tabEmptySub}>
+                      When you schedule callbacks from the post-call modal, they will show up here automatically.
+                    </Text>
+                  </View>
+                ) : (
+                  dueTodayFollowUps.map((item) => {
+                    const timeStr = item.nextFollowUpAt
+                      ? new Date(item.nextFollowUpAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'Today';
+
+                    return (
+                      <View key={item._id} style={styles.queueItemRow}>
+                        <View style={[styles.itemAvatar, { backgroundColor: T.color.warnTint }]}>
+                          <CalendarClock size={14} color={T.color.warn} />
+                        </View>
+                        <View style={{ flex: 1, paddingHorizontal: 10 }}>
+                          <Text style={styles.itemNameText} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <Text style={styles.itemPhoneText}>
+                            {formatDisplayPhone(item.phone)} · <Text style={{ color: T.color.warn, fontWeight: '700' }}>{timeStr}</Text>
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.itemCallBtn}
+                          onPress={() => handleDirectDial(item)}
+                          activeOpacity={0.8}
+                        >
+                          <Phone size={12} color="#FFFFFF" strokeWidth={2.5} />
+                          <Text style={styles.itemCallBtnText}>Call</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            )}
+
+            {/* TAB 3: TODAY'S CALLS ACTIVITY */}
+            {activeTab === 'calls' && (
+              <View style={styles.tabContentBox}>
+                {periodCallActivities.length === 0 ? (
+                  <View style={styles.tabEmptyBox}>
+                    <Clock3 size={24} color={T.color.textFaint} />
+                    <Text style={styles.tabEmptyTitle}>No calls logged today yet</Text>
+                    <Text style={styles.tabEmptySub}>
+                      Calls you dial will appear here with detected duration and connection status.
+                    </Text>
+                  </View>
+                ) : (
+                  periodCallActivities.slice(0, 10).map((act, index) => {
+                    const isLast = index === Math.min(periodCallActivities.length, 10) - 1;
+                    const durText = act.connected ? formatSeconds(act.durationSeconds || 0) : 'Missed';
+                    const timeStr = new Date(act.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+
+                    return (
+                      <View
+                        key={act._id}
+                        style={[styles.historyRow, isLast && { borderBottomWidth: 0 }]}
+                      >
+                        <View
+                          style={[
+                            styles.historyIconBox,
+                            { backgroundColor: act.connected ? '#ECFDF5' : T.color.dangerTint },
+                          ]}
+                        >
+                          {act.connected ? (
+                            <Phone size={12} color={T.color.primaryDark} />
+                          ) : (
+                            <PhoneOff size={12} color={T.color.danger} />
+                          )}
+                        </View>
+
+                        <View style={{ flex: 1, paddingHorizontal: 10 }}>
+                          <Text style={styles.historyNameText} numberOfLines={1}>
+                            {act.customerName || (act.phone ? formatDisplayPhone(act.phone) : 'Contact')}
+                          </Text>
+                          <Text style={styles.historyPhoneText}>
+                            {act.phone ? formatDisplayPhone(act.phone) : 'No phone'} · {timeStr}
+                          </Text>
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text
+                            style={[
+                              styles.historyDurText,
+                              { color: act.connected ? T.color.primaryDark : T.color.danger },
+                            ]}
+                          >
+                            {durText}
+                          </Text>
+                          <Text style={styles.historyStageText}>{act.stage}</Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+
+                <TouchableOpacity
+                  style={styles.viewAllFooterBtn}
+                  onPress={() => navigation.navigate('CallHistory')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.viewAllFooterText}>View full call history</Text>
+                  <ChevronRight size={13} color={T.color.info} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* TAB 4: TEAM PERFORMANCE (Manager & Admin) */}
+            {isManagerOrAdmin && activeTab === 'team' && (
+              <View style={styles.tabContentBox}>
+                {/* Branch Filter Selector */}
+                <View style={styles.branchFilterRow}>
+                  {(['ALL', 'Trichy', 'Pudukkottai'] as const).map((br) => {
+                    const isSelected = selectedBranch === br;
+                    return (
+                      <TouchableOpacity
+                        key={br}
+                        style={[styles.branchFilterChip, isSelected && styles.branchFilterChipActive]}
+                        onPress={() => setSelectedBranch(br)}
+                      >
+                        <Text
+                          style={[
+                            styles.branchFilterText,
+                            isSelected && styles.branchFilterTextActive,
+                          ]}
+                        >
+                          {br === 'ALL' ? 'All' : br}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {agentCallsList.length === 0 ? (
+                  <Text style={styles.tabEmptyText}>No agents active in this branch.</Text>
+                ) : (
+                  agentCallsList.map((agentItem) => {
+                    const initials = agentItem.name
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((w) => w[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2) || 'AG';
+
+                    const cRate =
+                      agentItem.calls > 0
+                        ? ((agentItem.connected / agentItem.calls) * 100).toFixed(0) + '%'
+                        : '0%';
+                    const avgDur = formatSeconds(agentItem.avgDurationSeconds || 0);
+
+                    return (
+                      <View key={agentItem.userId || agentItem.email} style={styles.agentCard}>
+                        <View style={styles.agentHeader}>
+                          <View style={styles.itemAvatar}>
+                            <Text style={styles.itemAvatarText}>{initials}</Text>
+                          </View>
+                          <View style={{ flex: 1, paddingLeft: 10 }}>
+                            <Text style={styles.itemNameText}>{agentItem.name}</Text>
+                            <Text style={styles.itemPhoneText}>
+                              {agentItem.branch || 'Trichy'} Branch
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.agentMetricsGrid}>
+                          <View style={styles.agentMetricItem}>
+                            <Text style={styles.agentMetricVal}>{agentItem.calls}</Text>
+                            <Text style={styles.agentMetricLbl}>Calls</Text>
+                          </View>
+                          <View style={styles.agentMetricItem}>
+                            <Text style={[styles.agentMetricVal, { color: T.color.primaryDark }]}>
+                              {agentItem.connected}
+                            </Text>
+                            <Text style={styles.agentMetricLbl}>Connected</Text>
+                          </View>
+                          <View style={styles.agentMetricItem}>
+                            <Text style={styles.agentMetricVal}>{cRate}</Text>
+                            <Text style={styles.agentMetricLbl}>Rate</Text>
+                          </View>
+                          <View style={styles.agentMetricItem}>
+                            <Text style={styles.agentMetricVal}>{avgDur}</Text>
+                            <Text style={styles.agentMetricLbl}>Avg talk</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -1566,28 +1497,39 @@ export const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.bg,
   },
   contentContainer: {
-    padding: 12,
+    padding: T.space.md,
     paddingBottom: 90,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.bg,
   },
   headerAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#E6F4EA',
+    backgroundColor: T.color.primaryTint,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: T.radius.sm,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: T.color.border,
   },
   headerAddBtnText: {
-    color: '#0F9D58',
+    color: T.color.primary,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  campaignSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  campaignSwitchText: {
+    fontSize: 13,
+    color: T.color.textMuted,
+    fontWeight: '400',
   },
 
   // 1. Top Bar
@@ -1595,26 +1537,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: T.space.md,
   },
   greetingText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.color.text,
   },
   branchSubText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
+    fontSize: 12,
+    color: T.color.textMuted,
+    marginTop: 2,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     backgroundColor: '#ECFDF5',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
@@ -1622,338 +1564,437 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: T.color.primary,
   },
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#047857',
+    color: T.color.primaryDark,
   },
 
   // Alert Banner
   alertBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: T.color.infoTint,
     borderWidth: 1,
     borderColor: '#BFDBFE',
-    borderRadius: 10,
-    padding: 9,
-    marginBottom: 10,
+    borderRadius: T.radius.md,
+    padding: T.space.sm + 2,
+    marginBottom: T.space.md,
+  },
+  alertIconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   alertTitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#1E3A8A',
   },
   alertSubtitle: {
-    fontSize: 10.5,
-    color: '#3B82F6',
+    fontSize: 11,
+    color: T.color.info,
+    marginTop: 1,
   },
   alertBtn: {
-    backgroundColor: '#2563EB',
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-    borderRadius: 6,
+    backgroundColor: T.color.info,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: T.radius.sm,
   },
   alertBtnText: {
     color: '#FFFFFF',
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '700',
   },
 
-  // 2. Compact Target Card
-  targetCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
+  // Unified performance summary card (date banner + metric grid)
+  summaryCard: {
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 10,
-    ...shadows.soft,
+    borderColor: T.color.border,
+    padding: T.space.md,
+    marginBottom: T.space.md,
+    ...T.shadowCard,
   },
-  targetCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  targetCardTitle: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#475569',
-    letterSpacing: 0.5,
-  },
-  targetPercentPill: {
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  targetPercentText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#4F46E5',
-  },
-  progressRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 5,
-  },
-  callsCountBig: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  callsTargetSub: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  periodText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  progressBarTrack: {
-    height: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 10,
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#10B981',
-    borderRadius: 3,
-  },
-  metricsRow: {
+  summaryDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    gap: 6,
+    paddingBottom: T.space.md,
+    marginBottom: T.space.md,
+    borderBottomWidth: 1,
+    borderBottomColor: T.color.border,
   },
-  metricCol: {
+  summaryDateText: {
     flex: 1,
-    alignItems: 'center',
-  },
-  metricDivider: {
-    width: 1,
-    height: 22,
-    backgroundColor: '#E2E8F0',
-  },
-  metricVal: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  metricLbl: {
-    fontSize: 9.5,
+    fontSize: 12.5,
     fontWeight: '600',
-    color: '#64748B',
-    marginTop: 1,
+    color: T.color.text,
+  },
+  summaryDurationPill: {
+    backgroundColor: T.color.surfaceSunken,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: T.radius.sm,
+  },
+  summaryDurationText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: T.color.textMuted,
+  },
+  metricGrid: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  metricCell: {
+    flex: 1,
+    minHeight: 56,
+    justifyContent: 'space-between',
+  },
+  metricDividerV: {
+    width: 1,
+    backgroundColor: T.color.border,
+    marginHorizontal: T.space.sm,
+  },
+  metricTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  metricLabel: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: T.color.textMuted,
+  },
+  metricValue: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: T.color.text,
+    marginTop: 6,
   },
 
-  // 3. Hero Calling Card
+  // Segmented sub-tabs (Queues / Login report / Call report)
+  segmentWrap: {
+    flexDirection: 'row',
+    backgroundColor: T.color.surfaceSunken,
+    borderRadius: T.radius.sm,
+    padding: 3,
+    marginBottom: T.space.md,
+    borderWidth: 1,
+    borderColor: T.color.border,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: T.radius.sm - 2,
+    backgroundColor: 'transparent',
+  },
+  segmentBtnActive: {
+    backgroundColor: T.color.primaryTint,
+  },
+  segmentText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: T.color.textMuted,
+  },
+  segmentTextActive: {
+    fontWeight: '700',
+    color: T.color.primaryDark,
+  },
+
+  // Generic list card used for Call Report & Login Report rows
+  listCard: {
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md,
+    padding: T.space.md,
+    borderWidth: 1,
+    borderColor: T.color.border,
+  },
+  listCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: T.space.xs + 2,
+  },
+  listCardTitle: {
+    fontWeight: '700',
+    fontSize: 13.5,
+    color: T.color.text,
+  },
+  connectRatePill: {
+    backgroundColor: T.color.primaryTint,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: T.radius.sm - 2,
+  },
+  connectRatePillText: {
+    color: T.color.primaryDark,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  listCardStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: T.space.xs,
+  },
+  listCardStatText: {
+    fontSize: 12,
+    color: T.color.textMuted,
+  },
+  listCardStatStrong: {
+    fontWeight: '700',
+    color: T.color.text,
+  },
+  inlineEmptyCard: {
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md,
+    padding: T.space.xl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: T.color.border,
+  },
+  inlineEmptyText: {
+    fontSize: 13,
+    color: T.color.textMuted,
+  },
+  loginRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  loginSubText: {
+    fontSize: 11.5,
+    color: T.color.textMuted,
+    marginTop: 2,
+  },
+  loginStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  loginStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  loginTimeText: {
+    fontSize: 10,
+    color: T.color.textFaint,
+    marginTop: 2,
+  },
+
+  // 3. Hero Calling Card — given brand-tinted elevation so it reads as the
+  // primary action area rather than another grey box in the stack.
   heroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.lg,
+    padding: T.space.md,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    marginBottom: 10,
-    ...shadows.card,
+    borderColor: '#CDEBD9',
+    marginBottom: T.space.md,
+    ...T.shadowHero,
   },
   heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: T.space.sm + 2,
   },
   queueOrderPill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
+    backgroundColor: T.color.primaryTint,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: T.radius.sm - 2,
   },
   queueOrderText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '800',
-    color: '#475569',
+    color: T.color.primaryDark,
   },
   tempPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: T.radius.sm - 2,
     borderWidth: 1,
   },
   tempPillText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '700',
   },
   stagePill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
+    backgroundColor: T.color.surfaceSunken,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: T.radius.sm - 2,
   },
   stagePillText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '700',
     color: '#334155',
   },
   leadDetailsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: T.space.sm + 2,
   },
   leadAvatarBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#4F46E5',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: T.color.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   leadAvatarText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: '#FFFFFF',
   },
   leadNameText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.color.text,
   },
   leadPhoneText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#334155',
     marginTop: 1,
   },
   leadCampaignText: {
-    fontSize: 10,
-    color: '#64748B',
-    marginTop: 1,
+    fontSize: 10.5,
+    color: T.color.textMuted,
+    marginTop: 2,
   },
   notePreviewRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 7,
-    marginBottom: 10,
+    gap: 6,
+    backgroundColor: T.color.surfaceSunken,
+    borderRadius: T.radius.sm,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    marginBottom: T.space.sm + 2,
   },
   notePreviewText: {
-    fontSize: 10,
-    color: '#64748B',
+    fontSize: 10.5,
+    color: T.color.textMuted,
     flex: 1,
   },
   callNowBtn: {
-    backgroundColor: '#059669',
+    backgroundColor: T.color.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 11,
-    borderRadius: 9,
-    marginBottom: 8,
-    ...shadows.card,
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: T.radius.sm + 2,
+    marginBottom: T.space.sm,
+    ...T.shadowCard,
   },
   callNowBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   heroActionRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: T.space.sm - 2,
   },
   heroMiniBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    backgroundColor: '#F8FAFC',
+    gap: 5,
+    paddingVertical: 8,
+    backgroundColor: T.color.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 7,
+    borderColor: T.color.border,
+    borderRadius: T.radius.sm - 1,
   },
   heroMiniBtnText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '700',
   },
 
   emptyQueueCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.lg,
+    padding: T.space.xl,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 10,
+    borderColor: T.color.border,
+    marginBottom: T.space.md,
   },
   emptyQueueTitle: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 6,
+    color: T.color.text,
+    marginTop: T.space.sm,
   },
   emptyQueueSub: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: 11.5,
+    color: T.color.textMuted,
     textAlign: 'center',
-    marginVertical: 4,
+    marginVertical: T.space.xs,
+    lineHeight: 16,
   },
   emptyQueueBtn: {
-    marginTop: 6,
-    backgroundColor: '#2563EB',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 7,
+    marginTop: T.space.sm,
+    backgroundColor: T.color.primary,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: T.radius.sm,
   },
   emptyQueueBtnText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },
 
   // 4. Segmented Tabs
   tabsContainer: {
-    marginBottom: 8,
+    marginBottom: T.space.sm,
   },
   tabsScroll: {
-    gap: 6,
+    gap: T.space.sm - 2,
   },
   tabChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
+    borderColor: T.color.border,
+    borderRadius: T.radius.sm,
   },
   tabChipActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: T.color.primary,
+    borderColor: T.color.primary,
   },
   tabChipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#475569',
+    color: T.color.textMuted,
   },
   tabChipTextActive: {
     color: '#FFFFFF',
@@ -1961,80 +2002,81 @@ const styles = StyleSheet.create({
 
   // Tab Content Box
   tabContentBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 10,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md,
+    padding: T.space.sm + 2,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: T.color.border,
   },
   tabEmptyText: {
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 11.5,
+    color: T.color.textFaint,
     textAlign: 'center',
-    paddingVertical: 16,
+    paddingVertical: T.space.lg,
   },
   tabEmptyBox: {
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: T.space.lg - 2,
   },
   tabEmptyTitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#334155',
-    marginTop: 4,
+    marginTop: T.space.xs,
   },
   tabEmptySub: {
-    fontSize: 10,
-    color: '#94A3B8',
+    fontSize: 10.5,
+    color: T.color.textFaint,
     textAlign: 'center',
     marginTop: 2,
-    paddingHorizontal: 12,
+    paddingHorizontal: T.space.md,
+    lineHeight: 15,
   },
 
   // Queue Item Row
   queueItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
+    paddingVertical: T.space.sm - 1,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: T.color.surfaceSunken,
   },
   itemAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#EEF2FF',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: T.color.infoTint,
     justifyContent: 'center',
     alignItems: 'center',
   },
   itemAvatarText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '800',
-    color: '#4F46E5',
+    color: T.color.info,
   },
   itemNameText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
-    color: '#0F172A',
+    color: T.color.text,
   },
   itemPhoneText: {
     fontSize: 10.5,
-    color: '#64748B',
+    color: T.color.textMuted,
     marginTop: 1,
   },
   itemActionGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   itemCallBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#059669',
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-    borderRadius: 6,
+    backgroundColor: T.color.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: T.radius.sm - 1,
   },
   itemCallBtnText: {
     fontSize: 10.5,
@@ -2042,12 +2084,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   itemIconBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: '#F8FAFC',
+    width: 28,
+    height: 28,
+    borderRadius: T.radius.sm - 1,
+    backgroundColor: T.color.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: T.color.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2056,112 +2098,114 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: 8,
-    marginTop: 4,
+    paddingVertical: T.space.sm,
+    marginTop: T.space.xs,
   },
   viewAllFooterText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#2563EB',
+    color: T.color.info,
   },
 
   // Calls History Row
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
+    paddingVertical: T.space.sm - 1,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: T.color.surfaceSunken,
   },
   historyIconBox: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   historyNameText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#0F172A',
+    color: T.color.text,
   },
   historyPhoneText: {
     fontSize: 10,
-    color: '#64748B',
+    color: T.color.textMuted,
   },
   historyDurText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '800',
   },
   historyStageText: {
     fontSize: 9,
-    color: '#94A3B8',
+    color: T.color.textFaint,
     marginTop: 1,
   },
 
   // Team Branch Filter & Cards
   branchFilterRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 8,
+    gap: T.space.xs + 2,
+    marginBottom: T.space.sm,
   },
   branchFilterChip: {
-    paddingVertical: 4,
-    paddingHorizontal: 9,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    backgroundColor: T.color.surfaceSunken,
+    borderRadius: T.radius.sm - 1,
   },
   branchFilterChipActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: T.color.primary,
   },
   branchFilterText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#475569',
+    color: T.color.textMuted,
   },
   branchFilterTextActive: {
     color: '#FFFFFF',
   },
   agentCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: T.color.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 6,
+    borderColor: T.color.border,
+    borderRadius: T.radius.sm + 1,
+    padding: T.space.sm + 1,
+    marginBottom: T.space.sm - 2,
   },
   agentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: T.space.sm - 2,
   },
   agentMetricsGrid: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    paddingTop: 5,
+    borderTopColor: T.color.border,
+    paddingTop: T.space.xs + 1,
   },
   agentMetricItem: {
     flex: 1,
     alignItems: 'center',
   },
   agentMetricVal: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.color.text,
   },
   agentMetricLbl: {
     fontSize: 9,
-    color: '#64748B',
+    color: T.color.textMuted,
   },
 
-  // NeoDove Queue Cards (Clean Minimal)
+  // NeoDove Queue Cards — same radius/padding/shadow as every other card
+  // in the stack so the screen reads as one consistent system.
   neoQueueCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md,
+    padding: T.space.md,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: T.color.border,
+    ...T.shadowCard,
   },
   neoQueueCardHeader: {
     flexDirection: 'row',
@@ -2169,58 +2213,61 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   neoQueueCardTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#1F2937',
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: T.color.text,
   },
   neoQueueCountBadge: {
-    backgroundColor: '#E6F4EA',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
+    backgroundColor: T.color.primaryTint,
+    minWidth: 30,
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: T.radius.sm,
   },
   neoQueueCountBadgeText: {
-    color: '#0F9D58',
+    color: T.color.primaryDark,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   neoQueueCardSub: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
-    marginBottom: 14,
-    fontWeight: '400',
+    fontSize: 11.5,
+    color: T.color.textMuted,
+    marginTop: 3,
+    marginBottom: T.space.md,
   },
   neoQueueActionsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: T.space.sm,
   },
   neoQueueViewBtn: {
     flex: 1,
     height: 40,
-    borderRadius: 8,
+    borderRadius: T.radius.sm,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+    borderColor: T.color.borderStrong,
+    backgroundColor: T.color.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   neoQueueViewBtnText: {
-    color: '#1F2937',
-    fontWeight: '500',
+    color: T.color.text,
+    fontWeight: '600',
     fontSize: 13,
   },
   neoQueueCallBtn: {
     flex: 1.4,
     height: 40,
-    borderRadius: 8,
-    backgroundColor: '#0F9D58',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    borderRadius: T.radius.sm,
+    backgroundColor: T.color.primary,
   },
   neoQueueCallBtnText: {
     color: '#FFFFFF',
-    fontWeight: '500',
+    fontWeight: '700',
     fontSize: 13,
   },
 });

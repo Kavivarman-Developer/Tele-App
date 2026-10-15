@@ -64,6 +64,41 @@ interface FollowUpItem {
   lastRemark?: string;
 }
 
+// ======================================================================
+// DESIGN TOKENS — same palette/rhythm as HomeScreen & LoginScreen so the
+// whole app reads as one consistent system.
+// ======================================================================
+const T = {
+  radius: { sm: 10, md: 14, lg: 16 },
+  space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 20 },
+  color: {
+    bg: '#F6F8FA',
+    surface: '#FFFFFF',
+    surfaceSunken: '#F8FAFC',
+    border: '#E7EAEE',
+    borderStrong: '#D7DCE3',
+    text: '#111827',
+    textMuted: '#6B7280',
+    textFaint: '#9CA3AF',
+    primary: '#0F9D58',
+    primaryDark: '#0B7A44',
+    primaryTint: '#E6F4EA',
+    danger: '#DC2626',
+    dangerTint: '#FEF2F2',
+    info: '#2563EB',
+    infoTint: '#EFF6FF',
+    warn: '#D97706',
+    warnTint: '#FFFBEB',
+  },
+  shadowCard: {
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+};
+
 export const FollowUpsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuthStore();
@@ -337,7 +372,7 @@ export const FollowUpsScreen: React.FC = () => {
         {/* Top Header Summary */}
         <View style={styles.headerBanner}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.bannerTitle}>Follow-up Callbacks</Text>
+            <Text style={styles.bannerTitle}>Follow-up callbacks</Text>
             <Text style={styles.bannerSubtitle}>
               {todayCount > 0
                 ? `${todayCount} scheduled callbacks for today`
@@ -352,7 +387,7 @@ export const FollowUpsScreen: React.FC = () => {
             }}
             activeOpacity={0.7}
           >
-            <RotateCw size={13} color="#0F172A" />
+            <RotateCw size={13} color={T.color.textMuted} />
             <Text style={styles.refreshBtnText}>Refresh</Text>
           </TouchableOpacity>
         </View>
@@ -364,37 +399,39 @@ export const FollowUpsScreen: React.FC = () => {
             onPress={() => setActiveTab('Overdue')}
             activeOpacity={0.8}
           >
-            <AlertTriangle size={16} color="#DC2626" strokeWidth={2.5} />
+            <View style={styles.overdueIconBubble}>
+              <AlertTriangle size={15} color={T.color.danger} strokeWidth={2.5} />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.overdueAlertTitle}>
-                {overdueCount} Overdue Callback{overdueCount > 1 ? 's' : ''} Require Immediate Attention!
+                {overdueCount} overdue callback{overdueCount > 1 ? 's' : ''} need attention
               </Text>
               <Text style={styles.overdueAlertSub}>
-                Tap here to clear and call overdue customers now.
+                Tap here to clear and call overdue customers now
               </Text>
             </View>
-            <ArrowUpRight size={14} color="#DC2626" />
+            <ArrowUpRight size={14} color={T.color.danger} />
           </TouchableOpacity>
         )}
 
         {/* Sticky Search Bar */}
         <View style={styles.searchBarWrap}>
-          <Search size={16} color="#64748B" />
+          <Search size={16} color={T.color.textFaint} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search scheduled contact by name or number..."
-            placeholderTextColor="#94A3B8"
+            placeholder="Search scheduled contact by name or number"
+            placeholderTextColor={T.color.textFaint}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <X size={14} color="#94A3B8" />
+              <X size={14} color={T.color.textFaint} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* 3 Segmented Tabs: Overdue🔴 / Today🟡 / Upcoming🔵 */}
+        {/* 3 Segmented Tabs: Overdue / Today / Upcoming */}
         <View style={styles.segmentedTabsRow}>
           {/* Overdue Tab */}
           <TouchableOpacity
@@ -408,7 +445,7 @@ export const FollowUpsScreen: React.FC = () => {
             <Text
               style={[
                 styles.tabLabel,
-                activeTab === 'Overdue' && { color: '#DC2626', fontWeight: '800' },
+                activeTab === 'Overdue' && { color: T.color.danger, fontWeight: '800' },
               ]}
             >
               Overdue
@@ -416,14 +453,14 @@ export const FollowUpsScreen: React.FC = () => {
             <View
               style={[
                 styles.tabBadge,
-                { backgroundColor: overdueCount > 0 ? '#FEE2E2' : '#F1F5F9' },
-                activeTab === 'Overdue' && { backgroundColor: '#DC2626' },
+                { backgroundColor: overdueCount > 0 ? '#FEE2E2' : T.color.surfaceSunken },
+                activeTab === 'Overdue' && { backgroundColor: T.color.danger },
               ]}
             >
               <Text
                 style={[
                   styles.tabBadgeText,
-                  { color: overdueCount > 0 ? '#DC2626' : '#64748B' },
+                  { color: overdueCount > 0 ? T.color.danger : T.color.textMuted },
                   activeTab === 'Overdue' && { color: '#FFFFFF' },
                 ]}
               >
@@ -444,7 +481,7 @@ export const FollowUpsScreen: React.FC = () => {
             <Text
               style={[
                 styles.tabLabel,
-                activeTab === 'Today' && { color: '#D97706', fontWeight: '800' },
+                activeTab === 'Today' && { color: T.color.warn, fontWeight: '800' },
               ]}
             >
               Today
@@ -452,14 +489,14 @@ export const FollowUpsScreen: React.FC = () => {
             <View
               style={[
                 styles.tabBadge,
-                { backgroundColor: todayCount > 0 ? '#FEF3C7' : '#F1F5F9' },
-                activeTab === 'Today' && { backgroundColor: '#D97706' },
+                { backgroundColor: todayCount > 0 ? '#FEF3C7' : T.color.surfaceSunken },
+                activeTab === 'Today' && { backgroundColor: T.color.warn },
               ]}
             >
               <Text
                 style={[
                   styles.tabBadgeText,
-                  { color: todayCount > 0 ? '#D97706' : '#64748B' },
+                  { color: todayCount > 0 ? T.color.warn : T.color.textMuted },
                   activeTab === 'Today' && { color: '#FFFFFF' },
                 ]}
               >
@@ -480,7 +517,7 @@ export const FollowUpsScreen: React.FC = () => {
             <Text
               style={[
                 styles.tabLabel,
-                activeTab === 'Upcoming' && { color: '#2563EB', fontWeight: '800' },
+                activeTab === 'Upcoming' && { color: T.color.info, fontWeight: '800' },
               ]}
             >
               Upcoming
@@ -488,14 +525,14 @@ export const FollowUpsScreen: React.FC = () => {
             <View
               style={[
                 styles.tabBadge,
-                { backgroundColor: upcomingCount > 0 ? '#EFF6FF' : '#F1F5F9' },
-                activeTab === 'Upcoming' && { backgroundColor: '#2563EB' },
+                { backgroundColor: upcomingCount > 0 ? T.color.infoTint : T.color.surfaceSunken },
+                activeTab === 'Upcoming' && { backgroundColor: T.color.info },
               ]}
             >
               <Text
                 style={[
                   styles.tabBadgeText,
-                  { color: upcomingCount > 0 ? '#2563EB' : '#64748B' },
+                  { color: upcomingCount > 0 ? T.color.info : T.color.textMuted },
                   activeTab === 'Upcoming' && { color: '#FFFFFF' },
                 ]}
               >
@@ -509,7 +546,7 @@ export const FollowUpsScreen: React.FC = () => {
         <View style={styles.cardsList}>
           {displayedItems.length === 0 ? (
             <View style={styles.emptyStateCard}>
-              <CheckCircle2 size={38} color="#10B981" />
+              <CheckCircle2 size={38} color={T.color.primary} />
               <Text style={styles.emptyStateTitle}>
                 {activeTab === 'Today'
                   ? 'No follow-up callbacks due today! 🎉'
@@ -528,7 +565,7 @@ export const FollowUpsScreen: React.FC = () => {
                 activeOpacity={0.8}
               >
                 <Phone size={14} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={styles.emptyQueueBtnText}>Go to Calling Queue</Text>
+                <Text style={styles.emptyQueueBtnText}>Go to calling queue</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -570,16 +607,16 @@ export const FollowUpsScreen: React.FC = () => {
                           ]}
                         >
                           {isHot ? (
-                            <Flame size={10} color="#DC2626" fill="#DC2626" />
+                            <Flame size={10} color={T.color.danger} fill={T.color.danger} />
                           ) : isCold ? (
-                            <Snowflake size={10} color="#2563EB" />
+                            <Snowflake size={10} color={T.color.info} />
                           ) : (
-                            <Sun size={10} color="#D97706" />
+                            <Sun size={10} color={T.color.warn} />
                           )}
                           <Text
                             style={[
                               styles.priorityPillText,
-                              { color: isHot ? '#DC2626' : isCold ? '#2563EB' : '#D97706' },
+                              { color: isHot ? T.color.danger : isCold ? T.color.info : T.color.warn },
                             ]}
                           >
                             {item.temperature || 'Warm'}
@@ -607,7 +644,7 @@ export const FollowUpsScreen: React.FC = () => {
                       <Clock3
                         size={11}
                         color={
-                          isOverdue ? '#DC2626' : item.category === 'Today' ? '#D97706' : '#2563EB'
+                          isOverdue ? T.color.danger : item.category === 'Today' ? T.color.warn : T.color.info
                         }
                       />
                       <Text
@@ -615,7 +652,7 @@ export const FollowUpsScreen: React.FC = () => {
                           styles.countdownText,
                           {
                             color:
-                              isOverdue ? '#DC2626' : item.category === 'Today' ? '#D97706' : '#2563EB',
+                              isOverdue ? T.color.danger : item.category === 'Today' ? T.color.warn : T.color.info,
                           },
                         ]}
                       >
@@ -626,7 +663,7 @@ export const FollowUpsScreen: React.FC = () => {
 
                   {/* Last Remark Preview Line */}
                   <View style={styles.remarkPreviewBox}>
-                    <Clock size={12} color="#64748B" />
+                    <Clock size={12} color={T.color.textMuted} />
                     <Text style={styles.remarkPreviewText} numberOfLines={1}>
                       {item.lastRemark || 'Customer requested callback to discuss details'}
                     </Text>
@@ -641,7 +678,7 @@ export const FollowUpsScreen: React.FC = () => {
                       activeOpacity={0.85}
                     >
                       <Phone size={15} color="#FFFFFF" strokeWidth={2.5} />
-                      <Text style={styles.callNowBtnText}>Call Now</Text>
+                      <Text style={styles.callNowBtnText}>Call now</Text>
                     </TouchableOpacity>
 
                     {/* Snooze Button */}
@@ -650,7 +687,7 @@ export const FollowUpsScreen: React.FC = () => {
                       onPress={() => handleQuickSnooze(item)}
                       activeOpacity={0.8}
                     >
-                      <Clock3 size={14} color="#D97706" strokeWidth={2.5} />
+                      <Clock3 size={14} color={T.color.warn} strokeWidth={2.5} />
                       <Text style={styles.snoozeBtnText}>Snooze</Text>
                     </TouchableOpacity>
 
@@ -660,7 +697,7 @@ export const FollowUpsScreen: React.FC = () => {
                       onPress={() => handleOpenWhatsApp(item)}
                       activeOpacity={0.8}
                     >
-                      <MessageCircle size={15} color="#15803D" strokeWidth={2.5} />
+                      <MessageCircle size={15} color={T.color.primaryDark} strokeWidth={2.5} />
                     </TouchableOpacity>
 
                     {/* Details / Modal Button */}
@@ -669,7 +706,7 @@ export const FollowUpsScreen: React.FC = () => {
                       onPress={() => handleOpenLead(item)}
                       activeOpacity={0.8}
                     >
-                      <FileEdit size={15} color="#4F46E5" strokeWidth={2} />
+                      <FileEdit size={15} color={T.color.info} strokeWidth={2} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -708,55 +745,63 @@ export const FollowUpsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: T.color.bg,
   },
   contentContainer: {
-    padding: 16,
+    padding: T.space.lg,
     paddingBottom: 110,
   },
   headerBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: T.space.md,
   },
   bannerTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.color.text,
     letterSpacing: -0.4,
   },
   bannerSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: T.color.textMuted,
     marginTop: 2,
   },
   refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: T.color.border,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 7,
+    borderRadius: T.radius.sm - 2,
   },
   refreshBtnText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#0F172A',
+    color: T.color.text,
   },
   overdueAlertBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FEF2F2',
+    gap: T.space.sm + 2,
+    backgroundColor: T.color.dangerTint,
     borderWidth: 1,
     borderColor: '#FECACA',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    borderRadius: T.radius.md,
+    padding: T.space.md - 1,
+    marginBottom: T.space.md,
+  },
+  overdueIconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   overdueAlertTitle: {
     fontSize: 12.5,
@@ -771,57 +816,57 @@ const styles = StyleSheet.create({
   searchBarWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 42,
-    gap: 8,
-    marginBottom: 12,
+    borderColor: T.color.border,
+    borderRadius: T.radius.sm,
+    paddingHorizontal: T.space.md,
+    height: 44,
+    gap: T.space.sm,
+    marginBottom: T.space.md,
   },
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
+    color: T.color.text,
     paddingVertical: 0,
   },
   segmentedTabsRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
+    gap: T.space.sm,
+    marginBottom: T.space.lg - 2,
   },
   tabBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: T.color.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 6,
+    borderColor: T.color.border,
+    paddingVertical: T.space.sm + 1,
+    borderRadius: T.radius.sm,
+    gap: T.space.sm - 2,
   },
   tabBtnActiveOverdue: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: T.color.dangerTint,
     borderColor: '#FCA5A5',
     borderWidth: 1.5,
   },
   tabBtnActiveToday: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: T.color.warnTint,
     borderColor: '#FDE68A',
     borderWidth: 1.5,
   },
   tabBtnActiveUpcoming: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: T.color.infoTint,
     borderColor: '#BFDBFE',
     borderWidth: 1.5,
   },
   tabLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
+    color: T.color.textMuted,
   },
   tabBadge: {
     paddingHorizontal: 6,
@@ -833,34 +878,34 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   cardsList: {
-    gap: 12,
+    gap: T.space.md,
   },
   followupCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md + 2,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    ...shadows.soft,
+    borderColor: T.color.border,
+    padding: T.space.md + 2,
+    ...T.shadowCard,
   },
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 10,
+    gap: T.space.sm + 2,
+    marginBottom: T.space.sm + 2,
   },
   avatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#EEF2FF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: T.color.infoTint,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#4F46E5',
+    color: T.color.info,
   },
   leadInfoCol: {
     flex: 1,
@@ -868,12 +913,12 @@ const styles = StyleSheet.create({
   customerName: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.color.text,
   },
   customerPhone: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.color.text,
     marginTop: 2,
   },
   priorityPill: {
@@ -886,15 +931,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   priorityHot: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: T.color.dangerTint,
     borderColor: '#FECACA',
   },
   priorityWarm: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: T.color.warnTint,
     borderColor: '#FDE68A',
   },
   priorityCold: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: T.color.infoTint,
     borderColor: '#BFDBFE',
   },
   priorityPillText: {
@@ -911,15 +956,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   countdownBadgeOverdue: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: T.color.dangerTint,
     borderColor: '#FECACA',
   },
   countdownBadgeToday: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: T.color.warnTint,
     borderColor: '#FDE68A',
   },
   countdownBadgeUpcoming: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: T.color.infoTint,
     borderColor: '#BFDBFE',
   },
   countdownText: {
@@ -929,25 +974,25 @@ const styles = StyleSheet.create({
   remarkPreviewBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
+    gap: T.space.sm - 2,
+    backgroundColor: T.color.surfaceSunken,
+    borderRadius: T.radius.sm - 2,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    marginBottom: 12,
+    borderColor: T.color.border,
+    paddingVertical: T.space.sm - 2,
+    paddingHorizontal: T.space.sm,
+    marginBottom: T.space.md,
   },
   remarkPreviewText: {
     fontSize: 11,
-    color: '#64748B',
+    color: T.color.textMuted,
     fontWeight: '500',
     flex: 1,
   },
   actionButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: T.space.sm,
   },
   callNowBtn: {
     flex: 1.5,
@@ -955,10 +1000,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#10B981',
-    borderRadius: 10,
-    shadowColor: '#10B981',
+    gap: T.space.sm - 2,
+    backgroundColor: T.color.primary,
+    borderRadius: T.radius.sm,
+    shadowColor: T.color.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3,
@@ -976,47 +1021,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: T.color.warnTint,
     borderWidth: 1,
     borderColor: '#FDE68A',
-    borderRadius: 10,
+    borderRadius: T.radius.sm,
   },
   snoozeBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#D97706',
+    color: T.color.warn,
   },
   iconBtn: {
     width: 48,
     height: 48,
     minHeight: 48,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
+    borderRadius: T.radius.sm,
+    backgroundColor: T.color.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: T.color.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   emptyStateCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 28,
+    backgroundColor: T.color.surface,
+    borderRadius: T.radius.md + 2,
+    padding: T.space.xl + 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...shadows.soft,
+    borderColor: T.color.border,
+    ...T.shadowCard,
   },
   emptyStateTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 10,
+    color: T.color.text,
+    marginTop: T.space.sm + 2,
     textAlign: 'center',
   },
   emptyStateSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: T.color.textMuted,
     textAlign: 'center',
     marginTop: 4,
     maxWidth: 260,
@@ -1025,12 +1070,12 @@ const styles = StyleSheet.create({
   emptyQueueBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 14,
+    gap: T.space.sm - 2,
+    backgroundColor: T.color.primary,
+    paddingHorizontal: T.space.lg,
+    paddingVertical: T.space.sm + 2,
+    borderRadius: T.radius.sm,
+    marginTop: T.space.md + 2,
   },
   emptyQueueBtnText: {
     fontSize: 12,

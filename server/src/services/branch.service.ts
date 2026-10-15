@@ -28,7 +28,7 @@ export class BranchService {
           })),
         );
         branches = await Branch.find().sort({ name: 1 });
-      } catch (err: any) {
+      } catch (_err: unknown) {
         // If race condition or duplicate key on seed, ignore and re-query
         branches = await Branch.find().sort({ name: 1 });
       }

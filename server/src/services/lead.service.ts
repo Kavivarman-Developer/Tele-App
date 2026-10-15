@@ -336,10 +336,9 @@ export class LeadService {
     ];
 
     for (const l of leads) {
-      const agent = l.assignedTo
-        ? (l.assignedTo as any).name || (l.assignedTo as any).email
-        : 'Unassigned';
-      const escape = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+      const assignedObj = l.assignedTo as unknown as { name?: string; email?: string } | null;
+      const agent = assignedObj?.name || assignedObj?.email || 'Unassigned';
+      const escape = (val: unknown) => `"${String(val || '').replace(/"/g, '""')}"`;
       lines.push(
         [
           escape(l.name),
@@ -395,11 +394,11 @@ export class LeadService {
     ];
 
     for (const l of leads) {
-      const camp = l.campaignId ? (l.campaignId as any).name : 'Outreach';
-      const agent = l.assignedTo
-        ? (l.assignedTo as any).name || (l.assignedTo as any).email
-        : 'Unassigned';
-      const escape = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+      const campObj = l.campaignId as unknown as { name?: string } | null;
+      const camp = campObj?.name || 'Outreach';
+      const assignedObj = l.assignedTo as unknown as { name?: string; email?: string } | null;
+      const agent = assignedObj?.name || assignedObj?.email || 'Unassigned';
+      const escape = (val: unknown) => `"${String(val || '').replace(/"/g, '""')}"`;
       lines.push(
         [
           escape(l.name),
