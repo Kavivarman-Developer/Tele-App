@@ -8,11 +8,15 @@ export const errorHandler: ErrorRequestHandler = (
   res: Response,
   _next: NextFunction,
 ): void => {
-  // If already an instance of AppError
-  if (err instanceof AppError) {
-    res.status(err.statusCode).json({
-      status: err.status,
-      message: err.message,
+  // If already an instance of AppError or contains operational error properties
+  if (
+    err instanceof AppError ||
+    (typeof err === 'object' && err !== null && 'statusCode' in err && 'isOperational' in err)
+  ) {
+    const appErr = err as AppError;
+    res.status(appErr.statusCode || 500).json({
+      status: appErr.status || 'error',
+      message: appErr.message,
     });
     return;
   }

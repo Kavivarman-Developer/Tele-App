@@ -461,7 +461,7 @@ export const MyLeadsScreen: React.FC = () => {
         navigation.navigate('Dispose', {
           lead: dialedLead,
           initialTab: 'DISPOSE LEAD',
-          callDurationSeconds: result.durationSeconds,
+          callDurationSeconds: result.connected ? result.durationSeconds : 0,
           isCallConnected: result.connected,
           callAttempt: true,
           detectionMethod: 'AUTOMATIC',

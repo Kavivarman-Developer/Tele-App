@@ -252,7 +252,7 @@ export class ActivityService {
       tag: lead.tag || input.tag || null,
       remark: input.remark || null,
       followUpAt: lead.nextFollowUpAt,
-      durationSeconds: isCallAttempt ? input.durationSeconds || 0 : 0,
+      durationSeconds: isCallAttempt && input.connected ? input.durationSeconds || 0 : 0,
       answers: input.answers || [],
     });
 

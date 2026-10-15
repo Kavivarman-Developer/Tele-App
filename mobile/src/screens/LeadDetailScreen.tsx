@@ -324,7 +324,7 @@ export const LeadDetailScreen: React.FC = () => {
           result = { connected: false, durationSeconds: 0 };
         }
 
-        setCallDurationSeconds(result.durationSeconds);
+        setCallDurationSeconds(result.connected ? result.durationSeconds : 0);
         if (!result.connected) {
           setSelectedState('NOT CONNECTED');
           setSelectedNotConnectedReason('DID_NOT_PICK');
@@ -435,7 +435,7 @@ export const LeadDetailScreen: React.FC = () => {
           (!isConnected
             ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason] || selectedNotConnectedReason}`
             : undefined),
-        durationSeconds: callDurationSeconds,
+        durationSeconds: isConnected ? callDurationSeconds : 0,
         reassignToUserId: actionReassign && selectedReassignUserId ? selectedReassignUserId : undefined,
         copyToCampaignId: actionCopyCampaign && selectedCopyCampaignId ? selectedCopyCampaignId : undefined,
       });
@@ -515,7 +515,7 @@ export const LeadDetailScreen: React.FC = () => {
             ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason] || selectedNotConnectedReason}`
             : undefined),
         followUpAt: finalFollowUp,
-        durationSeconds: isCallAttempt ? callDurationSeconds : 0,
+        durationSeconds: isCallAttempt && isConnected ? callDurationSeconds : 0,
       });
 
       if (!isClosing && actionNextFollowUp && finalFollowUp) {

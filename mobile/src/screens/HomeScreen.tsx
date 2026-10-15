@@ -305,22 +305,22 @@ export const HomeScreen: React.FC = () => {
   };
 
   const formatDurationHoursMinutes = (totalSec: number) => {
-    if (!totalSec || isNaN(totalSec) || totalSec <= 0) return '00:00:00 Hrs';
+    if (!totalSec || isNaN(totalSec) || totalSec <= 0) return '00:00:00';
     const hrs = Math.floor(totalSec / 3600);
     const mins = Math.floor((totalSec % 3600) / 60);
     const secs = totalSec % 60;
     if (hrs > 0) {
-      return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} Hrs`;
+      return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
-    return `00:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} Hrs`;
+    return `00:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
   const formatAvgDurationMins = (avgSec: number) => {
-    if (!avgSec || isNaN(avgSec) || avgSec <= 0) return '0 mins';
+    if (!avgSec || isNaN(avgSec) || avgSec <= 0) return '0s';
     const mins = Math.floor(avgSec / 60);
     const secs = avgSec % 60;
-    if (mins === 0) return `${secs} secs`;
-    if (secs === 0) return `${mins} mins`;
+    if (mins === 0) return `${secs}s`;
+    if (secs === 0) return `${mins}m`;
     return `${mins}m ${secs}s`;
   };
 
@@ -372,7 +372,9 @@ export const HomeScreen: React.FC = () => {
   );
   const localCallsCount = realLocalActivities.length;
   const localConnectedCount = realLocalActivities.filter((a) => a.connected).length;
-  const localTotalDuration = realLocalActivities.reduce((sum, a) => sum + (a.durationSeconds || 0), 0);
+  const localTotalDuration = realLocalActivities
+    .filter((a) => a.connected)
+    .reduce((sum, a) => sum + (a.durationSeconds || 0), 0);
 
   const callsMade = Math.max(dashboardData?.callsMade ?? 0, localCallsCount);
   const connectedCalls = Math.max(dashboardData?.connectedCalls ?? 0, localConnectedCount);
@@ -611,7 +613,7 @@ export const HomeScreen: React.FC = () => {
         navigation.navigate('Dispose', {
           lead: dialedLead,
           initialTab: 'DISPOSE LEAD',
-          callDurationSeconds: result.durationSeconds,
+          callDurationSeconds: result.connected ? result.durationSeconds : 0,
           isCallConnected: result.connected,
           callAttempt: true,
           detectionMethod: 'AUTOMATIC',
@@ -801,7 +803,7 @@ export const HomeScreen: React.FC = () => {
                 <Clock3 size={14} color={T.color.textFaint} />
               </View>
               <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatDurationHoursMinutes(localTotalDuration || (connectedCalls * 68))}
+                {formatDurationHoursMinutes(localTotalDuration)}
               </Text>
             </View>
 
@@ -813,7 +815,7 @@ export const HomeScreen: React.FC = () => {
                 <Clock size={14} color={T.color.textFaint} />
               </View>
               <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatAvgDurationMins(avgDurationSeconds || 68)}
+                {formatAvgDurationMins(avgDurationSeconds)}
               </Text>
             </View>
           </View>

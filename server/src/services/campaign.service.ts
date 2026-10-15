@@ -298,7 +298,7 @@ export class CampaignService {
     if (mongoose.modelNames().includes('Lead')) {
       const Lead = mongoose.model('Lead');
       const leads = await Lead.find({ campaignId: id }, '_id');
-      const leadIds = leads.map((l: any) => l._id);
+      const leadIds = leads.map((l: { _id: unknown }) => l._id);
 
       if (leadIds.length > 0) {
         if (mongoose.modelNames().includes('Activity')) {
