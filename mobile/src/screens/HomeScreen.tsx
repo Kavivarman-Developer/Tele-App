@@ -128,7 +128,9 @@ export const HomeScreen: React.FC = () => {
   const isAdmin = user?.role === 'ADMIN';
 
   // Scope: 'MY' (personal calls dialed by logged-in user) vs 'TEAM' (overall team calls)
-  const [callScope, setCallScope] = useState<'MY' | 'TEAM'>('MY');
+  const [callScope, setCallScope] = useState<'MY' | 'TEAM'>(
+    user?.role === 'AGENT' ? 'MY' : 'TEAM',
+  );
 
   const [period, setPeriod] = useState<ReportingPeriod>('Today');
   const [customDate, setCustomDate] = useState<string | null>(null);

@@ -97,7 +97,8 @@ export const CallHistoryScreen: React.FC = () => {
 
   // Fetch activities combining server DB records and local history
   const userActivities = useMemo(() => {
-    const local = getAllActivities(user?._id || user?.name).filter((activity) => activity.type === 'CALL');
+    const targetAgentId = isAgent ? (user?._id || user?.name) : undefined;
+    const local = getAllActivities(targetAgentId).filter((activity) => activity.type === 'CALL');
     const map = new Map<string, Activity>();
 
     // 1. Add server activities (synced from MongoDB)
