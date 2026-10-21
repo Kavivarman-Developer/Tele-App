@@ -167,12 +167,16 @@ export const AgentReportScreen: React.FC = () => {
         avgDurationSeconds: myRemote?.avgDurationSeconds || 0,
       };
 
-      // Merge local activities for instant reactivity
-      const allLocalActivities = Object.values(historyMap).flat();
+      // Merge local activities for instant reactivity (strictly deduplicated by _id)
+      const allLocalActivities = getAllActivities();
       let localCalls = 0;
       let localConnected = 0;
       let localNotConnected = 0;
       let localDuration = 0;
+
+      const currentUserId = currentUser._id?.toLowerCase();
+      const currentUserName = currentUser.name?.toLowerCase();
+      const currentUserEmail = currentUser.email?.toLowerCase();
 
       for (const act of allLocalActivities) {
         if (act.type !== 'CALL') continue;
@@ -181,10 +185,16 @@ export const AgentReportScreen: React.FC = () => {
         if (fromDate && actTime < new Date(fromDate).getTime()) continue;
         if (toDate && actTime > new Date(toDate).getTime()) continue;
 
+        const uId = typeof act.userId === 'object' && act.userId ? (act.userId as any)._id : act.userId;
+        const uName = typeof act.userId === 'object' && act.userId ? (act.userId as any).name : '';
+        const uEmail = typeof act.userId === 'object' && act.userId ? (act.userId as any).email : '';
+
         const isMyAct =
-          act.agentId === currentUser._id ||
-          (act.agentName && currentUser.name && act.agentName.toLowerCase() === currentUser.name.toLowerCase()) ||
-          act.userId === currentUser._id;
+          (uId && String(uId).toLowerCase() === currentUserId) ||
+          (act.agentId && String(act.agentId).toLowerCase() === currentUserId) ||
+          (uName && currentUserName && String(uName).toLowerCase() === currentUserName) ||
+          (act.agentName && currentUserName && String(act.agentName).toLowerCase() === currentUserName) ||
+          (uEmail && currentUserEmail && String(uEmail).toLowerCase() === currentUserEmail);
 
         if (isMyAct) {
           localCalls++;
@@ -243,8 +253,8 @@ export const AgentReportScreen: React.FC = () => {
       }
     }
 
-    // Merge local activities for zero-latency updates
-    const allLocalActivities = Object.values(historyMap).flat();
+    // Merge local activities for zero-latency updates (deduplicated by _id)
+    const allLocalActivities = getAllActivities();
     for (const act of allLocalActivities) {
       if (!act.createdAt) continue;
       const actTime = new Date(act.createdAt).getTime();
@@ -254,10 +264,15 @@ export const AgentReportScreen: React.FC = () => {
       if (toDate && actTime > new Date(toDate).getTime()) continue;
 
       // Find matching agent
+      const uId = typeof act.userId === 'object' && act.userId ? (act.userId as any)._id : act.userId;
+      const uName = typeof act.userId === 'object' && act.userId ? (act.userId as any).name : '';
+
       const matchedAgent = Array.from(statsMap.values()).find(
         (a) =>
           a.userId === act.agentId ||
-          (act.agentName && a.name.toLowerCase() === act.agentName.toLowerCase()),
+          (uId && String(uId) === a.userId) ||
+          (act.agentName && a.name.toLowerCase() === act.agentName.toLowerCase()) ||
+          (uName && a.name.toLowerCase() === String(uName).toLowerCase()),
       );
 
       if (matchedAgent) {

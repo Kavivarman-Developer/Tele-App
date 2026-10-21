@@ -135,7 +135,9 @@ export const HomeScreen: React.FC = () => {
   const [period, setPeriod] = useState<ReportingPeriod>('Today');
   const [customDate, setCustomDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
-  const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
+  const [selectedBranch, setSelectedBranch] = useState<string>(
+    user?.role === 'AGENT' && user?.branch ? user.branch : 'ALL',
+  );
   const [selectedLeadForQuickModal, setSelectedLeadForQuickModal] = useState<Lead | null>(null);
   const [skippedLeadIds, setSkippedLeadIds] = useState<string[]>([]);
 
@@ -229,14 +231,14 @@ export const HomeScreen: React.FC = () => {
     refetch: refetchDashboard,
     isRefetching: isDashboardRefetching,
   } = useQuery({
-    queryKey: ['homeDashboard', period, fromDate, toDate, selectedCampaignId, queryUserId, selectedBranch],
+    queryKey: ['homeDashboard', period, fromDate, toDate, selectedCampaignId, queryUserId, effectiveBranch],
     queryFn: () =>
       fetchDashboardReports({
         from: fromDate,
         to: toDate,
         campaignId: selectedCampaignId || undefined,
         userId: queryUserId,
-        branch: selectedBranch !== 'ALL' ? selectedBranch : undefined,
+        branch: effectiveBranch !== 'ALL' ? effectiveBranch : undefined,
       }),
     refetchInterval: 15000,
     refetchIntervalInBackground: false,
@@ -249,13 +251,13 @@ export const HomeScreen: React.FC = () => {
     refetch: refetchUserCalls,
     isRefetching: isUserCallsRefetching,
   } = useQuery({
-    queryKey: ['homeUserCalls', period, fromDate, toDate, selectedCampaignId, selectedBranch],
+    queryKey: ['homeUserCalls', period, fromDate, toDate, selectedCampaignId, effectiveBranch],
     queryFn: () =>
       fetchUserCallsReport({
         from: fromDate,
         to: toDate,
         campaignId: selectedCampaignId || undefined,
-        branch: selectedBranch !== 'ALL' ? selectedBranch : undefined,
+        branch: effectiveBranch !== 'ALL' ? effectiveBranch : undefined,
       }),
     enabled: isManagerOrAdmin,
     refetchInterval: 15000,
@@ -289,8 +291,8 @@ export const HomeScreen: React.FC = () => {
 
   const periodCallActivities = useMemo(() => {
     const calls = periodActivities.filter((activity) => activity.type === 'CALL');
-    if (selectedBranch === 'ALL') return calls;
-    const target = selectedBranch.trim().toLowerCase();
+    if (effectiveBranch === 'ALL') return calls;
+    const target = effectiveBranch.trim().toLowerCase();
     return calls.filter((activity) => {
       const b = (activity as any).branch;
       if (b) return b.trim().toLowerCase() === target;
@@ -298,17 +300,17 @@ export const HomeScreen: React.FC = () => {
       if (l?.branch) return l.branch.trim().toLowerCase() === target;
       return false;
     });
-  }, [periodActivities, selectedBranch, myLeadsData]);
+  }, [periodActivities, effectiveBranch, myLeadsData]);
 
   // Overall Agent Calls List for Manager & Admin
   const agentCallsList = useMemo(() => {
     const list = userCallsData?.agents || [];
-    if (selectedBranch === 'ALL') return list;
-    const target = selectedBranch.trim().toLowerCase();
+    if (effectiveBranch === 'ALL') return list;
+    const target = effectiveBranch.trim().toLowerCase();
     return list.filter(
       (a) => (a.branch || '').trim().toLowerCase() === target,
     );
-  }, [userCallsData, selectedBranch]);
+  }, [userCallsData, effectiveBranch]);
 
   // Alert for newly assigned leads
   const [assignedLeadAlert, setAssignedLeadAlert] = useState<{
@@ -440,16 +442,16 @@ export const HomeScreen: React.FC = () => {
   // Leads scoped by branch selection
   const allBranchFilteredLeads = useMemo(() => {
     const list = myLeadsData?.leads || [];
-    if (selectedBranch === 'ALL') return list;
-    const target = selectedBranch.trim().toLowerCase();
+    if (effectiveBranch === 'ALL') return list;
+    const target = effectiveBranch.trim().toLowerCase();
     return list.filter((l) => (l.branch || '').trim().toLowerCase() === target);
-  }, [myLeadsData, selectedBranch]);
+  }, [myLeadsData, effectiveBranch]);
 
   // ==============================================================
   // REAL DYNAMIC METRICS CALCULATION (ZERO DELAY)
   // ==============================================================
   const myAssignedLeadsCount =
-    selectedBranch === 'ALL'
+    effectiveBranch === 'ALL'
       ? (myLeadsData?.total ?? (myLeadsData?.leads?.length || 0))
       : allBranchFilteredLeads.length;
 
@@ -882,42 +884,44 @@ export const HomeScreen: React.FC = () => {
 
           {/* Top Combined Filter Bar: Branch Filter & Date Picker */}
           <View style={[styles.topControlCard, isWide && styles.topControlCardWide]}>
-            {/* Branch / City Filter Horizontal Scroll */}
-            <View style={styles.branchFilterSection}>
-              <View style={styles.branchHeaderRow}>
-                <View style={styles.branchIconBadge}>
-                  <Building2 size={13} color="#0D9488" strokeWidth={2.2} />
+            {/* Branch / City Filter Horizontal Scroll (Admins & Managers Only - Agents are locked to assigned branch) */}
+            {!isAgent && (
+              <View style={styles.branchFilterSection}>
+                <View style={styles.branchHeaderRow}>
+                  <View style={styles.branchIconBadge}>
+                    <Building2 size={13} color="#0D9488" strokeWidth={2.2} />
+                  </View>
+                  <Text style={styles.branchFilterLabel}>Branch</Text>
                 </View>
-                <Text style={styles.branchFilterLabel}>Branch</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.branchScrollList}
+                >
+                  {availableBranches.map((br) => {
+                    const isSelected = effectiveBranch === br.value;
+                    return (
+                      <TouchableOpacity
+                        key={br.value}
+                        style={[styles.branchPill, isSelected && styles.branchPillActive]}
+                        onPress={() => setSelectedBranch(br.value)}
+                        activeOpacity={0.7}
+                      >
+                        <MapPin
+                          size={11}
+                          color={isSelected ? '#FFFFFF' : '#64748B'}
+                          strokeWidth={isSelected ? 2.5 : 2}
+                        />
+                        <Text style={[styles.branchPillText, isSelected && styles.branchPillTextActive]}>
+                          {br.label}
+                        </Text>
+                        {isSelected && <View style={styles.activeBranchDot} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.branchScrollList}
-              >
-                {availableBranches.map((br) => {
-                  const isSelected = selectedBranch === br.value;
-                  return (
-                    <TouchableOpacity
-                      key={br.value}
-                      style={[styles.branchPill, isSelected && styles.branchPillActive]}
-                      onPress={() => setSelectedBranch(br.value)}
-                      activeOpacity={0.7}
-                    >
-                      <MapPin
-                        size={11}
-                        color={isSelected ? '#FFFFFF' : '#64748B'}
-                        strokeWidth={isSelected ? 2.5 : 2}
-                      />
-                      <Text style={[styles.branchPillText, isSelected && styles.branchPillTextActive]}>
-                        {br.label}
-                      </Text>
-                      {isSelected && <View style={styles.activeBranchDot} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
+            )}
 
             {/* Date Picker & Range Bar */}
             <TouchableOpacity

@@ -16,6 +16,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSidebarStore } from '../store/sidebarStore';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -108,7 +109,13 @@ export const MyLeadsScreen: React.FC = () => {
     setSelectedCampaign: setStoreCampaign,
   } = useCampaignStore();
   const isAgent = user?.role === 'AGENT';
+  const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
   const { width } = useWindowDimensions();
+
+  const handleNavigateToCampaigns = () => {
+    useSidebarStore.getState().setCurrentRoute('Campaigns');
+    navigation.navigate('Campaigns' as any);
+  };
   const isWide = width >= 860;
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -655,6 +662,17 @@ export const MyLeadsScreen: React.FC = () => {
           </View>
 
           <View style={[styles.bannerActions, !isWide && styles.bannerActionsMobile]}>
+            {isManagerOrAdmin && (
+              <TouchableOpacity
+                style={[styles.campaignNavBtn, !isWide && styles.campaignNavBtnMobile]}
+                onPress={handleNavigateToCampaigns}
+                activeOpacity={0.7}
+              >
+                <Megaphone size={14} color="#0D9488" strokeWidth={2.4} />
+                <Text style={styles.campaignNavBtnText}>Campaigns</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[styles.walkInBtn, !isWide && styles.walkInBtnMobile]}
               onPress={() => setShowWalkInModal(true)}
@@ -1275,6 +1293,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  campaignNavBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    paddingVertical: 9,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+    gap: 6,
+    shadowColor: '#0F766E',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  campaignNavBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
   walkInBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1720,6 +1759,10 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     gap: T.space.sm,
+  },
+  campaignNavBtnMobile: {
+    flex: 1,
+    justifyContent: 'center',
   },
   walkInBtnMobile: {
     flex: 1,
