@@ -39,11 +39,13 @@ import {
   Download,
   Menu,
   Phone,
+  BarChart2,
 } from 'lucide-react-native';
 
 import { downloadOrShareCsv, SAMPLE_LEADS_TEMPLATE_CSV } from '../utils/csvDownloader';
 import { useAuthStore } from '../store/authStore';
 import { useSidebarStore } from '../store/sidebarStore';
+import { CrmShell } from '../components/CrmShell';
 import {
   fetchUsers,
   createUser,
@@ -121,7 +123,8 @@ export const DashboardScreen: React.FC = () => {
 
   if (isAgent) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      <CrmShell title="Management Access" breadcrumb="Access">
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
         <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: '#FFE4E6', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
           <AlertCircle size={36} color="#DC2626" />
         </View>
@@ -138,7 +141,8 @@ export const DashboardScreen: React.FC = () => {
         >
           <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Go to My Call Report</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+        </View>
+      </CrmShell>
     );
   }
 
@@ -480,30 +484,23 @@ export const DashboardScreen: React.FC = () => {
   });
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Platform.OS === 'android' ? 6 : 0 }} edges={['top']}>
-      <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
-      {/* Top Header - Clean Minimal */}
-      <View style={{ backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <TouchableOpacity onPress={() => useSidebarStore.getState().toggleDrawer()} style={{ padding: 4 }}>
-            <Menu size={22} color="#6B7280" />
-          </TouchableOpacity>
-          <Text style={{ fontSize: 16, fontWeight: '500', color: '#1F2937' }}>
-            {viewMode === 'REPORT' ? 'My Report' : 'Management'}
-          </Text>
-        </View>
-
-        {(isManager || isAdmin) && (
+    <CrmShell
+      title={viewMode === 'REPORT' ? 'Executive Reports' : 'Management Hub'}
+      breadcrumb={viewMode === 'REPORT' ? 'Workspace' : 'Management'}
+      headerIcon={<BarChart2 size={16} color="#0F9D58" />}
+      rightAction={
+        (isManager || isAdmin) ? (
           <TouchableOpacity
             onPress={() => setViewMode(viewMode === 'REPORT' ? 'MANAGEMENT' : 'REPORT')}
-            style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB' }}
+            style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#A7F3D0' }}
           >
-            <Text style={{ color: '#0F9D58', fontSize: 12, fontWeight: '500' }}>
-              {viewMode === 'REPORT' ? '⚙️ Management' : '📊 My Report'}
+            <Text style={{ color: '#0F9D58', fontSize: 12, fontWeight: '600' }}>
+              {viewMode === 'REPORT' ? '⚙️ Management' : '📊 Reports'}
             </Text>
           </TouchableOpacity>
-        )}
-      </View>
+        ) : undefined
+      }
+    >
 
       {/* Segmented Top Navigation Tabs (Shown in MANAGEMENT mode) */}
       {viewMode === 'MANAGEMENT' && (
@@ -572,10 +569,10 @@ export const DashboardScreen: React.FC = () => {
               }}
             >
               <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 13.5, letterSpacing: 0.2 }}>
-                FROM 01-10-2026 - TO 10-10-2026
+                CURRENT BILLING & REPORTING PERIOD
               </Text>
               <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12, marginTop: 3 }}>
-                Duration : 10 Day(s)
+                Active Period Monitor
               </Text>
             </View>
 
@@ -1925,6 +1922,6 @@ export const DashboardScreen: React.FC = () => {
         </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </CrmShell>
   );
 };

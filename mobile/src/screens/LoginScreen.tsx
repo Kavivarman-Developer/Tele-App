@@ -9,10 +9,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
+  StatusBar as RNStatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ShieldCheck, Phone, Eye, EyeOff, AlertCircle, Mail, Lock } from 'lucide-react-native';
-
+import { useSafeTopPadding } from '../utils/safeArea';
 import { useAuthStore } from '../store/authStore';
 
 // ======================================================================
@@ -59,6 +61,10 @@ const SketchBackground: React.FC = () => (
 );
 
 export const LoginScreen: React.FC = () => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 860;
+  const safeTopPadding = useSafeTopPadding(isWide);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -72,7 +78,8 @@ export const LoginScreen: React.FC = () => {
   const canSubmit = Boolean(email.trim() && password) && !isLoading;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: safeTopPadding }]} edges={['left', 'right']}>
+      <RNStatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
       <SketchBackground />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -197,7 +204,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: T.color.bg,
-    paddingTop: Platform.OS === 'android' ? 8 : 0,
   },
   sketchGlyph: {
     position: 'absolute',

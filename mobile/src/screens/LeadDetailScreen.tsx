@@ -14,11 +14,13 @@ import {
   Modal,
   Linking,
   StatusBar as RNStatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSafeTopPadding } from '../utils/safeArea';
 import {
   ArrowLeft,
   Phone,
@@ -56,6 +58,7 @@ import {
   fetchCampaignById,
   fetchPipeline,
   disposeLead,
+  updateLeadDetails,
 } from '../api/leadApi';
 import { RootStackParamList, Activity, Lead, CustomerTemperature, NotConnectedReason, NotConnectedReasons, User, Campaign, PipelineStage } from '../types';
 import { colors, borderRadius, shadows } from '../theme';
@@ -147,6 +150,9 @@ export const LeadDetailScreen: React.FC = () => {
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<ScreenNavigationProp>();
   const queryClient = useQueryClient();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 860;
+  const safeTopPadding = useSafeTopPadding(isWide);
 
   const { lead, queue, queueIndex } = route.params;
   const routeParams = route.params as RootStackParamList['Dispose'];
@@ -608,19 +614,33 @@ export const LeadDetailScreen: React.FC = () => {
       : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handleSaveContactEdit = () => {
+  const handleSaveContactEdit = async () => {
+    const newName = editName.trim() || currentLead.name;
+    const newPhone = editPhone.trim() || currentLead.phone;
     setCurrentLead((prev) => ({
       ...prev,
-      name: editName.trim() || prev.name,
-      phone: editPhone.trim() || prev.phone,
+      name: newName,
+      phone: newPhone,
     }));
     setShowEditContactModal(false);
-    toast.success('Contact info updated!', 'Updated');
+
+    try {
+      if (currentLead._id) {
+        await updateLeadDetails(currentLead._id, { name: newName, phone: newPhone });
+        useLeadHistoryStore.getState().updateLeadName(currentLead._id, newName);
+        queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
+        queryClient.invalidateQueries({ queryKey: ['leadHistory', currentLead._id] });
+      }
+      toast.success('Contact info saved!', 'Updated');
+    } catch {
+      useLeadHistoryStore.getState().updateLeadName(currentLead._id, newName);
+      toast.info('Contact info updated locally', 'Updated');
+    }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+    <SafeAreaView style={[styles.safeArea, { paddingTop: safeTopPadding }]} edges={['left', 'right']}>
+      <RNStatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
       {/* 1. TOP HEADER (Clean White) */}
       <View style={styles.headerBar}>
         <TouchableOpacity
@@ -1337,7 +1357,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   headerBar: {
     height: 56,

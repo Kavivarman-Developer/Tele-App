@@ -37,11 +37,18 @@ export class NotificationService {
       }
 
       if (finalStatus === 'granted' && Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
+        await Notifications.setNotificationChannelAsync('reminders', {
           name: 'Telecalling Reminders',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#2563EB',
+          sound: 'default',
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          bypassDnd: true,
+        });
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'General Alerts',
+          importance: Notifications.AndroidImportance.HIGH,
           sound: 'default',
         });
       }
@@ -75,31 +82,60 @@ export class NotificationService {
       }
 
       const now = Date.now();
-      // Reminder is 10 minutes (600,000 ms) before follow-up
-      const reminderTime = targetDate.getTime() - 10 * 60 * 1000;
-
       // If the follow-up is already in the past, don't schedule
       if (targetDate.getTime() <= now) {
         return null;
       }
 
-      // If 10 minutes before is in the past (e.g. follow-up is in 5 minutes), trigger in 5 seconds
-      const triggerDate = reminderTime > now ? new Date(reminderTime) : new Date(now + 5000);
+      // Ensure Android high-priority reminder channel is active
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('reminders', {
+          name: 'Telecalling Reminders',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#2563EB',
+          sound: 'default',
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          bypassDnd: true,
+        });
+      }
 
+      // 1. Primary Alert: Exactly at the scheduled follow-up time!
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
-          title: '⏰ Follow-up Reminder',
-          body: `Call with ${lead.name} (${lead.phone}) is scheduled in 10 minutes.`,
-          data: { leadId: lead._id },
-          sound: true,
+          title: `⏰ Callback Reminder: ${lead.name || 'Lead'}`,
+          body: `Call with ${lead.name || 'Customer'} (${lead.phone || ''}) is scheduled now!`,
+          data: { leadId: lead._id, phone: lead.phone, name: lead.name },
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.MAX,
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: triggerDate,
+          date: targetDate,
+          channelId: 'reminders',
         },
       });
 
       scheduledNotificationMap.set(lead._id, notificationId);
+
+      // 2. Advance Alert: 10 minutes prior (if scheduled more than 12 minutes in advance)
+      const advanceTime = targetDate.getTime() - 10 * 60 * 1000;
+      if (advanceTime > now + 60 * 1000) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `⏳ Upcoming Callback in 10 mins: ${lead.name || 'Lead'}`,
+            body: `Reminder: Follow-up call with ${lead.name || 'Customer'} starts at ${targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
+            data: { leadId: lead._id, phone: lead.phone, name: lead.name },
+            sound: 'default',
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: new Date(advanceTime),
+            channelId: 'reminders',
+          },
+        });
+      }
+
       return notificationId;
     } catch (error) {
       console.warn('[NotificationService] Failed to schedule reminder:', error);

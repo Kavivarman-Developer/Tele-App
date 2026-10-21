@@ -37,7 +37,7 @@ import {
 } from 'lucide-react-native';
 
 import { CrmShell } from '../components/CrmShell';
-import { fetchUserCallsReport, fetchUsers, fetchBranches } from '../api/leadApi';
+import { fetchUserCallsReport, fetchUsers, fetchBranches, fetchUserActivities } from '../api/leadApi';
 import { useAuthStore } from '../store/authStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { UserCallStats, Activity } from '../types';
@@ -333,21 +333,51 @@ export const AgentReportScreen: React.FC = () => {
     return `${s}s`;
   };
 
-  // Get call history timeline strictly for selected drill-down agent
+  // Fetch real activities from MongoDB for the selected agent drilldown
+  const { data: serverAgentCalls = [] } = useQuery({
+    queryKey: ['agentModalCalls', selectedAgentDetail?.userId, fromDate, toDate],
+    queryFn: () =>
+      selectedAgentDetail?.userId
+        ? fetchUserActivities({
+            userId: selectedAgentDetail.userId,
+            from: fromDate,
+            to: toDate,
+          })
+        : Promise.resolve([]),
+    enabled: Boolean(selectedAgentDetail?.userId),
+  });
+
+  // Get call history timeline strictly for selected drill-down agent (server + local merged)
   const selectedAgentCalls = useMemo(() => {
     if (!selectedAgentDetail) return [];
     const allActivities = getAllActivities(
       selectedAgentDetail.userId || selectedAgentDetail.name,
     ).filter((activity) => activity.type === 'CALL');
 
-    return allActivities.filter((act) => {
-      if (!act.createdAt) return false;
-      const actTime = new Date(act.createdAt).getTime();
-      if (fromDate && actTime < new Date(fromDate).getTime()) return false;
-      if (toDate && actTime > new Date(toDate).getTime()) return false;
-      return true;
-    });
-  }, [selectedAgentDetail, getAllActivities, fromDate, toDate]);
+    const map = new Map<string, Activity>();
+    for (const a of serverAgentCalls) {
+      if (a && a._id && a.type === 'CALL') {
+        map.set(a._id, a);
+      }
+    }
+    for (const a of allActivities) {
+      if (a && a._id && !map.has(a._id)) {
+        map.set(a._id, a);
+      }
+    }
+
+    const merged = Array.from(map.values());
+
+    return merged
+      .filter((act) => {
+        if (!act.createdAt) return false;
+        const actTime = new Date(act.createdAt).getTime();
+        if (fromDate && actTime < new Date(fromDate).getTime()) return false;
+        if (toDate && actTime > new Date(toDate).getTime()) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [selectedAgentDetail, serverAgentCalls, getAllActivities, fromDate, toDate]);
 
   return (
     <CrmShell

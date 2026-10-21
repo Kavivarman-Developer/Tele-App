@@ -9,11 +9,14 @@ import {
   Platform,
   Linking,
   StyleSheet,
+  StatusBar as RNStatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSafeTopPadding } from '../utils/safeArea';
 import { ArrowLeft, UserPlus, Layers, Check, Phone, Mail, User, PhoneCall, BookmarkCheck } from 'lucide-react-native';
 
 import { fetchCampaigns, createWalkInLead } from '../api/leadApi';
@@ -31,6 +34,9 @@ export const AddWalkInLeadScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 860;
+  const safeTopPadding = useSafeTopPadding(isWide);
 
   const [name, setName] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
@@ -112,7 +118,8 @@ export const AddWalkInLeadScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: safeTopPadding }]} edges={['left', 'right']}>
+      <RNStatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
       {/* Top Header */}
       <View style={styles.topHeader}>
         <TouchableOpacity
@@ -272,7 +279,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   topHeader: {
     backgroundColor: '#FFFFFF',

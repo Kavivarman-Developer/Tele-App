@@ -19,6 +19,13 @@ export const INITIAL_PRESET_BRANCHES: Branch[] = [
     isActive: true,
   },
   {
+    _id: 'b-coimbatore',
+    name: 'Coimbatore',
+    code: 'CJB',
+    address: 'Coimbatore Regional Office',
+    isActive: true,
+  },
+  {
     _id: 'b-chennai',
     name: 'Chennai',
     code: 'MAA',

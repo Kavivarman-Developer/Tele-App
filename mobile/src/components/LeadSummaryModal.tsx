@@ -8,19 +8,31 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, History, MessageCircle, Phone, X } from 'lucide-react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowRight,
+  History,
+  MessageCircle,
+  Phone,
+  X,
+  Edit2,
+  Check,
+  Calendar,
+  Flame,
+} from 'lucide-react-native';
 
-import { fetchLeadHistory } from '../api/leadApi';
+import { fetchLeadHistory, updateLeadDetails } from '../api/leadApi';
 import { Activity, Lead, RootStackParamList } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { formatDisplayPhone, getDialerTelUrl, isLeadLostOrSuppressed } from '../utils/phoneUtils';
 import { LeadTimeline, deduplicateActivities } from './LeadTimeline';
 import { WhatsAppTemplateModal } from './WhatsAppTemplateModal';
+import { toast } from '../store/toastStore';
 
 interface LeadSummaryModalProps {
   lead: Lead | null;
@@ -40,18 +52,31 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
   onOpenFullDispose,
 }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const { getHistoryForLead, loadHistory } = useLeadHistoryStore();
+
   const [activeTab, setActiveTab] = useState<ModalTab>('SUMMARY');
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+
+  // Customer Name Editing State
+  const [currentName, setCurrentName] = useState(lead?.name || '');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(lead?.name || '');
+  const [isSavingName, setIsSavingName] = useState(false);
 
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
 
   useEffect(() => {
-    if (lead) setActiveTab('SUMMARY');
-  }, [lead?._id]);
+    if (lead) {
+      setActiveTab('SUMMARY');
+      setCurrentName(lead.name);
+      setNameInput(lead.name);
+      setIsEditingName(false);
+    }
+  }, [lead?._id, lead?.name]);
 
   const { data: backendHistoryData, isLoading: isHistoryLoading } = useQuery({
     queryKey: ['leadHistory', lead?._id],
@@ -110,6 +135,40 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
     );
   };
 
+  const handleSaveName = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed) {
+      Alert.alert('Required', 'Customer name cannot be empty.');
+      return;
+    }
+    if (trimmed === currentName) {
+      setIsEditingName(false);
+      return;
+    }
+
+    setIsSavingName(true);
+    setCurrentName(trimmed);
+    if (lead) {
+      lead.name = trimmed;
+    }
+    setIsEditingName(false);
+
+    try {
+      if (lead?._id) {
+        await updateLeadDetails(lead._id, { name: trimmed });
+        useLeadHistoryStore.getState().updateLeadName(lead._id, trimmed);
+        queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
+        queryClient.invalidateQueries({ queryKey: ['leadHistory', lead._id] });
+      }
+      toast.success('Customer name updated successfully!', 'Saved');
+    } catch {
+      useLeadHistoryStore.getState().updateLeadName(lead?._id || '', trimmed);
+      toast.info('Customer name updated locally', 'Saved');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
   const openDisposition = () => {
     onClose();
     if (onOpenDisposition) {
@@ -128,25 +187,90 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
           <View style={styles.sheet}>
             <View style={styles.handle} />
 
-            <View style={styles.header}>
-              <View style={styles.leadInfo}>
-                <Text style={styles.name} numberOfLines={1}>{lead.name}</Text>
-                <Text style={styles.phone}>{formatDisplayPhone(lead.phone)} · {campaignName}</Text>
+            {/* Header: Normal Mode vs Dedicated Name Edit Bar */}
+            {isEditingName ? (
+              <View style={styles.editNameHeaderBox}>
+                <View style={styles.editNameInputWrap}>
+                  <Text style={styles.editNameHeaderLabel}>EDIT CUSTOMER NAME</Text>
+                  <TextInput
+                    style={styles.editNameInputFull}
+                    value={nameInput}
+                    onChangeText={setNameInput}
+                    autoFocus
+                    placeholder="Enter customer name..."
+                    placeholderTextColor="#94A3B8"
+                    returnKeyType="done"
+                    onSubmitEditing={handleSaveName}
+                  />
+                </View>
+                <View style={styles.editNameActionsRow}>
+                  <TouchableOpacity
+                    style={styles.saveNameActionBtn}
+                    onPress={handleSaveName}
+                    disabled={isSavingName}
+                    activeOpacity={0.8}
+                  >
+                    <Check size={15} color="#FFFFFF" strokeWidth={2.5} />
+                    <Text style={styles.saveNameActionBtnText}>Save</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cancelNameActionBtn}
+                    onPress={() => {
+                      setNameInput(currentName);
+                      setIsEditingName(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <X size={15} color="#64748B" />
+                    <Text style={styles.cancelNameActionBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <TouchableOpacity style={[styles.iconButton, styles.callButton]} onPress={handleCall}>
-                <Phone size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.iconButton, styles.whatsAppButton]}
-                onPress={() => setShowWhatsAppModal(true)}
-              >
-                <MessageCircle size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.iconButton, styles.closeButton]} onPress={onClose}>
-                <X size={17} color="#64748B" />
-              </TouchableOpacity>
-            </View>
+            ) : (
+              <View style={styles.header}>
+                <View style={styles.leadInfo}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.name} numberOfLines={1}>{currentName}</Text>
+                    <TouchableOpacity
+                      style={styles.editNameBtn}
+                      onPress={() => {
+                        setNameInput(currentName);
+                        setIsEditingName(true);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Edit customer name"
+                    >
+                      <Edit2 size={13} color="#059669" />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.phone}>{formatDisplayPhone(lead.phone)} · {campaignName}</Text>
+                </View>
 
+                <TouchableOpacity
+                  style={[styles.iconButton, styles.callButton]}
+                  onPress={handleCall}
+                  accessibilityLabel="Call Customer"
+                >
+                  <Phone size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.iconButton, styles.whatsAppButton]}
+                  onPress={() => setShowWhatsAppModal(true)}
+                  accessibilityLabel="WhatsApp Message"
+                >
+                  <MessageCircle size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.iconButton, styles.closeButton]}
+                  onPress={onClose}
+                  accessibilityLabel="Close"
+                >
+                  <X size={17} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Tabs: Lead | Timeline */}
             <View style={styles.tabs}>
               <TouchableOpacity
                 style={[styles.tab, activeTab === 'SUMMARY' && styles.activeTab]}
@@ -167,6 +291,7 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
               </TouchableOpacity>
             </View>
 
+            {/* Body */}
             <ScrollView
               style={styles.body}
               contentContainerStyle={styles.bodyContent}
@@ -174,33 +299,86 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
             >
               {activeTab === 'SUMMARY' ? (
                 <View style={styles.summaryCard}>
-                  <Text style={styles.eyebrow}>LEAD DETAILS</Text>
-                  <Text style={styles.summaryText}>
-                    Record the call outcome, not-connected reason, follow-up date, and any next action
-                    together in the disposition form.
-                  </Text>
+                  <View style={styles.cardHeaderRow}>
+                    <Text style={styles.eyebrow}>LEAD DETAILS</Text>
+                    <View
+                      style={[
+                        styles.tempBadge,
+                        lead.temperature === 'HOT' || lead.tag === 'HOT'
+                          ? styles.tempHot
+                          : lead.temperature === 'COLD' || lead.tag === 'COLD'
+                          ? styles.tempCold
+                          : styles.tempWarm,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.tempBadgeText,
+                          lead.temperature === 'HOT' || lead.tag === 'HOT'
+                            ? styles.tempHotText
+                            : lead.temperature === 'COLD' || lead.tag === 'COLD'
+                            ? styles.tempColdText
+                            : styles.tempWarmText,
+                        ]}
+                      >
+                        {lead.temperature === 'HOT' || lead.tag === 'HOT'
+                          ? '🔥 HOT'
+                          : lead.temperature === 'COLD' || lead.tag === 'COLD'
+                          ? '❄️ COLD'
+                          : '☀️ WARM'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.infoGrid}>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Status / Stage</Text>
+                      <Text style={styles.infoValue}>{lead.stage || 'Open / Pending'}</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Campaign</Text>
+                      <Text style={styles.infoValue} numberOfLines={1}>{campaignName}</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Contact Number</Text>
+                      <Text style={styles.infoValue}>{formatDisplayPhone(lead.phone)}</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Call Attempts</Text>
+                      <Text style={styles.infoValue}>{lead.attemptCount ?? 0} time(s)</Text>
+                    </View>
+                  </View>
+
                   {lead.nextFollowUpAt ? (
-                    <Text style={styles.followUpText}>
-                      Next follow-up: {new Date(lead.nextFollowUpAt).toLocaleString()}
-                    </Text>
+                    <View style={styles.followUpBox}>
+                      <Text style={styles.followUpLabel}>SCHEDULED CALLBACK</Text>
+                      <Text style={styles.followUpValue}>
+                        📅 {new Date(lead.nextFollowUpAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      </Text>
+                    </View>
                   ) : null}
-                  <TouchableOpacity style={styles.openFormButton} onPress={openDisposition}>
-                    <Text style={styles.openFormText}>Open Lead Disposition Form</Text>
-                    <ArrowRight size={16} color="#FFFFFF" />
-                  </TouchableOpacity>
                 </View>
               ) : (
                 <LeadTimeline activities={activities} isLoading={isHistoryLoading} />
               )}
             </ScrollView>
 
+            {/* Single Prominent Action Button */}
             {activeTab === 'SUMMARY' ? (
-              <TouchableOpacity style={styles.primaryButton} onPress={openDisposition}>
-                <Text style={styles.primaryButtonText}>Update Lead Outcome</Text>
-                <ArrowRight size={16} color="#FFFFFF" />
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={openDisposition}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryButtonText}>Update Lead Outcome / Disposition</Text>
+                <ArrowRight size={17} color="#FFFFFF" strokeWidth={2.5} />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.secondaryButton} onPress={onClose}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={onClose}
+                activeOpacity={0.75}
+              >
                 <Text style={styles.secondaryButtonText}>Close History</Text>
               </TouchableOpacity>
             )}
@@ -211,7 +389,7 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
       <WhatsAppTemplateModal
         visible={showWhatsAppModal}
         onClose={() => setShowWhatsAppModal(false)}
-        customerName={lead.name}
+        customerName={currentName}
         customerPhone={lead.phone}
       />
     </>
@@ -255,15 +433,119 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
   },
+  editNameBtn: {
+    padding: 3,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  editNameHeaderBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#059669',
+    padding: 12,
+    marginBottom: 12,
+    gap: 10,
+  },
+  editNameInputWrap: {
+    gap: 4,
+  },
+  editNameHeaderLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.8,
+  },
+  editNameInputFull: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  editNameActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  saveNameActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#059669',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  saveNameActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cancelNameActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  cancelNameActionBtnText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  editNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  editNameInput: {
+    flex: 1,
+    height: 32,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#059669',
+    borderRadius: 6,
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  saveNameBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelNameBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   phone: {
     color: '#64748B',
     fontSize: 12,
     marginTop: 3,
   },
   iconButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -316,51 +598,119 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#F8FAFC',
   },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   eyebrow: {
-    marginBottom: 8,
     color: '#64748B',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
-  summaryText: {
-    color: '#334155',
-    fontSize: 13,
-    lineHeight: 19,
+  tempBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  followUpText: {
-    marginTop: 12,
-    color: '#047857',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  openFormButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 18,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#059669',
-  },
-  openFormText: {
-    color: '#FFFFFF',
-    fontSize: 13,
+  tempBadgeText: {
+    fontSize: 10,
     fontWeight: '800',
+  },
+  tempHot: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  tempHotText: {
+    color: '#DC2626',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  tempCold: {
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  tempColdText: {
+    color: '#0284C7',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  tempWarm: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  tempWarmText: {
+    color: '#D97706',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  infoItem: {
+    width: '47%',
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  infoLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  infoValue: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  followUpBox: {
+    marginTop: 12,
+    backgroundColor: '#ECFDF5',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  followUpLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#047857',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  followUpValue: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#065F46',
   },
   primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 13,
-    borderRadius: 10,
-    backgroundColor: '#059669',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#0F9D58',
+    shadowColor: '#0F9D58',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
   },
   secondaryButton: {

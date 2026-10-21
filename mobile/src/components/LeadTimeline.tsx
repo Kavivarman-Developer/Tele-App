@@ -249,6 +249,9 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
                       isCall && isConnected ? styles.callConnectedPill : styles.callNotConnectedPill,
                     ]}
                   >
+                    {isCall && isConnected && (
+                      <Phone size={10} color="#047857" strokeWidth={2.5} style={{ marginRight: 3 }} />
+                    )}
                     <Text
                       style={[
                         styles.callStatusText,
@@ -256,9 +259,9 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
                       ]}
                     >
                       {!isCall
-                        ? 'Lead updated · No call attempt'
+                        ? 'Updated'
                         : isConnected
-                        ? `Connected · ${formatDuration(act.durationSeconds)}`
+                        ? (act.durationSeconds && act.durationSeconds > 0 ? formatDuration(act.durationSeconds) : 'Connected')
                         : `${act.notConnectedReason?.replace(/_/g, ' ') || 'Did Not Pick'}`}
                     </Text>
                   </View>
@@ -497,10 +500,13 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   callStatusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: 20,
     borderWidth: 1,
+    flexShrink: 0,
   },
   callStatusText: {
     fontSize: 10,

@@ -30,7 +30,7 @@ export const listCampaignLeadsQuerySchema = z.object({
     limit: z
       .string()
       .optional()
-      .transform((val) => (val ? parseInt(val, 10) : 20)),
+      .transform((val) => (val ? parseInt(val, 10) : 5000)),
   }),
 });
 
@@ -46,7 +46,7 @@ export const myLeadsQuerySchema = z.object({
     limit: z
       .string()
       .optional()
-      .transform((val) => (val ? parseInt(val, 10) : 20)),
+      .transform((val) => (val ? parseInt(val, 10) : 5000)),
   }),
 });
 
@@ -67,8 +67,20 @@ export const bulkReassignSchema = z.object({
   }),
 });
 
+export const updateLeadSchema = z.object({
+  params: z.object({
+    id: z.string().regex(objectIdRegex, 'Invalid lead ID format'),
+  }),
+  body: z.object({
+    name: z.string().min(1).trim().optional(),
+    phone: z.string().min(5).trim().optional(),
+    email: z.string().email().trim().toLowerCase().optional().or(z.literal('')),
+  }),
+});
+
 export type CreateLeadInput = z.infer<typeof createLeadSchema>['body'];
 export type ListCampaignLeadsQuery = z.infer<typeof listCampaignLeadsQuerySchema>['query'];
 export type MyLeadsQuery = z.infer<typeof myLeadsQuerySchema>['query'];
 export type ReassignLeadInput = z.infer<typeof reassignLeadSchema>['body'];
 export type BulkReassignInput = z.infer<typeof bulkReassignSchema>['body'];
+export type UpdateLeadInput = z.infer<typeof updateLeadSchema>['body'];

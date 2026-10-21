@@ -263,6 +263,8 @@ export interface DashboardReportResponse {
   callsMade: number;
   connectedCalls: number;
   connectRate: number;
+  totalDurationSeconds?: number;
+  averageDurationSeconds?: number;
   leadsBySource: SourceLeadCount[];
   leadsByStage: StageLeadCount[];
   followUpsDueToday: number;

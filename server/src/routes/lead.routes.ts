@@ -10,6 +10,7 @@ import {
   myLeadsQuerySchema,
   reassignLeadSchema,
   bulkReassignSchema,
+  updateLeadSchema,
 } from '../validations/lead.validation';
 import { disposeLeadSchema } from '../validations/activity.validation';
 
@@ -57,6 +58,7 @@ leadsRouter.use(authenticate);
 
 leadsRouter.get('/my', validate(myLeadsQuerySchema), LeadController.getMyLeads);
 leadsRouter.get('/export', validate(myLeadsQuerySchema), LeadController.exportMyLeadsCsv);
+leadsRouter.get('/activities/my', ActivityController.getUserActivities);
 
 leadsRouter.post(
   '/:id/reassign',
@@ -77,3 +79,6 @@ leadsRouter.post('/:id/dispose', validate(disposeLeadSchema), ActivityController
 
 // Lead call activity history
 leadsRouter.get('/:id/history', ActivityController.getLeadHistory);
+
+// Update lead details (e.g. name, phone, email)
+leadsRouter.patch('/:id', validate(updateLeadSchema), LeadController.updateLead);
