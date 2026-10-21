@@ -334,6 +334,19 @@ export class ActivityService {
     } else if (query.userId) {
       if (Types.ObjectId.isValid(query.userId)) {
         filter.userId = new Types.ObjectId(query.userId);
+      } else {
+        const cleanQuery = query.userId.trim();
+        const userMatch = await User.findOne({
+          $or: [
+            { email: new RegExp("^" + cleanQuery + "$", "i") },
+            { name: new RegExp("^" + cleanQuery + "$", "i") },
+          ],
+        });
+        if (userMatch) {
+          filter.userId = userMatch._id;
+        } else {
+          filter.userId = new Types.ObjectId();
+        }
       }
     } else if (requester.role === 'MANAGER' && requester.branch) {
       filter.branch = new RegExp(`^${requester.branch.trim()}$`, 'i');

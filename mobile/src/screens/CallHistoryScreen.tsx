@@ -97,13 +97,28 @@ export const CallHistoryScreen: React.FC = () => {
 
   // Fetch activities combining server DB records and local history
   const userActivities = useMemo(() => {
+    const cleanId = (user?._id || '').toLowerCase();
+    const cleanName = (user?.name || '').toLowerCase();
+
+    const matchesMe = (a: Activity) => {
+      if (!isAgent) return true;
+      const uId = typeof a.userId === 'object' && a.userId ? (a.userId as any)._id : a.userId;
+      const uName = typeof a.userId === 'object' && a.userId ? (a.userId as any).name : '';
+      return Boolean(
+        (cleanId && uId && String(uId).toLowerCase() === cleanId) ||
+        (cleanId && a.agentId && String(a.agentId).toLowerCase() === cleanId) ||
+        (cleanName && uName && String(uName).toLowerCase() === cleanName) ||
+        (cleanName && a.agentName && String(a.agentName).toLowerCase() === cleanName)
+      );
+    };
+
     const targetAgentId = isAgent ? (user?._id || user?.name) : undefined;
-    const local = getAllActivities(targetAgentId).filter((activity) => activity.type === 'CALL');
+    const local = getAllActivities(targetAgentId).filter((activity) => activity.type === 'CALL' && matchesMe(activity));
     const map = new Map<string, Activity>();
 
     // 1. Add server activities (synced from MongoDB)
     for (const a of serverActivities) {
-      if (a && a._id && a.type === 'CALL') {
+      if (a && a._id && a.type === 'CALL' && matchesMe(a)) {
         map.set(a._id, a);
       }
     }
@@ -118,7 +133,7 @@ export const CallHistoryScreen: React.FC = () => {
     return Array.from(map.values()).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [serverActivities, getAllActivities, user]);
+  }, [serverActivities, getAllActivities, user, isAgent]);
 
   // Start of Day timestamps
   const startOfToday = useMemo(() => {
