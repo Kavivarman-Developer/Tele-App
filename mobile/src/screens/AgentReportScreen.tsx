@@ -365,13 +365,34 @@ export const AgentReportScreen: React.FC = () => {
   // Get call history timeline strictly for selected drill-down agent (server + local merged)
   const selectedAgentCalls = useMemo(() => {
     if (!selectedAgentDetail) return [];
-    const allActivities = getAllActivities(
-      selectedAgentDetail.userId || selectedAgentDetail.name,
-    ).filter((activity) => activity.type === 'CALL');
+
+    const targetUserId = selectedAgentDetail.userId?.toLowerCase().trim();
+    const targetName = selectedAgentDetail.name?.toLowerCase().trim();
+    const targetEmail = selectedAgentDetail.email?.toLowerCase().trim();
+
+    const matchesSelectedAgent = (act: Activity) => {
+      const uId = typeof act.userId === 'object' && act.userId ? (act.userId as any)._id : act.userId;
+      const uName = typeof act.userId === 'object' && act.userId ? (act.userId as any).name : '';
+      const uEmail = typeof act.userId === 'object' && act.userId ? (act.userId as any).email : '';
+      const aId = act.agentId;
+      const aName = act.agentName;
+
+      return Boolean(
+        (targetUserId && uId && String(uId).toLowerCase() === targetUserId) ||
+        (targetUserId && aId && String(aId).toLowerCase() === targetUserId) ||
+        (targetName && uName && String(uName).toLowerCase() === targetName) ||
+        (targetName && aName && String(aName).toLowerCase() === targetName) ||
+        (targetEmail && uEmail && String(uEmail).toLowerCase() === targetEmail)
+      );
+    };
+
+    const allActivities = getAllActivities().filter(
+      (activity) => activity.type === 'CALL' && matchesSelectedAgent(activity),
+    );
 
     const map = new Map<string, Activity>();
     for (const a of serverAgentCalls) {
-      if (a && a._id && a.type === 'CALL') {
+      if (a && a._id && a.type === 'CALL' && matchesSelectedAgent(a)) {
         map.set(a._id, a);
       }
     }
