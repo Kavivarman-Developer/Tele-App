@@ -148,14 +148,16 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
         for (const act of list) {
           if (act && act._id && !foundMap.has(act._id)) {
             if (agentId) {
-              const uId = typeof act.userId === 'object' && act.userId ? act.userId._id : act.userId;
-              const uName = typeof act.userId === 'object' && act.userId ? act.userId.name : '';
-              const uEmail = typeof act.userId === 'object' && act.userId ? act.userId.email : '';
+              const uId = typeof act.userId === 'object' && act.userId ? (act.userId as any)._id : act.userId;
+              const uName = typeof act.userId === 'object' && act.userId ? (act.userId as any).name : '';
+              const uEmail = typeof act.userId === 'object' && act.userId ? (act.userId as any).email : '';
               const cleanAgentId = agentId.toLowerCase().trim();
               const match =
-                (uId && uId.toLowerCase() === cleanAgentId) ||
-                (uName && uName.toLowerCase() === cleanAgentId) ||
-                (uEmail && uEmail.toLowerCase() === cleanAgentId);
+                (uId && String(uId).toLowerCase() === cleanAgentId) ||
+                (uName && String(uName).toLowerCase() === cleanAgentId) ||
+                (uEmail && String(uEmail).toLowerCase() === cleanAgentId) ||
+                (act.agentId && String(act.agentId).toLowerCase() === cleanAgentId) ||
+                (act.agentName && String(act.agentName).toLowerCase() === cleanAgentId);
               if (!match) continue;
             }
             foundMap.set(act._id, act);
