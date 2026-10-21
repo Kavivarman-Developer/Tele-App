@@ -418,4 +418,25 @@ export class LeadService {
 
     return lines.join('\n');
   }
+
+  public static async updateLead(
+    id: string,
+    updates: { name?: string; phone?: string; email?: string },
+  ): Promise<ILeadDoc> {
+    const lead = await Lead.findById(id);
+    if (!lead) {
+      throw new AppError('Lead not found', 404);
+    }
+    if (updates.name && updates.name.trim()) {
+      lead.name = updates.name.trim();
+    }
+    if (updates.phone && updates.phone.trim()) {
+      lead.phone = updates.phone.trim();
+    }
+    if (updates.email !== undefined) {
+      lead.email = updates.email.trim();
+    }
+    await lead.save();
+    return lead;
+  }
 }

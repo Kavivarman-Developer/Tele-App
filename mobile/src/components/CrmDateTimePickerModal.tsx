@@ -26,6 +26,8 @@ export interface CrmDateTimePickerModalProps {
   onClose: () => void;
   onConfirm: (isoDate: string) => void;
   title?: string;
+  allowPastDates?: boolean;
+  mode?: 'datetime' | 'date';
 }
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -38,6 +40,8 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
   onClose,
   onConfirm,
   title = 'Select Date & Time',
+  allowPastDates = false,
+  mode = 'datetime',
 }) => {
   // Active Tab: 'DATE' or 'TIME'
   const [activeTab, setActiveTab] = useState<'DATE' | 'TIME'>('DATE');
@@ -51,8 +55,10 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
   // Currently selected date
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(10, 0, 0, 0);
+    if (!allowPastDates) {
+      d.setDate(d.getDate() + 1);
+      d.setHours(10, 0, 0, 0);
+    }
     return d;
   });
 
@@ -69,11 +75,11 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
         const parsed = new Date(initialDate);
         if (!isNaN(parsed.getTime())) {
           init = parsed;
-        } else {
+        } else if (!allowPastDates) {
           init.setDate(init.getDate() + 1);
           init.setHours(10, 0, 0, 0);
         }
-      } else {
+      } else if (!allowPastDates) {
         init.setDate(init.getDate() + 1);
         init.setHours(10, 0, 0, 0);
       }
@@ -91,7 +97,7 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
       setActiveTab('DATE');
       setTimeSubTab('HOUR');
     }
-  }, [visible, initialDate]);
+  }, [visible, initialDate, allowPastDates]);
 
   // Calendar Math
   const monthName = useMemo(() => {
@@ -156,6 +162,7 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
 
   // Check if a day is in the past
   const isDayPast = (day: number) => {
+    if (allowPastDates) return false;
     const dateToCheck = new Date(viewYear, viewMonth, day, 23, 59, 59);
     return dateToCheck.getTime() < today.getTime() && !isDayToday(day);
   };
@@ -205,6 +212,21 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
 
   // Confirm Selection
   const handleConfirm = () => {
+    if (mode === 'date') {
+      const finalDate = new Date(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate(),
+        12,
+        0,
+        0,
+        0,
+      );
+      onConfirm(finalDate.toISOString());
+      onClose();
+      return;
+    }
+
     let finalHours = hour12 % 12;
     if (period === 'PM') {
       finalHours += 12;
@@ -236,7 +258,9 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
                 <Text style={styles.modalTitle} numberOfLines={1}>
                   {title}
                 </Text>
-                <Text style={styles.modalSubtitle}>Pick exact callback date & time</Text>
+                <Text style={styles.modalSubtitle}>
+                  {mode === 'date' ? 'Choose date to view history' : 'Pick exact callback date & time'}
+                </Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
@@ -244,30 +268,32 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Segmented Tab Bar: [ 📅 Date ] and [ 🕒 Time ] */}
-          <View style={styles.segmentedTabBar}>
-            <TouchableOpacity
-              style={[styles.segmentTab, activeTab === 'DATE' && styles.segmentTabActive]}
-              onPress={() => setActiveTab('DATE')}
-              activeOpacity={0.8}
-            >
-              <CalendarIcon size={15} color={activeTab === 'DATE' ? '#10B981' : '#64748B'} />
-              <Text style={[styles.segmentTabText, activeTab === 'DATE' && styles.segmentTabTextActive]}>
-                1. Date ({formattedDateStr})
-              </Text>
-            </TouchableOpacity>
+          {/* Segmented Tab Bar: [ 📅 Date ] and [ 🕒 Time ] (Hidden in date-only mode) */}
+          {mode !== 'date' ? (
+            <View style={styles.segmentedTabBar}>
+              <TouchableOpacity
+                style={[styles.segmentTab, activeTab === 'DATE' && styles.segmentTabActive]}
+                onPress={() => setActiveTab('DATE')}
+                activeOpacity={0.8}
+              >
+                <CalendarIcon size={15} color={activeTab === 'DATE' ? '#10B981' : '#64748B'} />
+                <Text style={[styles.segmentTabText, activeTab === 'DATE' && styles.segmentTabTextActive]}>
+                  1. Date ({formattedDateStr})
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.segmentTab, activeTab === 'TIME' && styles.segmentTabActive]}
-              onPress={() => setActiveTab('TIME')}
-              activeOpacity={0.8}
-            >
-              <Clock size={15} color={activeTab === 'TIME' ? '#10B981' : '#64748B'} />
-              <Text style={[styles.segmentTabText, activeTab === 'TIME' && styles.segmentTabTextActive]}>
-                2. Time ({formattedTimeStr})
-              </Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={[styles.segmentTab, activeTab === 'TIME' && styles.segmentTabActive]}
+                onPress={() => setActiveTab('TIME')}
+                activeOpacity={0.8}
+              >
+                <Clock size={15} color={activeTab === 'TIME' ? '#10B981' : '#64748B'} />
+                <Text style={[styles.segmentTabText, activeTab === 'TIME' && styles.segmentTabTextActive]}>
+                  2. Time ({formattedTimeStr})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {/* =========================================================================
@@ -338,15 +364,17 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
                   })}
                 </View>
 
-                {/* Next Step Button */}
-                <TouchableOpacity
-                  style={styles.nextStepBtn}
-                  onPress={() => setActiveTab('TIME')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.nextStepBtnText}>Next: Select Time ({formattedTimeStr})</Text>
-                  <ArrowRight size={16} color="#10B981" />
-                </TouchableOpacity>
+                {/* Next Step Button (only in datetime mode) */}
+                {mode !== 'date' ? (
+                  <TouchableOpacity
+                    style={styles.nextStepBtn}
+                    onPress={() => setActiveTab('TIME')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.nextStepBtnText}>Next: Select Time ({formattedTimeStr})</Text>
+                    <ArrowRight size={16} color="#10B981" />
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ) : (
               /* =========================================================================
@@ -506,8 +534,12 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
                 <Check size={16} color="#059669" strokeWidth={3} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.summaryLabel}>CONFIRMED SCHEDULE</Text>
-                <Text style={styles.summaryValue}>{formattedFullPreview}</Text>
+                <Text style={styles.summaryLabel}>
+                  {mode === 'date' ? 'SELECTED DATE' : 'CONFIRMED SCHEDULE'}
+                </Text>
+                <Text style={styles.summaryValue}>
+                  {mode === 'date' ? formattedDateStr : formattedFullPreview}
+                </Text>
               </View>
             </View>
           </ScrollView>
@@ -520,7 +552,9 @@ export const CrmDateTimePickerModal: React.FC<CrmDateTimePickerModalProps> = ({
 
             <TouchableOpacity onPress={handleConfirm} style={styles.confirmBtn} activeOpacity={0.8}>
               <Check size={16} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.confirmBtnText}>Set Follow-up Date</Text>
+              <Text style={styles.confirmBtnText}>
+                {mode === 'date' ? 'Confirm Date' : 'Set Follow-up Date'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Platform } from 'react-native';
+import { View, Platform, useWindowDimensions } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -42,6 +42,8 @@ const Tab = createBottomTabNavigator();
 const MainTabs: React.FC = () => {
   const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 860;
   const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   // Compute safe bottom padding for Android navigation gestures & iOS home bar
@@ -55,19 +57,21 @@ const MainTabs: React.FC = () => {
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#E5E7EB',
-          borderTopWidth: 1,
-          height: tabHeight,
-          paddingTop: 8,
-          paddingBottom: bottomPadding,
-          elevation: 2,
-          shadowColor: '#000000',
-          shadowOffset: { width: 0, height: -1 },
-          shadowOpacity: 0.04,
-          shadowRadius: 3,
-        },
+        tabBarStyle: isWide
+          ? { display: 'none', height: 0 }
+          : {
+              backgroundColor: '#FFFFFF',
+              borderTopColor: '#E5E7EB',
+              borderTopWidth: 1,
+              height: tabHeight,
+              paddingTop: 8,
+              paddingBottom: bottomPadding,
+              elevation: 2,
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: -1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 3,
+            },
         tabBarItemStyle: {
           justifyContent: 'center',
           alignItems: 'center',

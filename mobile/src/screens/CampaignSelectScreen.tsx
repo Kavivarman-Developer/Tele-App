@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { useCampaignStore } from '../store/campaignStore';
 import { fetchCampaigns, fetchMyLeads } from '../api/leadApi';
+import { useSafeTopPadding } from '../utils/safeArea';
 import { RootStackParamList, Campaign, Lead } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -41,6 +42,7 @@ export const CampaignSelectScreen: React.FC = () => {
   const { setSelectedCampaign } = useCampaignStore();
   const { width } = useWindowDimensions();
   const isWide = width >= 860;
+  const safeTopPadding = useSafeTopPadding(isWide);
 
   const currentMonthName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
@@ -64,12 +66,20 @@ export const CampaignSelectScreen: React.FC = () => {
     refetch: refetchLeads,
   } = useQuery({
     queryKey: ['myLeadsList'],
-    queryFn: () => fetchMyLeads({ limit: 100 }),
+    queryFn: () => fetchMyLeads({ limit: 5000 }),
     refetchInterval: 15000,
   });
 
   const allLeads: Lead[] = leadsData?.leads || [];
-  const campaigns: Campaign[] = campaignsData?.campaigns || [];
+  const campaigns: any[] = campaignsData?.campaigns || [];
+
+  // Total leads across campaigns (accurate aggregation from DB)
+  const totalSystemLeads = useMemo(() => {
+    const sumFromCamps = campaigns.reduce((acc, c: any) => acc + (c.totalLeads || 0), 0);
+    if (sumFromCamps > 0) return sumFromCamps;
+    if (leadsData?.total && leadsData.total > 0) return leadsData.total;
+    return allLeads.length;
+  }, [campaigns, leadsData, allLeads]);
 
   const handleSelectCampaign = async (campaign: Campaign | null) => {
     if (!campaign) {
@@ -90,7 +100,7 @@ export const CampaignSelectScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: safeTopPadding }]} edges={['left', 'right']}>
       {/* Header Bar */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
@@ -165,12 +175,12 @@ export const CampaignSelectScreen: React.FC = () => {
                 <Text style={styles.allLeadsTitle}>All Campaigns (Combined Queue)</Text>
               </View>
               <Text style={styles.allLeadsSubtitle}>
-                Access all {allLeads.length} leads assigned to you across all active campaigns
+                Access all {totalSystemLeads} leads assigned to you across all active campaigns
               </Text>
             </View>
           </View>
           <View style={styles.allLeadsBadge}>
-            <Text style={styles.allLeadsBadgeText}>{allLeads.length} Leads</Text>
+            <Text style={styles.allLeadsBadgeText}>{totalSystemLeads} Leads</Text>
             <ChevronRight size={16} color="#2563EB" />
           </View>
         </TouchableOpacity>
@@ -184,7 +194,7 @@ export const CampaignSelectScreen: React.FC = () => {
 
         {isCampaignsLoading && !campaigns.length ? (
           <View style={styles.loaderWrap}>
-            <ActivityIndicator size="large" color="#10B981" />
+            <ActivityIndicator size="large" color="#2563EB" />
             <Text style={styles.loaderText}>Loading campaigns...</Text>
           </View>
         ) : campaigns.length === 0 ? (
@@ -196,7 +206,7 @@ export const CampaignSelectScreen: React.FC = () => {
             </Text>
           </View>
         ) : (
-          campaigns.map((camp) => {
+          campaigns.map((camp: any) => {
             // Count leads assigned to this agent for this specific campaign
             const campLeads = allLeads.filter((l) => {
               if (typeof l.campaign === 'object' && l.campaign) {
@@ -205,8 +215,9 @@ export const CampaignSelectScreen: React.FC = () => {
               return l.campaignId === camp._id;
             });
 
-            const newLeadsCount = campLeads.filter((l) => l.stage === 'New' || l.attemptCount === 0).length;
-            const followUpCount = campLeads.filter((l) => l.stage === 'Follow Up' || l.stage === 'Follow-up').length;
+            const assignedCount = camp.totalLeads ?? campLeads.length;
+            const newLeadsCount = camp.newLeads ?? campLeads.filter((l) => l.stage === 'New' || l.attemptCount === 0).length;
+            const followUpCount = camp.followUpLeads ?? campLeads.filter((l) => l.stage === 'Follow Up' || l.stage === 'Follow-up').length;
 
             const priorityColor =
               camp.priority === 'HIGH' ? '#DC2626' : camp.priority === 'MEDIUM' ? '#D97706' : '#2563EB';
@@ -223,7 +234,7 @@ export const CampaignSelectScreen: React.FC = () => {
                 {/* Top Row: Icon, Title, Priority */}
                 <View style={styles.campTopRow}>
                   <View style={styles.campIconWrap}>
-                    <PhoneCall size={20} color="#10B981" />
+                    <PhoneCall size={20} color="#2563EB" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.campName}>{camp.name}</Text>
@@ -243,7 +254,7 @@ export const CampaignSelectScreen: React.FC = () => {
                 {/* Metrics Row */}
                 <View style={styles.statsRow}>
                   <View style={styles.statBox}>
-                    <Text style={styles.statNumber}>{campLeads.length}</Text>
+                    <Text style={styles.statNumber}>{assignedCount}</Text>
                     <Text style={styles.statLabel}>Assigned Leads</Text>
                   </View>
                   <View style={styles.statDivider} />
@@ -291,7 +302,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   header: {
     flexDirection: 'row',
@@ -499,16 +509,16 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   campaignCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#EFF6FF',
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
     marginBottom: 14,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 2,
   },
   campTopRow: {
@@ -520,7 +530,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#DBEAFE',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -548,10 +560,12 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingVertical: 10,
     marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
   },
   statBox: {
     flex: 1,
@@ -580,21 +594,26 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#DBEAFE',
   },
   campFooterHint: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#64748B',
     fontWeight: '500',
   },
   enterQueueBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#10B981',
+    backgroundColor: '#2563EB',
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 9,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
   },
   enterQueueBtnText: {
     fontSize: 12,

@@ -39,7 +39,7 @@ export const fetchMyLeads = async (params: MyLeadsParams): Promise<MyLeadsRespon
   const queryParams: Record<string, string | number> = {
     type: params.type || 'ALL',
     page: params.page || 1,
-    limit: params.limit || 20,
+    limit: params.limit || 5000,
   };
 
   if (params.campaignId) {
@@ -61,6 +61,17 @@ export const fetchLeadHistory = async (
   const response = await apiClient.get<{ activities: Activity[] }>(
     `/api/leads/${leadId}/history`,
   );
+  return response.data;
+};
+
+/**
+ * Updates basic lead details (name, phone, email) on the server.
+ */
+export const updateLeadDetails = async (
+  leadId: string,
+  payload: { name?: string; phone?: string; email?: string },
+): Promise<{ lead: Lead }> => {
+  const response = await apiClient.patch<{ lead: Lead }>(`/api/leads/${leadId}`, payload);
   return response.data;
 };
 
@@ -159,6 +170,28 @@ export const createWalkInLead = async (
 };
 
 /**
+ * Fetches call activities from server directly (for current agent, or for a specific agent if manager/admin).
+ */
+export const fetchUserActivities = async (params?: {
+  userId?: string;
+  from?: string;
+  to?: string;
+  stage?: string;
+  connected?: boolean;
+}): Promise<Activity[]> => {
+  try {
+    const response = await apiClient.get<{ activities: Activity[] }>(
+      '/api/leads/activities/my',
+      { params },
+    );
+    return response.data?.activities || [];
+  } catch (err) {
+    console.warn('[API] Failed to fetch activities from server:', err);
+    return [];
+  }
+};
+
+/**
  * Fetches aggregated dashboard metrics for reporting (scoped by user role).
  */
 export const fetchDashboardReports = async (params: {
@@ -166,6 +199,7 @@ export const fetchDashboardReports = async (params: {
   to?: string;
   campaignId?: string;
   userId?: string;
+  branch?: string;
 }): Promise<DashboardReportResponse> => {
   const response = await apiClient.get<DashboardReportResponse>('/api/reports/dashboard', {
     params,
@@ -180,6 +214,7 @@ export const fetchUserCallsReport = async (params: {
   from?: string;
   to?: string;
   campaignId?: string;
+  branch?: string;
 } = {}): Promise<UserCallsReportResponse> => {
   const response = await apiClient.get<UserCallsReportResponse>('/api/reports/user-calls', {
     params,

@@ -1,0 +1,57 @@
+[
+  {
+    "_id": "6ac61fd1121750038763d471",
+    "name": "Sales Pipeline",
+    "stages": [
+      {
+        "name": "New",
+        "isClosed": false,
+        "tags": [],
+        "order": 0,
+        "_id": "6ac61fd1121750038763d472"
+      },
+      {
+        "name": "Interested",
+        "isClosed": false,
+        "tags": [
+          "hot",
+          "warm",
+          "cold"
+        ],
+        "order": 1,
+        "_id": "6ac61fd1121750038763d473"
+      },
+      {
+        "name": "Follow Up",
+        "isClosed": false,
+        "tags": [],
+        "order": 2,
+        "_id": "6ac61fd1121750038763d474"
+      },
+      {
+        "name": "Not Interested",
+        "isClosed": false,
+        "tags": [],
+        "order": 3,
+        "_id": "6ac61fd1121750038763d475"
+      },
+      {
+        "name": "Converted",
+        "isClosed": true,
+        "tags": [],
+        "order": 4,
+        "_id": "6ac61fd1121750038763d476"
+      },
+      {
+        "name": "Lost",
+        "isClosed": true,
+        "tags": [],
+        "order": 5,
+        "_id": "6ac61fd1121750038763d477"
+      }
+    ],
+    "createdAt": "2026-10-07T10:32:49.376Z",
+    "updatedAt": "2026-10-07T10:32:49.376Z",
+    "__v": 0
+  }
+]

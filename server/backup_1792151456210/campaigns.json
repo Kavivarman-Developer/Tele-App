@@ -1,0 +1,103 @@
+[
+  {
+    "_id": "6ac6208c0590a2bca3716aa3",
+    "name": "Q4 Real Estate Outreach",
+    "pipelineId": "6ac61fd1121750038763d471",
+    "managerId": "6ac61d0b08167881d5c1c7e5",
+    "agentIds": [
+      "6ac61d2a7bd428cb381d0e2c",
+      "6ac74f3279bb9292ad180d49"
+    ],
+    "distributionMode": "EQUAL",
+    "conditionalRules": [],
+    "fallbackAgentId": null,
+    "priority": "MEDIUM",
+    "duplicateMode": "MERGE",
+    "engagementForm": [
+      {
+        "id": "q1",
+        "type": "MULTIPLE_CHOICE",
+        "label": "Budget range",
+        "options": [
+          "< 50L",
+          "50L - 1Cr",
+          "> 1Cr"
+        ],
+        "required": true
+      },
+      {
+        "id": "q2",
+        "type": "SHORT_ANSWER",
+        "label": "Preferred location",
+        "options": [],
+        "required": false
+      }
+    ],
+    "isActive": false,
+    "createdAt": "2026-10-07T10:35:56.388Z",
+    "updatedAt": "2026-10-09T10:25:38.734Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac623d96c84a3753e45737b",
+    "name": "Demo Sales Campaign",
+    "pipelineId": "6ac61fd1121750038763d471",
+    "managerId": "6ac61d0b08167881d5c1c7e5",
+    "agentIds": [
+      "6ac61d2a7bd428cb381d0e2c",
+      "6ac62130f01e376b529ebfa1",
+      "6ac623d96c84a3753e457376",
+      "6ac74f3279bb9292ad180d49"
+    ],
+    "distributionMode": "EQUAL",
+    "fallbackAgentId": null,
+    "priority": "HIGH",
+    "duplicateMode": "MERGE",
+    "engagementForm": [
+      {
+        "id": "q1",
+        "type": "MULTIPLE_CHOICE",
+        "label": "Budget",
+        "options": [
+          "30L - 50L",
+          "50L - 80L",
+          "80L - 1.2Cr",
+          "1.2Cr - 2Cr",
+          "> 2Cr"
+        ],
+        "required": true
+      },
+      {
+        "id": "q2",
+        "type": "SHORT_ANSWER",
+        "label": "Preferred City",
+        "options": [],
+        "required": false
+      }
+    ],
+    "isActive": false,
+    "conditionalRules": [],
+    "createdAt": "2026-10-07T10:50:01.502Z",
+    "updatedAt": "2026-10-09T10:25:36.547Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac8c22307eb998b1974b791",
+    "name": "Testing Campaigns",
+    "pipelineId": "6ac61fd1121750038763d471",
+    "managerId": "6ac61d0b08167881d5c1c7e5",
+    "agentIds": [
+      "6ac74f3279bb9292ad180d49"
+    ],
+    "distributionMode": "EQUAL",
+    "conditionalRules": [],
+    "fallbackAgentId": null,
+    "priority": "LOW",
+    "duplicateMode": "SKIP",
+    "engagementForm": [],
+    "isActive": true,
+    "createdAt": "2026-10-09T10:29:55.048Z",
+    "updatedAt": "2026-10-10T05:42:21.104Z",
+    "__v": 0
+  }
+]

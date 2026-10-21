@@ -9,7 +9,7 @@
     "androidStatusBar": {
       "barStyle": "dark-content",
       "backgroundColor": "#FFFFFF",
-      "translucent": false
+      "translucent": true
     },
     "ios": {
       "supportsTablet": true,

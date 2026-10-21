@@ -120,11 +120,83 @@ export class CampaignService {
       };
     }
 
-    return Campaign.find(query)
+    const campaigns = await Campaign.find(query)
       .populate('pipelineId', 'name')
       .populate('managerId', 'name email')
       .populate('agentIds', 'name email phone')
       .sort({ createdAt: -1 });
+
+    if (campaigns.length === 0) {
+      return [];
+    }
+
+    // Aggregate real lead statistics for each campaign from MongoDB
+    const campIds = campaigns.map((c) => c._id);
+    const leadMatch: Record<string, unknown> = { campaignId: { $in: campIds } };
+    if (requester.role === 'AGENT') {
+      leadMatch.assignedTo = requester._id;
+    }
+
+    const leadCounts = await Lead.aggregate<{
+      _id: Types.ObjectId;
+      total: number;
+      newCount: number;
+      followUpCount: number;
+    }>([
+      { $match: leadMatch },
+      {
+        $group: {
+          _id: '$campaignId',
+          total: { $sum: 1 },
+          newCount: {
+            $sum: {
+              $cond: [
+                { $or: [{ $eq: ['$attemptCount', 0] }, { $not: ['$attemptCount'] }] },
+                1,
+                0,
+              ],
+            },
+          },
+          followUpCount: {
+            $sum: {
+              $cond: [
+                {
+                  $or: [
+                    { $eq: ['$stage', 'Follow Up'] },
+                    { $eq: ['$stage', 'Follow-up'] },
+                    { $ne: [{ $ifNull: ['$nextFollowUpAt', null] }, null] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    const countMap = new Map<string, { total: number; newCount: number; followUpCount: number }>();
+    for (const item of leadCounts) {
+      countMap.set(item._id.toString(), {
+        total: item.total,
+        newCount: item.newCount,
+        followUpCount: item.followUpCount,
+      });
+    }
+
+    const result = campaigns.map((camp) => {
+      const campObj = camp.toObject ? camp.toObject() : camp;
+      const stats = countMap.get(camp._id.toString()) || { total: 0, newCount: 0, followUpCount: 0 };
+      return {
+        ...campObj,
+        totalLeads: stats.total,
+        newLeads: stats.newCount,
+        followUpLeads: stats.followUpCount,
+      };
+    });
+
+    return result as any;
   }
 
   public static async getCampaignById(

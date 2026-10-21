@@ -43,6 +43,8 @@ import {
   RotateCcw,
   CalendarClock,
   ListOrdered,
+  MapPin,
+  Building2,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
@@ -54,6 +56,7 @@ import {
   fetchUserCallsReport,
   fetchMyLeads,
   fetchCampaigns,
+  fetchBranches,
 } from '../api/leadApi';
 import { RootStackParamList, Lead } from '../types';
 import { colors, borderRadius, shadows } from '../theme';
@@ -116,7 +119,7 @@ export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const { selectedCampaignName } = useCampaignStore();
+  const { selectedCampaignId, selectedCampaignName } = useCampaignStore();
   const { width } = useWindowDimensions();
   const isWide = width >= 860;
 
@@ -124,12 +127,45 @@ export const HomeScreen: React.FC = () => {
   const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
 
+  // Scope: 'MY' (personal calls dialed by logged-in user) vs 'TEAM' (overall team calls)
+  const [callScope, setCallScope] = useState<'MY' | 'TEAM'>(
+    user?.role === 'AGENT' ? 'MY' : 'TEAM',
+  );
+
   const [period, setPeriod] = useState<ReportingPeriod>('Today');
   const [customDate, setCustomDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
-  const [selectedBranch, setSelectedBranch] = useState<'ALL' | 'Trichy' | 'Pudukkottai'>('ALL');
+  const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
   const [selectedLeadForQuickModal, setSelectedLeadForQuickModal] = useState<Lead | null>(null);
   const [skippedLeadIds, setSkippedLeadIds] = useState<string[]>([]);
+
+  // Fetch branches from backend / local registry
+  const { data: branchesData } = useQuery({
+    queryKey: ['branchesList'],
+    queryFn: fetchBranches,
+  });
+
+  const availableBranches = useMemo(() => {
+    const list: { label: string; value: string }[] = [{ label: 'All Branches', value: 'ALL' }];
+    const registered = branchesData?.branches || [];
+    const seen = new Set<string>(['all']);
+
+    for (const b of registered) {
+      if (b.name && !seen.has(b.name.trim().toLowerCase())) {
+        seen.add(b.name.trim().toLowerCase());
+        list.push({ label: b.name.trim(), value: b.name.trim() });
+      }
+    }
+
+    const defaults = ['Trichy', 'Pudukkottai', 'Coimbatore', 'Chennai', 'Madurai'];
+    for (const d of defaults) {
+      if (!seen.has(d.toLowerCase())) {
+        seen.add(d.toLowerCase());
+        list.push({ label: d, value: d });
+      }
+    }
+    return list;
+  }, [branchesData]);
 
   // NeoDove Segmented Tab: Queue vs Callbacks vs Today's Calls vs Team
   const [activeTab, setActiveTab] = useState<'queue' | 'callbacks' | 'calls' | 'team'>('queue');
@@ -144,11 +180,11 @@ export const HomeScreen: React.FC = () => {
   const callingLeadRef = useRef<Lead | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  const effectiveBranch: 'ALL' | 'Trichy' | 'Pudukkottai' =
+  const effectiveBranch: string =
     user?.role === 'MANAGER' && user?.branch
-      ? (user.branch as any)
+      ? user.branch
       : user?.role === 'AGENT' && user?.branch
-      ? (user.branch as any)
+      ? user.branch
       : selectedBranch;
 
   const handleConfirmCustomDate = (isoStr: string) => {
@@ -161,29 +197,47 @@ export const HomeScreen: React.FC = () => {
     ? new Date(customDate).toLocaleDateString([], { month: 'short', day: 'numeric' })
     : 'Date';
 
-  // Compute ISO 'from' date for backend query
+  // Compute ISO 'from' and 'to' date for backend query
   const now = new Date();
   let fromDate: string | undefined;
+  let toDate: string | undefined;
   if (period === 'Today') {
-    fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    fromDate = startOfToday.toISOString();
+    toDate = endOfToday.toISOString();
   } else if (period === '7 Days') {
     fromDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    toDate = new Date().toISOString();
   } else if (period === '30 Days') {
     fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    toDate = new Date().toISOString();
   } else if (period === 'Custom' && customDate) {
     const cd = new Date(customDate);
-    fromDate = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate()).toISOString();
+    const startOfCustomDay = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate(), 0, 0, 0, 0);
+    const endOfCustomDay = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate(), 23, 59, 59, 999);
+    fromDate = startOfCustomDay.toISOString();
+    toDate = endOfCustomDay.toISOString();
   }
 
   // 1. Dashboard Metrics from Backend
+  const queryUserId = !isAgent && callScope === 'TEAM' ? undefined : user?._id;
+
   const {
     data: dashboardData,
     isLoading: isDashboardLoading,
     refetch: refetchDashboard,
     isRefetching: isDashboardRefetching,
   } = useQuery({
-    queryKey: ['homeDashboard', period, fromDate],
-    queryFn: () => fetchDashboardReports({ from: fromDate }),
+    queryKey: ['homeDashboard', period, fromDate, toDate, selectedCampaignId, queryUserId, selectedBranch],
+    queryFn: () =>
+      fetchDashboardReports({
+        from: fromDate,
+        to: toDate,
+        campaignId: selectedCampaignId || undefined,
+        userId: queryUserId,
+        branch: selectedBranch !== 'ALL' ? selectedBranch : undefined,
+      }),
     refetchInterval: 15000,
     refetchIntervalInBackground: false,
   });
@@ -195,8 +249,14 @@ export const HomeScreen: React.FC = () => {
     refetch: refetchUserCalls,
     isRefetching: isUserCallsRefetching,
   } = useQuery({
-    queryKey: ['homeUserCalls', period, fromDate],
-    queryFn: () => fetchUserCallsReport({ from: fromDate }),
+    queryKey: ['homeUserCalls', period, fromDate, toDate, selectedCampaignId, selectedBranch],
+    queryFn: () =>
+      fetchUserCallsReport({
+        from: fromDate,
+        to: toDate,
+        campaignId: selectedCampaignId || undefined,
+        branch: selectedBranch !== 'ALL' ? selectedBranch : undefined,
+      }),
     enabled: isManagerOrAdmin,
     refetchInterval: 15000,
     refetchIntervalInBackground: false,
@@ -209,8 +269,13 @@ export const HomeScreen: React.FC = () => {
     refetch: refetchMyLeads,
     isRefetching: isMyLeadsRefetching,
   } = useQuery({
-    queryKey: ['homeMyLeadsQueue'],
-    queryFn: () => fetchMyLeads({ type: 'ALL', limit: 100 }),
+    queryKey: ['homeMyLeadsQueue', selectedCampaignId],
+    queryFn: () =>
+      fetchMyLeads({
+        type: 'ALL',
+        campaignId: selectedCampaignId || undefined,
+        limit: 5000,
+      }),
     refetchInterval: 15000,
     refetchIntervalInBackground: false,
   });
@@ -221,17 +286,27 @@ export const HomeScreen: React.FC = () => {
   const periodActivities = useMemo(() => {
     return getActivitiesForPeriod(period, customDate, user?._id || user?.name);
   }, [historyMap, period, customDate, user, getActivitiesForPeriod]);
-  const periodCallActivities = useMemo(
-    () => periodActivities.filter((activity) => activity.type === 'CALL'),
-    [periodActivities],
-  );
+
+  const periodCallActivities = useMemo(() => {
+    const calls = periodActivities.filter((activity) => activity.type === 'CALL');
+    if (selectedBranch === 'ALL') return calls;
+    const target = selectedBranch.trim().toLowerCase();
+    return calls.filter((activity) => {
+      const b = (activity as any).branch;
+      if (b) return b.trim().toLowerCase() === target;
+      const l = (myLeadsData?.leads || []).find((lead) => lead._id === activity.leadId);
+      if (l?.branch) return l.branch.trim().toLowerCase() === target;
+      return false;
+    });
+  }, [periodActivities, selectedBranch, myLeadsData]);
 
   // Overall Agent Calls List for Manager & Admin
   const agentCallsList = useMemo(() => {
     const list = userCallsData?.agents || [];
     if (selectedBranch === 'ALL') return list;
+    const target = selectedBranch.trim().toLowerCase();
     return list.filter(
-      (a) => (a.branch || 'Trichy').toLowerCase() === selectedBranch.toLowerCase(),
+      (a) => (a.branch || '').trim().toLowerCase() === target,
     );
   }, [userCallsData, selectedBranch]);
 
@@ -346,12 +421,13 @@ export const HomeScreen: React.FC = () => {
     }
     if (period === 'Custom' && customDate) {
       const cd = new Date(customDate);
-      const fromStr = cd.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
-      const toStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
-      const days = Math.max(1, Math.ceil((today.getTime() - cd.getTime()) / (24 * 3600 * 1000)));
+      const isToday = cd.toDateString() === today.toDateString();
+      const yesterday = new Date(today.getTime() - 24 * 3600 * 1000);
+      const isYesterday = cd.toDateString() === yesterday.toDateString();
+      const dateStr = cd.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
       return {
-        fromTo: `${fromStr}  →  ${toStr}`,
-        duration: `${days} day(s)`,
+        fromTo: dateStr,
+        duration: isToday ? 'Today' : isYesterday ? 'Yesterday' : 'History',
       };
     }
     const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit', year: 'numeric' });
@@ -361,10 +437,21 @@ export const HomeScreen: React.FC = () => {
     };
   }, [period, customDate]);
 
+  // Leads scoped by branch selection
+  const allBranchFilteredLeads = useMemo(() => {
+    const list = myLeadsData?.leads || [];
+    if (selectedBranch === 'ALL') return list;
+    const target = selectedBranch.trim().toLowerCase();
+    return list.filter((l) => (l.branch || '').trim().toLowerCase() === target);
+  }, [myLeadsData, selectedBranch]);
+
   // ==============================================================
   // REAL DYNAMIC METRICS CALCULATION (ZERO DELAY)
   // ==============================================================
-  const myAssignedLeadsCount = myLeadsData?.total ?? (myLeadsData?.leads?.length || 0);
+  const myAssignedLeadsCount =
+    selectedBranch === 'ALL'
+      ? (myLeadsData?.total ?? (myLeadsData?.leads?.length || 0))
+      : allBranchFilteredLeads.length;
 
   // Calls made and connected (combines local session with backend reports)
   const realLocalActivities = periodCallActivities.filter(
@@ -378,12 +465,16 @@ export const HomeScreen: React.FC = () => {
 
   const callsMade = Math.max(dashboardData?.callsMade ?? 0, localCallsCount);
   const connectedCalls = Math.max(dashboardData?.connectedCalls ?? 0, localConnectedCount);
+  const totalCallDurationSeconds = Math.max(
+    dashboardData?.totalDurationSeconds ?? 0,
+    localTotalDuration,
+  );
   const connectRatePercent = callsMade > 0 ? ((connectedCalls / callsMade) * 100).toFixed(0) + '%' : '0%';
 
   const avgDurationSeconds =
-    connectedCalls > 0 && localTotalDuration > 0
-      ? Math.round(localTotalDuration / connectedCalls)
-      : (dashboardData as any)?.averageDurationSeconds || 0;
+    connectedCalls > 0 && totalCallDurationSeconds > 0
+      ? Math.round(totalCallDurationSeconds / connectedCalls)
+      : Math.max(dashboardData?.averageDurationSeconds ?? 0, 0);
   const avgDurationFormatted = formatSeconds(avgDurationSeconds);
 
   // Dynamic daily call report grouped from real activity history
@@ -401,7 +492,7 @@ export const HomeScreen: React.FC = () => {
     map.set(todayStr, {
       attempted: callsMade,
       connected: connectedCalls,
-      duration: localTotalDuration,
+      duration: totalCallDurationSeconds,
     });
 
     for (const act of allUserActivities) {
@@ -441,7 +532,7 @@ export const HomeScreen: React.FC = () => {
   const endOfToday = startOfToday + 24 * 60 * 60 * 1000 - 1;
 
   const dueTodayFollowUps = useMemo(() => {
-    return (myLeadsData?.leads || []).filter((l) => {
+    return allBranchFilteredLeads.filter((l) => {
       if (isLeadLostOrSuppressed(l)) {
         return false;
       }
@@ -449,7 +540,7 @@ export const HomeScreen: React.FC = () => {
       const t = new Date(l.nextFollowUpAt).getTime();
       return t >= startOfToday && t <= endOfToday;
     });
-  }, [myLeadsData, startOfToday, endOfToday]);
+  }, [allBranchFilteredLeads, startOfToday, endOfToday]);
 
   const callbacksDueTodayCount = Math.max(dashboardData?.followUpsDueToday ?? 0, dueTodayFollowUps.length);
 
@@ -464,7 +555,7 @@ export const HomeScreen: React.FC = () => {
 
   // Immediate queue (top leads ready to call - strictly excludes Not Interested / Closed / Lost)
   const queueLeads = useMemo(() => {
-    const raw = (myLeadsData?.leads || []).filter((l) => !isLeadLostOrSuppressed(l));
+    const raw = allBranchFilteredLeads.filter((l) => !isLeadLostOrSuppressed(l));
     return [...raw].sort((a, b) => {
       // 1. Uncontacted leads (attemptCount 0 and no lastContactedAt) first
       const aCalled = (a.attemptCount && a.attemptCount > 0) || a.lastContactedAt ? 1 : 0;
@@ -479,7 +570,7 @@ export const HomeScreen: React.FC = () => {
       }
       return 0;
     });
-  }, [myLeadsData]);
+  }, [allBranchFilteredLeads]);
 
   // Hero Lead to Call (accounts for skipped leads in current session)
   const heroLead: Lead | null = useMemo(() => {
@@ -495,28 +586,28 @@ export const HomeScreen: React.FC = () => {
 
   // NeoDove 3 Calling Queues (Strictly excludes Customer Lost / Not Interested)
   const newUnattemptedLeads = useMemo(() => {
-    return (myLeadsData?.leads || []).filter(
+    return allBranchFilteredLeads.filter(
       (l) => (!l.attemptCount || l.attemptCount === 0) && !isLeadLostOrSuppressed(l),
     );
-  }, [myLeadsData]);
+  }, [allBranchFilteredLeads]);
 
   const followUpLeads = useMemo(() => {
-    return (myLeadsData?.leads || []).filter(
+    return allBranchFilteredLeads.filter(
       (l) =>
         (l.stage === 'Follow Up' || l.stage === 'Follow-up' || !!l.nextFollowUpAt) &&
         !isLeadLostOrSuppressed(l),
     );
-  }, [myLeadsData]);
+  }, [allBranchFilteredLeads]);
 
   const notConnectedLeads = useMemo(() => {
-    return (myLeadsData?.leads || []).filter(
+    return allBranchFilteredLeads.filter(
       (l) =>
         (l.stage === 'Not connected' ||
           l.stage === 'NOT CONNECTED' ||
           (l.attemptCount && l.attemptCount > 0 && l.stage === 'New')) &&
         !isLeadLostOrSuppressed(l),
     );
-  }, [myLeadsData]);
+  }, [allBranchFilteredLeads]);
 
   const handleStartCallingQueue = (targetQueue: Lead[], queueTitle: string) => {
     if (targetQueue.length === 0) {
@@ -761,62 +852,169 @@ export const HomeScreen: React.FC = () => {
         {/* =========================================================================
             PERFORMANCE SUMMARY — date banner + 2x2 metric grid, unified card
            ========================================================================= */}
-        <View style={styles.summaryCard}>
-          <TouchableOpacity
-            style={styles.summaryDateRow}
-            onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.7}
-          >
-            <Calendar size={13} color={T.color.textMuted} />
-            <Text style={styles.summaryDateText} numberOfLines={1}>
-              {bannerDateInfo.fromTo}
-            </Text>
-            <View style={styles.summaryDurationPill}>
-              <Text style={styles.summaryDurationText}>{bannerDateInfo.duration}</Text>
+        {/* =========================================================================
+            PERFORMANCE SUMMARY — Modern executive dashboard metrics
+           ========================================================================= */}
+        <View style={styles.perfSummaryWrap}>
+          {/* Scope Switcher for Admin / Manager: My Personal Calls vs Team Overview */}
+          {isManagerOrAdmin && (
+            <View style={styles.scopeSwitcherRow}>
+              <TouchableOpacity
+                style={[styles.scopeBtn, callScope === 'MY' && styles.scopeBtnActive]}
+                onPress={() => setCallScope('MY')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.scopeBtnText, callScope === 'MY' && styles.scopeBtnTextActive]}>
+                  My Personal Calls
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.scopeBtn, callScope === 'TEAM' && styles.scopeBtnActive]}
+                onPress={() => setCallScope('TEAM')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.scopeBtnText, callScope === 'TEAM' && styles.scopeBtnTextActive]}>
+                  Team Overview
+                </Text>
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          )}
 
-          <View style={styles.metricGrid}>
-            <View style={styles.metricCell}>
-              <View style={styles.metricTopRow}>
-                <Text style={styles.metricLabel}>Attempted</Text>
-                <Phone size={14} color={T.color.textFaint} />
+          {/* Top Combined Filter Bar: Branch Filter & Date Picker */}
+          <View style={[styles.topControlCard, isWide && styles.topControlCardWide]}>
+            {/* Branch / City Filter Horizontal Scroll */}
+            <View style={styles.branchFilterSection}>
+              <View style={styles.branchHeaderRow}>
+                <View style={styles.branchIconBadge}>
+                  <Building2 size={13} color="#0D9488" strokeWidth={2.2} />
+                </View>
+                <Text style={styles.branchFilterLabel}>Branch</Text>
               </View>
-              <Text style={styles.metricValue}>{callsMade}</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.branchScrollList}
+              >
+                {availableBranches.map((br) => {
+                  const isSelected = selectedBranch === br.value;
+                  return (
+                    <TouchableOpacity
+                      key={br.value}
+                      style={[styles.branchPill, isSelected && styles.branchPillActive]}
+                      onPress={() => setSelectedBranch(br.value)}
+                      activeOpacity={0.7}
+                    >
+                      <MapPin
+                        size={11}
+                        color={isSelected ? '#FFFFFF' : '#64748B'}
+                        strokeWidth={isSelected ? 2.5 : 2}
+                      />
+                      <Text style={[styles.branchPillText, isSelected && styles.branchPillTextActive]}>
+                        {br.label}
+                      </Text>
+                      {isSelected && <View style={styles.activeBranchDot} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
 
-            <View style={styles.metricDividerV} />
-
-            <View style={styles.metricCell}>
-              <View style={styles.metricTopRow}>
-                <Text style={styles.metricLabel}>Connected</Text>
-                <PhoneCall size={14} color={T.color.textFaint} />
+            {/* Date Picker & Range Bar */}
+            <TouchableOpacity
+              style={styles.summaryDateBar}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.summaryDateBarLeft}>
+                <View style={styles.calendarBubble}>
+                  <Calendar size={13} color="#0F9D58" strokeWidth={2.5} />
+                </View>
+                <View>
+                  <Text style={styles.summaryDateBarText}>{bannerDateInfo.fromTo}</Text>
+                  {period === 'Custom' && (
+                    <Text style={styles.summaryDateSubtext}>Tap to pick another date</Text>
+                  )}
+                </View>
               </View>
-              <Text style={[styles.metricValue, { color: T.color.primaryDark }]}>{connectedCalls}</Text>
-            </View>
-
-            <View style={styles.metricDividerV} />
-
-            <View style={styles.metricCell}>
-              <View style={styles.metricTopRow}>
-                <Text style={styles.metricLabel}>Call time</Text>
-                <Clock3 size={14} color={T.color.textFaint} />
+              <View style={styles.summaryDateRightRow}>
+                <View style={[styles.summaryDurationChip, period === 'Custom' && styles.summaryDurationChipCustom]}>
+                  <Text style={[styles.summaryDurationChipText, period === 'Custom' && styles.summaryDurationChipTextCustom]}>
+                    {bannerDateInfo.duration}
+                  </Text>
+                </View>
+                {period === 'Custom' && (
+                  <TouchableOpacity
+                    style={styles.resetDateBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setPeriod('Today');
+                      setCustomDate(null);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.resetDateBtnText}>Today</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-              <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatDurationHoursMinutes(localTotalDuration)}
+            </TouchableOpacity>
+          </View>
+
+          {/* 4 Responsive Metric Cards Grid */}
+          <View style={isWide ? styles.metricGridWide : styles.metricGridMobile}>
+            {/* Card 1: Attempted (Blue Theme) */}
+            <View style={[styles.modernStatCard, styles.statCardBlue, isWide ? { flex: 1 } : styles.modernStatCardMobile]}>
+              <View style={styles.modernStatTop}>
+                <Text style={[styles.modernStatLabel, { color: '#2563EB' }]}>Attempted</Text>
+                <View style={[styles.modernStatIconWrap, { backgroundColor: '#DBEAFE' }]}>
+                  <Phone size={14} color="#2563EB" strokeWidth={2.2} />
+                </View>
+              </View>
+              <Text style={[styles.modernStatVal, { color: '#1D4ED8' }]}>{callsMade}</Text>
+              <Text style={[styles.modernStatSub, { color: '#3B82F6' }]}>
+                {callScope === 'MY' ? 'My calls dialed' : 'Team calls dialed'}
               </Text>
             </View>
 
-            <View style={styles.metricDividerV} />
-
-            <View style={styles.metricCell}>
-              <View style={styles.metricTopRow}>
-                <Text style={styles.metricLabel}>Avg. duration</Text>
-                <Clock size={14} color={T.color.textFaint} />
+            {/* Card 2: Connected (Emerald Green Theme) */}
+            <View style={[styles.modernStatCard, styles.statCardGreen, isWide ? { flex: 1 } : styles.modernStatCardMobile]}>
+              <View style={styles.modernStatTop}>
+                <Text style={[styles.modernStatLabel, { color: '#16A34A' }]}>Connected</Text>
+                <View style={[styles.modernStatIconWrap, { backgroundColor: '#DCFCE7' }]}>
+                  <PhoneCall size={14} color="#16A34A" strokeWidth={2.2} />
+                </View>
               </View>
-              <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
+              <Text style={[styles.modernStatVal, { color: '#15803D' }]}>{connectedCalls}</Text>
+              <Text style={[styles.modernStatSub, { color: '#16A34A' }]}>
+                {callsMade > 0 ? `${Math.round((connectedCalls / callsMade) * 100)}% connect rate` : 'Ready to dial'}
+              </Text>
+            </View>
+
+            {/* Card 3: Call Time (Amber/Gold Theme) */}
+            <View style={[styles.modernStatCard, styles.statCardAmber, isWide ? { flex: 1 } : styles.modernStatCardMobile]}>
+              <View style={styles.modernStatTop}>
+                <Text style={[styles.modernStatLabel, { color: '#D97706' }]}>Call time</Text>
+                <View style={[styles.modernStatIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                  <Clock3 size={14} color="#D97706" strokeWidth={2.2} />
+                </View>
+              </View>
+              <Text style={[styles.modernStatVal, { color: '#B45309' }]} numberOfLines={1}>
+                {formatDurationHoursMinutes(totalCallDurationSeconds)}
+              </Text>
+              <Text style={[styles.modernStatSub, { color: '#D97706' }]}>Active duration</Text>
+            </View>
+
+            {/* Card 4: Avg Duration (Purple/Violet Theme) */}
+            <View style={[styles.modernStatCard, styles.statCardPurple, isWide ? { flex: 1 } : styles.modernStatCardMobile]}>
+              <View style={styles.modernStatTop}>
+                <Text style={[styles.modernStatLabel, { color: '#9333EA' }]}>Avg. duration</Text>
+                <View style={[styles.modernStatIconWrap, { backgroundColor: '#F3E8FF' }]}>
+                  <Clock size={14} color="#9333EA" strokeWidth={2.2} />
+                </View>
+              </View>
+              <Text style={[styles.modernStatVal, { color: '#7E22CE' }]} numberOfLines={1}>
                 {formatAvgDurationMins(avgDurationSeconds)}
               </Text>
+              <Text style={[styles.modernStatSub, { color: '#9333EA' }]}>Per connected call</Text>
             </View>
           </View>
         </View>
@@ -920,18 +1118,26 @@ export const HomeScreen: React.FC = () => {
         ) : null}
 
         {/* 3 NEODOVE QUEUE CARDS */}
+        {/* 3 NEODOVE QUEUE CARDS */}
         {dashboardSubTab === 'QUEUES' && (
           <View>
-            <View style={{ gap: T.space.md, marginBottom: T.space.lg }}>
+            <View style={isWide ? styles.neoQueueCardsGridWide : styles.neoQueueCardsGridMobile}>
               {/* Card 1: New/Un-attempted Leads */}
-              <View style={styles.neoQueueCard}>
+              <View style={[styles.neoQueueCard, isWide && { flex: 1 }]}>
                 <View style={styles.neoQueueCardHeader}>
-                  <Text style={styles.neoQueueCardTitle}>New / un-attempted leads</Text>
-                  <View style={styles.neoQueueCountBadge}>
-                    <Text style={styles.neoQueueCountBadgeText}>{newUnattemptedLeads.length}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={[styles.neoQueueIconBubble, { backgroundColor: '#ECFDF5' }]}>
+                      <Sparkles size={16} color="#0F9D58" strokeWidth={2.2} />
+                    </View>
+                    <View>
+                      <Text style={styles.neoQueueCardTitle}>New leads</Text>
+                      <Text style={styles.neoQueueCardSub}>Haven't been called yet</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.neoQueueCountBadge, { backgroundColor: '#E6F4EA' }]}>
+                    <Text style={[styles.neoQueueCountBadgeText, { color: '#0F9D58' }]}>{newUnattemptedLeads.length}</Text>
                   </View>
                 </View>
-                <Text style={styles.neoQueueCardSub}>Haven't been called yet</Text>
                 <View style={styles.neoQueueActionsRow}>
                   <TouchableOpacity
                     style={styles.neoQueueViewBtn}
@@ -955,14 +1161,21 @@ export const HomeScreen: React.FC = () => {
               </View>
 
               {/* Card 2: Follow-up Leads */}
-              <View style={styles.neoQueueCard}>
+              <View style={[styles.neoQueueCard, isWide && { flex: 1 }]}>
                 <View style={styles.neoQueueCardHeader}>
-                  <Text style={styles.neoQueueCardTitle}>Follow-up leads</Text>
-                  <View style={styles.neoQueueCountBadge}>
-                    <Text style={styles.neoQueueCountBadgeText}>{followUpLeads.length}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={[styles.neoQueueIconBubble, { backgroundColor: '#FFFBEB' }]}>
+                      <CalendarClock size={16} color="#D97706" strokeWidth={2.2} />
+                    </View>
+                    <View>
+                      <Text style={styles.neoQueueCardTitle}>Follow-up</Text>
+                      <Text style={styles.neoQueueCardSub}>Scheduled for callbacks</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.neoQueueCountBadge, { backgroundColor: '#FEF3C7' }]}>
+                    <Text style={[styles.neoQueueCountBadgeText, { color: '#B45309' }]}>{followUpLeads.length}</Text>
                   </View>
                 </View>
-                <Text style={styles.neoQueueCardSub}>Scheduled to be called later</Text>
                 <View style={styles.neoQueueActionsRow}>
                   <TouchableOpacity
                     style={styles.neoQueueViewBtn}
@@ -986,14 +1199,21 @@ export const HomeScreen: React.FC = () => {
               </View>
 
               {/* Card 3: Not Connected Leads */}
-              <View style={styles.neoQueueCard}>
+              <View style={[styles.neoQueueCard, isWide && { flex: 1 }]}>
                 <View style={styles.neoQueueCardHeader}>
-                  <Text style={styles.neoQueueCardTitle}>Not connected leads</Text>
-                  <View style={styles.neoQueueCountBadge}>
-                    <Text style={styles.neoQueueCountBadgeText}>{notConnectedLeads.length}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={[styles.neoQueueIconBubble, { backgroundColor: '#FEF2F2' }]}>
+                      <PhoneOff size={16} color="#DC2626" strokeWidth={2.2} />
+                    </View>
+                    <View>
+                      <Text style={styles.neoQueueCardTitle}>Not connected</Text>
+                      <Text style={styles.neoQueueCardSub}>Needs re-dial attempt</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.neoQueueCountBadge, { backgroundColor: '#FEE2E2' }]}>
+                    <Text style={[styles.neoQueueCountBadgeText, { color: '#DC2626' }]}>{notConnectedLeads.length}</Text>
                   </View>
                 </View>
-                <Text style={styles.neoQueueCardSub}>Not reached on previous attempt</Text>
                 <View style={styles.neoQueueActionsRow}>
                   <TouchableOpacity
                     style={styles.neoQueueViewBtn}
@@ -1022,24 +1242,25 @@ export const HomeScreen: React.FC = () => {
                 {/* Top Tag Bar */}
                 <View style={styles.heroTopRow}>
                   <View style={styles.queueOrderPill}>
-                    <Text style={styles.queueOrderText}>Next in line</Text>
+                    <View style={styles.liveGreenDot} />
+                    <Text style={styles.queueOrderText}>NEXT IN LINE</Text>
                   </View>
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     {heroLeadTemp === 'HOT' ? (
-                      <View style={[styles.tempPill, { backgroundColor: T.color.dangerTint, borderColor: '#FECACA' }]}>
-                        <Flame size={10} color={T.color.danger} fill={T.color.danger} />
-                        <Text style={[styles.tempPillText, { color: T.color.danger }]}>Hot</Text>
+                      <View style={[styles.tempPill, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                        <Flame size={11} color="#EF4444" fill="#EF4444" />
+                        <Text style={[styles.tempPillText, { color: '#EF4444' }]}>Hot</Text>
                       </View>
                     ) : heroLeadTemp === 'COLD' ? (
-                      <View style={[styles.tempPill, { backgroundColor: T.color.infoTint, borderColor: '#BFDBFE' }]}>
-                        <Snowflake size={10} color={T.color.info} />
-                        <Text style={[styles.tempPillText, { color: T.color.info }]}>Cold</Text>
+                      <View style={[styles.tempPill, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                        <Snowflake size={11} color="#3B82F6" />
+                        <Text style={[styles.tempPillText, { color: '#3B82F6' }]}>Cold</Text>
                       </View>
                     ) : (
-                      <View style={[styles.tempPill, { backgroundColor: T.color.warnTint, borderColor: '#FDE68A' }]}>
-                        <Sun size={10} color={T.color.warn} />
-                        <Text style={[styles.tempPillText, { color: T.color.warn }]}>Warm</Text>
+                      <View style={[styles.tempPill, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                        <Sun size={11} color="#F59E0B" />
+                        <Text style={[styles.tempPillText, { color: '#F59E0B' }]}>Warm</Text>
                       </View>
                     )}
 
@@ -1054,11 +1275,18 @@ export const HomeScreen: React.FC = () => {
                   <View style={styles.leadAvatarBox}>
                     <Text style={styles.leadAvatarText}>{heroLeadInitials}</Text>
                   </View>
-                  <View style={{ flex: 1, paddingLeft: 12 }}>
+                  <View style={{ flex: 1, paddingLeft: 14 }}>
                     <Text style={styles.leadNameText} numberOfLines={1}>
                       {heroLead.name}
                     </Text>
-                    <Text style={styles.leadPhoneText}>{formatDisplayPhone(heroLead.phone)}</Text>
+                    <TouchableOpacity
+                      onPress={() => handleDirectDial(heroLead)}
+                      activeOpacity={0.7}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}
+                    >
+                      <Phone size={13} color="#0F9D58" strokeWidth={2.2} />
+                      <Text style={styles.leadPhoneText}>{formatDisplayPhone(heroLead.phone)}</Text>
+                    </TouchableOpacity>
                     <Text style={styles.leadCampaignText} numberOfLines={1}>
                       {heroLeadCampaign} · Attempt #{heroLead.attemptCount || 1}
                     </Text>
@@ -1067,7 +1295,7 @@ export const HomeScreen: React.FC = () => {
 
                 {/* Note / Property Preview */}
                 <View style={styles.notePreviewRow}>
-                  <Clock3 size={12} color={T.color.textMuted} />
+                  <Clock3 size={13} color="#64748B" />
                   <Text style={styles.notePreviewText} numberOfLines={1}>
                     {heroLead.customProperties?.lastRemark ||
                       (heroLead.attemptCount && heroLead.attemptCount > 0
@@ -1089,30 +1317,30 @@ export const HomeScreen: React.FC = () => {
                 {/* Secondary Action Row: WhatsApp, Note, Skip */}
                 <View style={styles.heroActionRow}>
                   <TouchableOpacity
-                    style={styles.heroMiniBtn}
+                    style={styles.heroMiniBtnWhatsApp}
                     onPress={() => handleOpenWhatsApp(heroLead)}
                     activeOpacity={0.8}
                   >
-                    <MessageCircle size={14} color={T.color.primaryDark} strokeWidth={2.5} />
-                    <Text style={[styles.heroMiniBtnText, { color: T.color.primaryDark }]}>WhatsApp</Text>
+                    <MessageCircle size={15} color="#0F9D58" strokeWidth={2.5} />
+                    <Text style={styles.heroMiniBtnWhatsAppText}>WhatsApp</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.heroMiniBtn}
+                    style={styles.heroMiniBtnNote}
                     onPress={() => setSelectedLeadForQuickModal(heroLead)}
                     activeOpacity={0.8}
                   >
-                    <FileEdit size={14} color={T.color.info} strokeWidth={2.5} />
-                    <Text style={[styles.heroMiniBtnText, { color: T.color.info }]}>Note</Text>
+                    <FileEdit size={15} color="#2563EB" strokeWidth={2.5} />
+                    <Text style={styles.heroMiniBtnNoteText}>Note</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.heroMiniBtn}
+                    style={styles.heroMiniBtnSkip}
                     onPress={handleSkipHeroLead}
                     activeOpacity={0.8}
                   >
-                    <SkipForward size={14} color={T.color.textMuted} strokeWidth={2} />
-                    <Text style={[styles.heroMiniBtnText, { color: T.color.textMuted }]}>Skip</Text>
+                    <SkipForward size={15} color="#64748B" strokeWidth={2} />
+                    <Text style={styles.heroMiniBtnSkipText}>Skip</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1161,7 +1389,7 @@ export const HomeScreen: React.FC = () => {
                 >
                   <Clock3 size={12} color={activeTab === 'calls' ? '#FFFFFF' : T.color.textMuted} />
                   <Text style={[styles.tabChipText, activeTab === 'calls' && styles.tabChipTextActive]}>
-                    Today's calls ({periodCallActivities.length})
+                    {period === 'Today' ? "Today's calls" : `${customDateLabel} calls`} ({periodCallActivities.length})
                   </Text>
                 </TouchableOpacity>
 
@@ -1376,13 +1604,13 @@ export const HomeScreen: React.FC = () => {
               <View style={styles.tabContentBox}>
                 {/* Branch Filter Selector */}
                 <View style={styles.branchFilterRow}>
-                  {(['ALL', 'Trichy', 'Pudukkottai'] as const).map((br) => {
-                    const isSelected = selectedBranch === br;
+                  {availableBranches.map((br) => {
+                    const isSelected = selectedBranch === br.value;
                     return (
                       <TouchableOpacity
-                        key={br}
+                        key={br.value}
                         style={[styles.branchFilterChip, isSelected && styles.branchFilterChipActive]}
-                        onPress={() => setSelectedBranch(br)}
+                        onPress={() => setSelectedBranch(br.value)}
                       >
                         <Text
                           style={[
@@ -1390,7 +1618,7 @@ export const HomeScreen: React.FC = () => {
                             isSelected && styles.branchFilterTextActive,
                           ]}
                         >
-                          {br === 'ALL' ? 'All' : br}
+                          {br.label}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1478,6 +1706,8 @@ export const HomeScreen: React.FC = () => {
         title="Filter Dashboard by Date"
         initialDate={customDate || new Date().toISOString()}
         onClose={() => setShowDatePicker(false)}
+        allowPastDates={true}
+        mode="date"
         onConfirm={handleConfirmCustomDate}
       />
 
@@ -1502,7 +1732,10 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: T.space.md,
     paddingBottom: 90,
-    backgroundColor: T.color.bg,
+    backgroundColor: '#F8FAFC',
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
   },
   headerAddBtn: {
     flexDirection: 'row',
@@ -1613,71 +1846,274 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Unified performance summary card (date banner + metric grid)
-  summaryCard: {
-    backgroundColor: T.color.surface,
-    borderRadius: T.radius.lg,
-    borderWidth: 1,
-    borderColor: T.color.border,
-    padding: T.space.md,
-    marginBottom: T.space.md,
-    ...T.shadowCard,
+  // Scope Switcher (My Calls vs Team Overview)
+  scopeSwitcherRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 10,
+    gap: 4,
   },
-  summaryDateRow: {
+  scopeBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scopeBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  scopeBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  scopeBtnTextActive: {
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+
+  // Modern Performance Summary & Metric Grid
+  perfSummaryWrap: {
+    marginBottom: T.space.md + 2,
+  },
+  topControlCard: {
+    marginBottom: 12,
+    gap: 8,
+  },
+  topControlCardWide: {
+    marginBottom: 12,
+  },
+  branchFilterSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  branchHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginRight: 8,
+    paddingRight: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+  },
+  branchIconBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: '#CCFBF1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  branchFilterLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  branchScrollList: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingBottom: T.space.md,
-    marginBottom: T.space.md,
-    borderBottomWidth: 1,
-    borderBottomColor: T.color.border,
+    paddingRight: 10,
   },
-  summaryDateText: {
-    flex: 1,
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: T.color.text,
-  },
-  summaryDurationPill: {
-    backgroundColor: T.color.surfaceSunken,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: T.radius.sm,
-  },
-  summaryDurationText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: T.color.textMuted,
-  },
-  metricGrid: {
+  branchPill: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 5.5,
+    borderRadius: 20,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  metricCell: {
-    flex: 1,
-    minHeight: 56,
-    justifyContent: 'space-between',
+  branchPillActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
-  metricDividerV: {
-    width: 1,
-    backgroundColor: T.color.border,
-    marginHorizontal: T.space.sm,
+  branchPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
   },
-  metricTopRow: {
+  branchPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  activeBranchDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#10B981',
+  },
+  summaryDateBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  metricLabel: {
+  summaryDateBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  summaryDateSubtext: {
     fontSize: 10.5,
+    color: '#0F9D58',
     fontWeight: '600',
-    color: T.color.textMuted,
+    marginTop: 1,
   },
-  metricValue: {
-    fontSize: 17,
+  summaryDateRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  calendarBubble: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryDateBarText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  summaryDurationChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  summaryDurationChipCustom: {
+    backgroundColor: '#E6F4EA',
+  },
+  summaryDurationChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  summaryDurationChipTextCustom: {
+    color: '#0F9D58',
+  },
+  resetDateBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  resetDateBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  metricGridWide: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  metricGridMobile: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 12,
+  },
+  modernStatCard: {
+    borderRadius: 14,
+    borderWidth: 1.5,
+    padding: 13,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  modernStatCardMobile: {
+    width: '48.5%',
+  },
+  statCardBlue: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  statCardGreen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  statCardAmber: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  statCardPurple: {
+    backgroundColor: '#FAF5FF',
+    borderColor: '#E9D5FF',
+  },
+  modernStatTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  modernStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  modernStatIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modernStatVal: {
+    fontSize: 19,
     fontWeight: '800',
-    color: T.color.text,
-    marginTop: 6,
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  modernStatSub: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
 
   // Segmented sub-tabs (Queues / Login report / Call report)
@@ -2197,77 +2633,154 @@ const styles = StyleSheet.create({
     color: T.color.textMuted,
   },
 
-  // NeoDove Queue Cards — same radius/padding/shadow as every other card
-  // in the stack so the screen reads as one consistent system.
+  // NeoDove Queue Cards — 3-column deck on desktop, responsive stack on mobile
+  neoQueueCardsGridWide: {
+    flexDirection: 'row',
+    gap: 14,
+    marginBottom: T.space.lg,
+  },
+  neoQueueCardsGridMobile: {
+    gap: 12,
+    marginBottom: T.space.lg,
+  },
   neoQueueCard: {
-    backgroundColor: T.color.surface,
-    borderRadius: T.radius.md,
-    padding: T.space.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
     borderWidth: 1,
-    borderColor: T.color.border,
-    ...T.shadowCard,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+    justifyContent: 'space-between',
   },
   neoQueueCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  neoQueueIconBubble: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   neoQueueCardTitle: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '700',
-    color: T.color.text,
+    color: '#0F172A',
   },
   neoQueueCountBadge: {
-    backgroundColor: T.color.primaryTint,
-    minWidth: 30,
-    alignItems: 'center',
     paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: T.radius.sm,
+    borderRadius: 8,
+    minWidth: 32,
+    alignItems: 'center',
   },
   neoQueueCountBadgeText: {
-    color: T.color.primaryDark,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   neoQueueCardSub: {
     fontSize: 11.5,
-    color: T.color.textMuted,
-    marginTop: 3,
-    marginBottom: T.space.md,
+    color: '#64748B',
+    marginTop: 2,
   },
   neoQueueActionsRow: {
     flexDirection: 'row',
-    gap: T.space.sm,
+    gap: 10,
+    marginTop: 6,
   },
   neoQueueViewBtn: {
     flex: 1,
-    height: 40,
-    borderRadius: T.radius.sm,
+    height: 38,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: T.color.borderStrong,
-    backgroundColor: T.color.surface,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
   },
   neoQueueViewBtnText: {
-    color: T.color.text,
+    color: '#334155',
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: 12.5,
   },
   neoQueueCallBtn: {
     flex: 1.4,
-    height: 40,
+    height: 38,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderRadius: T.radius.sm,
-    backgroundColor: T.color.primary,
+    borderRadius: 10,
+    backgroundColor: '#0F9D58',
+    shadowColor: '#0F9D58',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   neoQueueCallBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12.5,
+  },
+
+  // Hero Card Action Buttons
+  heroMiniBtnWhatsApp: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 10,
+  },
+  heroMiniBtnWhatsAppText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F9D58',
+  },
+  heroMiniBtnNote: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 10,
+  },
+  heroMiniBtnNoteText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  heroMiniBtnSkip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+  },
+  heroMiniBtnSkipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
   },
 });

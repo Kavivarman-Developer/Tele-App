@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Platform,
   StatusBar as RNStatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
   PanelLeftClose,
@@ -21,6 +21,7 @@ import {
   Bell,
 } from 'lucide-react-native';
 
+import { useSafeTopPadding } from '../utils/safeArea';
 import { useSidebarStore } from '../store/sidebarStore';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -69,6 +70,8 @@ export const CrmShell: React.FC<CrmShellProps> = ({
   const unreadNotifications = useNotificationStore((s) => s.unreadCount);
   const [showNotifications, setShowNotifications] = useState(false);
 
+  const safeTopPadding = useSafeTopPadding(isWide);
+
   const handleToggle = () => {
     if (isWide) {
       toggleCollapse();
@@ -78,8 +81,8 @@ export const CrmShell: React.FC<CrmShellProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.shellContainer} edges={['top']}>
-      <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+    <View style={[styles.shellContainer, { paddingTop: safeTopPadding }]}>
+      <RNStatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
       <View style={styles.shellLayout}>
         {/* Persistent sidebar for wide screen/web */}
         {isWide && (
@@ -210,7 +213,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
         visible={showNotifications}
         onClose={() => setShowNotifications(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -218,7 +221,6 @@ const styles = StyleSheet.create({
   shellContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'android' ? 6 : 0,
   },
   shellLayout: {
     flex: 1,
