@@ -1,0 +1,57 @@
+[
+  {
+    "_id": "6accc7206e248ede330050a8",
+    "name": "Trichy",
+    "code": "TRZ",
+    "address": "Trichy Main Office",
+    "isActive": true,
+    "createdBy": null,
+    "__v": 0,
+    "createdAt": "2026-10-12T11:40:16.396Z",
+    "updatedAt": "2026-10-12T11:40:16.396Z"
+  },
+  {
+    "_id": "6accc7206e248ede330050a9",
+    "name": "Pudukkottai",
+    "code": "PDK",
+    "address": "Pudukkottai Branch Office",
+    "isActive": true,
+    "createdBy": null,
+    "__v": 0,
+    "createdAt": "2026-10-12T11:40:16.397Z",
+    "updatedAt": "2026-10-12T11:40:16.397Z"
+  },
+  {
+    "_id": "6accc7206e248ede330050aa",
+    "name": "Chennai",
+    "code": "MAA",
+    "address": "Chennai Regional Office",
+    "isActive": true,
+    "createdBy": null,
+    "__v": 0,
+    "createdAt": "2026-10-12T11:40:16.397Z",
+    "updatedAt": "2026-10-12T11:40:16.397Z"
+  },
+  {
+    "_id": "6accc7206e248ede330050ab",
+    "name": "Madurai",
+    "code": "IXM",
+    "address": "Madurai Branch Office",
+    "isActive": true,
+    "createdBy": null,
+    "__v": 0,
+    "createdAt": "2026-10-12T11:40:16.397Z",
+    "updatedAt": "2026-10-12T11:40:16.397Z"
+  },
+  {
+    "_id": "6accc9c76e248ede33005422",
+    "name": "Coimbatore",
+    "code": "",
+    "address": "",
+    "isActive": true,
+    "createdBy": "6ac61d0b08167881d5c1c7e5",
+    "createdAt": "2026-10-12T11:51:35.160Z",
+    "updatedAt": "2026-10-12T11:51:35.160Z",
+    "__v": 0
+  }
+]

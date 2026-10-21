@@ -1,0 +1,141 @@
+[
+  {
+    "_id": "6ac62346e928499dc876360a",
+    "reason": "CALL_NOT_COMPLETED",
+    "enabled": true,
+    "steps": [
+      {
+        "delayMinutes": 60
+      },
+      {
+        "delayMinutes": 1440
+      }
+    ],
+    "__v": 0,
+    "createdAt": "2026-10-07T10:47:34.390Z",
+    "updatedAt": "2026-10-07T10:47:34.390Z"
+  },
+  {
+    "_id": "6ac62346e928499dc876360b",
+    "reason": "OTHER",
+    "enabled": true,
+    "steps": [
+      {
+        "delayMinutes": 60
+      },
+      {
+        "delayMinutes": 1440
+      }
+    ],
+    "__v": 0,
+    "createdAt": "2026-10-07T10:47:34.390Z",
+    "updatedAt": "2026-10-07T10:47:34.390Z"
+  },
+  {
+    "_id": "6ac62346e928499dc876360e",
+    "reason": "NUMBER_NOT_IN_USE",
+    "enabled": false,
+    "steps": [],
+    "__v": 0,
+    "createdAt": "2026-10-07T10:47:34.390Z",
+    "updatedAt": "2026-10-07T10:47:34.390Z"
+  },
+  {
+    "_id": "6ac62346e928499dc876360c",
+    "reason": "INVALID_NUMBER",
+    "enabled": false,
+    "steps": [],
+    "__v": 0,
+    "createdAt": "2026-10-07T10:47:34.390Z",
+    "updatedAt": "2026-10-07T10:47:34.390Z"
+  },
+  {
+    "_id": "6ac62346e928499dc8763605",
+    "reason": "DID_NOT_PICK",
+    "enabled": true,
+    "steps": [
+      {
+        "delayMinutes": 60
+      },
+      {
+        "delayMinutes": 1440
+      }
+    ],
+    "__v": 0,
+    "createdAt": "2026-10-07T10:47:34.389Z",
+    "updatedAt": "2026-10-09T10:57:05.443Z"
+  },
+  {
+    "_id": "6ac62346e928499dc876360d",
+    "reason": "INCOMING_NOT_AVAILABLE",
+    "enabled": false,
+    "steps": [],
+    "__v": 0,
+    "createdAt": "2026-10-07T10:47:34.390Z",
+    "updatedAt": "2026-10-07T10:47:34.390Z"
+  },
+  {
+    "_id": "6ac62346e928499dc8763607",
+    "reason": "USER_DISCONNECTED",
+    "enabled": true,
+    "steps": [
+      {
+        "delayMinutes": 60
+      },
+      {
+        "delayMinutes": 1440
+      }
+    ],
+    "__v": 0,
+    "createdAt": "2026-10-07T10:47:34.390Z",
+    "updatedAt": "2026-10-07T10:47:34.390Z"
+  },
+  {
+    "_id": "6ac62346e928499dc8763606",
+    "reason": "BUSY",
+    "enabled": true,
+    "steps": [
+      {
+        "delayMinutes": 30
+      },
+      {
+        "delayMinutes": 120
+      }
+    ],
+    "__v": 1,
+    "createdAt": "2026-10-07T10:47:34.390Z",
+    "updatedAt": "2026-10-07T10:47:34.559Z"
+  },
+  {
+    "_id": "6ac62346e928499dc8763608",
+    "reason": "SWITCHED_OFF",
+    "enabled": true,
+    "steps": [
+      {
+        "delayMinutes": 60
+      },
+      {
+        "delayMinutes": 1440
+      }
+    ],
+    "__v": 0,
+    "createdAt": "2026-10-07T10:47:34.390Z",
+    "updatedAt": "2026-10-07T10:47:34.390Z"
+  },
+  {
+    "_id": "6ac62346e928499dc8763609",
+    "reason": "OUT_OF_COVERAGE",
+    "enabled": true,
+    "steps": [
+      {
+        "delayMinutes": 60
+      },
+      {
+        "delayMinutes": 1440
+      }
+    ],
+    "__v": 0,
+    "createdAt": "2026-10-07T10:47:34.390Z",
+    "updatedAt": "2026-10-07T10:47:34.390Z"
+  }
+]
