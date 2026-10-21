@@ -13,6 +13,8 @@ export interface DashboardReportData {
   callsMade: number;
   connectedCalls: number;
   connectRate: number;
+  totalDurationSeconds: number;
+  averageDurationSeconds: number;
   leadsBySource: Array<{ source: string; count: number }>;
   leadsByStage: Array<{ stage: string; count: number }>;
   followUpsDueToday: number;
@@ -123,6 +125,31 @@ export class ReportService {
       }
     }
 
+    // Branch filter
+    const effectiveBranch =
+      query.branch && query.branch !== 'ALL'
+        ? query.branch.trim()
+        : requester.role === 'MANAGER' && requester.branch
+        ? requester.branch.trim()
+        : undefined;
+
+    if (effectiveBranch && effectiveBranch !== 'ALL') {
+      const branchRegex = new RegExp(`^${effectiveBranch}$`, 'i');
+      const { User } = await import('../models/user.model');
+      const branchUsers = await User.find({ branch: branchRegex }, '_id');
+      const branchUserIds = branchUsers.map((u) => u._id);
+
+      leadMatch.$and = (leadMatch.$and as Array<Record<string, unknown>>) || [];
+      (leadMatch.$and as Array<Record<string, unknown>>).push({
+        $or: [{ branch: branchRegex }, { assignedTo: { $in: branchUserIds } }],
+      });
+
+      activityMatch.$and = (activityMatch.$and as Array<Record<string, unknown>>) || [];
+      (activityMatch.$and as Array<Record<string, unknown>>).push({
+        $or: [{ branch: branchRegex }, { userId: { $in: branchUserIds } }],
+      });
+    }
+
     return { leadMatch, activityMatch };
   }
 
@@ -179,12 +206,23 @@ export class ReportService {
       Activity.aggregate<{
         callsMade: Array<{ count: number }>;
         connectedCalls: Array<{ count: number }>;
+        duration: Array<{ totalDuration: number; avgDuration: number }>;
       }>([
         { $match: activityMatch },
         {
           $facet: {
             callsMade: [{ $count: 'count' }],
             connectedCalls: [{ $match: { connected: true } }, { $count: 'count' }],
+            duration: [
+              { $match: { connected: true } },
+              {
+                $group: {
+                  _id: null,
+                  totalDuration: { $sum: '$durationSeconds' },
+                  avgDuration: { $avg: '$durationSeconds' },
+                },
+              },
+            ],
           },
         },
       ]),
@@ -200,6 +238,8 @@ export class ReportService {
     const callsMade = a.callsMade?.[0]?.count || 0;
     const connectedCalls = a.connectedCalls?.[0]?.count || 0;
     const connectRate = callsMade > 0 ? Number(((connectedCalls / callsMade) * 100).toFixed(1)) : 0;
+    const totalDurationSeconds = a.duration?.[0]?.totalDuration || 0;
+    const averageDurationSeconds = Math.round(a.duration?.[0]?.avgDuration || 0);
 
     const leadsBySource = (l.bySource || []).map((s) => ({
       source: s._id || 'Unknown',
@@ -221,6 +261,8 @@ export class ReportService {
       callsMade,
       connectedCalls,
       connectRate,
+      totalDurationSeconds,
+      averageDurationSeconds,
       leadsBySource,
       leadsByStage,
       followUpsDueToday,
@@ -273,9 +315,16 @@ export class ReportService {
     ]);
 
     // Also include all active AGENT users across branches even if they made 0 calls in this date filter
+    const effectiveBranchForAgents =
+      query.branch && query.branch !== 'ALL'
+        ? query.branch.trim()
+        : requester.role === 'MANAGER' && requester.branch
+        ? requester.branch.trim()
+        : undefined;
+
     const agentFilter: Record<string, unknown> = { role: 'AGENT', isActive: true };
-    if (requester.role === 'MANAGER' && requester.branch) {
-      agentFilter.branch = requester.branch;
+    if (effectiveBranchForAgents && effectiveBranchForAgents !== 'ALL') {
+      agentFilter.branch = new RegExp(`^${effectiveBranchForAgents}$`, 'i');
     }
     const allAgents = await (await import('../models/user.model')).User.find(agentFilter, '_id name email branch');
 
@@ -296,7 +345,16 @@ export class ReportService {
       }
     }
 
-    return stats || [];
+    const finalStats =
+      effectiveBranchForAgents && effectiveBranchForAgents !== 'ALL'
+        ? stats.filter(
+            (s) =>
+              s.branch &&
+              s.branch.toLowerCase() === effectiveBranchForAgents.toLowerCase(),
+          )
+        : stats;
+
+    return finalStats || [];
   }
 
   public static async getDispositions(

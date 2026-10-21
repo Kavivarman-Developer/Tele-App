@@ -245,4 +245,22 @@ export class LeadController {
       next(error);
     }
   }
+
+  public static async updateLead(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401);
+      }
+      const { id } = req.params;
+      const { name, phone, email } = req.body;
+      const lead = await LeadService.updateLead(id, { name, phone, email });
+      res.status(200).json({ status: 'ok', lead });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

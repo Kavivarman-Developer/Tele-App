@@ -1,0 +1,11 @@
+[
+  {
+    "_id": "6ac622a154a38431e6badc17",
+    "allowDisposeWithoutFollowUp": true,
+    "followUpMandatoryForNotConnected": true,
+    "createdAt": "2026-10-07T10:44:49.630Z",
+    "updatedAt": "2026-10-09T10:32:45.214Z",
+    "__v": 0,
+    "reassignAfterHours": 24
+  }
+]

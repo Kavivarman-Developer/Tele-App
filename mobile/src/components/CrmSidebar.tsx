@@ -9,6 +9,7 @@ import {
   Dimensions,
   Platform,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -35,6 +36,7 @@ import {
   UserCheck,
 } from 'lucide-react-native';
 
+import { useSafeTopPadding } from '../utils/safeArea';
 import { useSidebarStore } from '../store/sidebarStore';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -62,6 +64,7 @@ export const CrmSidebarContent: React.FC<{
   const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   const handleNav = (route: string, action?: () => void) => {
+    useSidebarStore.getState().closeDrawer();
     if (action) {
       onNavigate?.();
       setTimeout(() => {
@@ -76,9 +79,6 @@ export const CrmSidebarContent: React.FC<{
     setTimeout(() => {
       try {
         const TAB_ROUTES = ['Home', 'MyLeads', 'FollowUps', 'CampaignsHub', 'Profile'];
-        if (isManagerOrAdmin) {
-          TAB_ROUTES.push('Dashboard');
-        }
 
         if (TAB_ROUTES.includes(route)) {
           navigation.navigate('Main', { screen: route });
@@ -93,7 +93,7 @@ export const CrmSidebarContent: React.FC<{
           console.error('Sidebar navigation error:', innerErr);
         }
       }
-    }, 120);
+    }, 80);
   };
 
   const roleLabel = user?.branch
@@ -111,7 +111,7 @@ export const CrmSidebarContent: React.FC<{
     { name: 'MyTasks', route: 'FollowUps', label: 'My Tasks', icon: CalendarCheck2, badge: unreadCount > 0 ? unreadCount : undefined },
     {
       name: 'MyReport',
-      route: isManagerOrAdmin ? 'Dashboard' : 'AgentReports',
+      route: 'AgentReports',
       label: 'My Report',
       icon: BarChart2,
     },
@@ -419,6 +419,15 @@ export const CrmSidebarContent: React.FC<{
 
 export const CrmSidebarModalDrawer: React.FC = () => {
   const { isOpenMobileDrawer, closeDrawer } = useSidebarStore();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 860;
+  const safeTopPadding = useSafeTopPadding(false);
+
+  // On wide screens (desktop web, tablets >= 860px), the sidebar is ALWAYS
+  // rendered persistently on the left. The mobile modal drawer must NEVER open or dim the desktop screen.
+  if (isWide || !isOpenMobileDrawer) {
+    return null;
+  }
 
   return (
     <Modal
@@ -433,7 +442,7 @@ export const CrmSidebarModalDrawer: React.FC = () => {
           activeOpacity={1}
           onPress={closeDrawer}
         />
-        <View style={styles.drawerSheet}>
+        <View style={[styles.drawerSheet, { paddingTop: safeTopPadding }]}>
           <CrmSidebarContent collapsed={false} onNavigate={closeDrawer} showCloseButton />
         </View>
       </View>

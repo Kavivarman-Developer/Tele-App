@@ -34,4 +34,20 @@ export class ActivityController {
       next(error);
     }
   }
+
+  public static async getUserActivities(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401);
+      }
+      const activities = await ActivityService.getUserActivities(req.user, req.query as any);
+      res.status(200).json({ activities });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

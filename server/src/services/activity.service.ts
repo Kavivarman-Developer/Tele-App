@@ -315,6 +315,89 @@ export class ActivityService {
     return deduplicated;
   }
 
+  public static async getUserActivities(
+    requester: IUserDoc,
+    query: {
+      userId?: string;
+      from?: string;
+      to?: string;
+      stage?: string;
+      connected?: string;
+      limit?: string | number;
+    },
+  ) {
+    const filter: Record<string, unknown> = { type: 'CALL' };
+
+    // If requester is an AGENT, strictly scope to their own userId
+    if (requester.role === 'AGENT') {
+      filter.userId = requester._id;
+    } else if (query.userId) {
+      if (Types.ObjectId.isValid(query.userId)) {
+        filter.userId = new Types.ObjectId(query.userId);
+      }
+    } else if (requester.role === 'MANAGER' && requester.branch) {
+      filter.branch = new RegExp(`^${requester.branch.trim()}$`, 'i');
+    }
+
+    if (query.from || query.to) {
+      const dateRange: Record<string, Date> = {};
+      if (query.from) dateRange.$gte = new Date(query.from);
+      if (query.to) dateRange.$lte = new Date(query.to);
+      filter.createdAt = dateRange;
+    }
+
+    if (query.stage && query.stage !== 'ALL') {
+      filter.stage = new RegExp(query.stage.trim(), 'i');
+    }
+
+    if (query.connected !== undefined && query.connected !== '') {
+      filter.connected = query.connected === 'true';
+    }
+
+    const limitNum = query.limit ? Math.min(Number(query.limit) || 500, 1000) : 500;
+
+    const activities = await Activity.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limitNum)
+      .populate('leadId', 'name phone temperature tag stage')
+      .populate('userId', 'name email branch')
+      .lean();
+
+    return activities.map((act: any) => {
+      const leadObj = act.leadId && typeof act.leadId === 'object' ? act.leadId : null;
+      const userObj = act.userId && typeof act.userId === 'object' ? act.userId : null;
+
+      const customerName =
+        leadObj?.name ||
+        (act.phone ? `Customer (${act.phone})` : 'Lead Contact');
+
+      const phone = act.phone || leadObj?.phone || '';
+      const temperature = act.tag || leadObj?.temperature || leadObj?.tag || 'WARM';
+
+      return {
+        _id: act._id.toString(),
+        leadId: leadObj?._id?.toString() || (act.leadId ? act.leadId.toString() : ''),
+        campaignId: act.campaignId ? act.campaignId.toString() : '',
+        userId: userObj?._id?.toString() || (act.userId ? act.userId.toString() : requester._id.toString()),
+        agentName: userObj?.name || requester.name,
+        customerName,
+        phone,
+        type: act.type,
+        connected: Boolean(act.connected),
+        notConnectedReason: act.notConnectedReason || null,
+        stage: act.stage || 'New',
+        tag: temperature,
+        temperature,
+        remark: act.remark || '',
+        followUpAt: act.followUpAt ? new Date(act.followUpAt).toISOString() : null,
+        durationSeconds: act.durationSeconds || 0,
+        branch: act.branch || userObj?.branch || null,
+        createdAt: act.createdAt ? new Date(act.createdAt).toISOString() : new Date().toISOString(),
+        updatedAt: act.updatedAt ? new Date(act.updatedAt).toISOString() : new Date().toISOString(),
+      };
+    });
+  }
+
   public static async getBranchCallStats(branchName?: string) {
     const match: Record<string, unknown> = { type: 'CALL' };
     if (branchName && branchName !== 'ALL') {

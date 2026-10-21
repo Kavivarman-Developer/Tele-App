@@ -35,6 +35,7 @@ import {
 } from 'lucide-react-native';
 
 import { fetchMyLeads, disposeLead } from '../api/leadApi';
+import { notificationService } from '../services/notification.service';
 import { Lead, RootStackParamList } from '../types';
 import { colors, borderRadius, shadows } from '../theme';
 import { useAuthStore } from '../store/authStore';
@@ -163,6 +164,10 @@ export const FollowUpsScreen: React.FC = () => {
               followUpAt: nextTime,
               durationSeconds: 0,
             });
+            notificationService.scheduleFollowUpReminder(
+              { _id: item._id, name: item.name, phone: item.phone } as any,
+              nextTime,
+            );
             refetch();
             toast.success(`Rescheduled ${item.name} for 2 hours later`, 'Snoozed');
           },
@@ -195,6 +200,10 @@ export const FollowUpsScreen: React.FC = () => {
               followUpAt: nextTime,
               durationSeconds: 0,
             });
+            notificationService.scheduleFollowUpReminder(
+              { _id: item._id, name: item.name, phone: item.phone } as any,
+              nextTime,
+            );
             refetch();
             toast.success(`Rescheduled ${item.name} for Tomorrow 10 AM`, 'Snoozed');
           },
@@ -206,7 +215,7 @@ export const FollowUpsScreen: React.FC = () => {
   // Real backend query for follow-ups
   const { data: realFollowupsData, refetch, isRefetching } = useQuery({
     queryKey: ['followUps'],
-    queryFn: () => fetchMyLeads({ type: 'FOLLOW_UP', limit: 100 }),
+    queryFn: () => fetchMyLeads({ type: 'FOLLOW_UP', limit: 5000 }),
   });
 
   // Extract real follow-ups from backend leads and local follow-ups

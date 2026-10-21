@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Activity, User } from '../types';
 import { storage } from '../utils/storage';
+import { fetchUserActivities } from '../api/leadApi';
 
 const HISTORY_STORAGE_KEY = 'tele_crm_lead_history_v3';
 
@@ -51,6 +52,7 @@ interface LeadHistoryStore {
       notConnectedReason?: any;
     },
   ) => Activity;
+  updateLeadName: (leadId: string, newName: string) => void;
 }
 
 export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
@@ -90,6 +92,42 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       } else {
         set({ historyMap: {}, isLoaded: true });
       }
+
+      // Background sync with MongoDB server activities
+      fetchUserActivities()
+        .then((serverActs) => {
+          if (serverActs && serverActs.length > 0) {
+            const currentMap = { ...get().historyMap };
+            let hasNew = false;
+
+            for (const act of serverActs) {
+              const leadKey = act.leadId || `lead-${act._id}`;
+              const normPhone = normalizePhone(act.phone);
+
+              // 1. Merge into leadKey list
+              const existingLeadList = currentMap[leadKey] || [];
+              if (!existingLeadList.some((e) => e._id === act._id)) {
+                currentMap[leadKey] = [act, ...existingLeadList];
+                hasNew = true;
+              }
+
+              // 2. Merge into phone list
+              if (normPhone) {
+                const existingPhoneList = currentMap[normPhone] || [];
+                if (!existingPhoneList.some((e) => e._id === act._id)) {
+                  currentMap[normPhone] = [act, ...existingPhoneList];
+                  hasNew = true;
+                }
+              }
+            }
+
+            if (hasNew) {
+              set({ historyMap: currentMap });
+              storage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(currentMap)).catch(() => {});
+            }
+          }
+        })
+        .catch(() => {});
     } catch {
       set({ historyMap: {}, isLoaded: true });
     }
@@ -316,5 +354,25 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
     storage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedMap)).catch(() => {});
 
     return newActivity;
+  },
+
+  updateLeadName: (leadId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    const currentMap = { ...get().historyMap };
+    let changed = false;
+    for (const key of Object.keys(currentMap)) {
+      currentMap[key] = currentMap[key].map((act) => {
+        if (act.leadId === leadId || key === leadId) {
+          changed = true;
+          return { ...act, customerName: trimmed };
+        }
+        return act;
+      });
+    }
+    if (changed) {
+      set({ historyMap: currentMap });
+      storage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(currentMap)).catch(() => {});
+    }
   },
 }));
