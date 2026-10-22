@@ -1,4 +1,5 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
+import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -15,7 +16,11 @@ app.set('trust proxy', 1);
 
 // Security and utility middlewares
 app.use(compressionMiddleware);
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -23,6 +28,26 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
+
+// Public static assets & pages (Landing page, Privacy Policy, Terms)
+const publicDir = path.join(__dirname, '../public');
+app.use(express.static(publicDir));
+
+app.get('/privacy', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'privacy.html'));
+});
+
+app.get('/terms', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'terms.html'));
+});
+
+app.get('/landing', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'landing.html'));
+});
+
+app.get('/about', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'landing.html'));
+});
 
 // Apply API rate limiter to protect against abuse and DDOS
 app.use('/api', apiLimiter);
