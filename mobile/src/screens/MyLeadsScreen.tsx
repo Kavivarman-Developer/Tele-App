@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
+  FlatList,
   TextInput,
   StyleSheet,
   ActivityIndicator,
@@ -14,6 +15,7 @@ import {
   AppStateStatus,
   useWindowDimensions,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSidebarStore } from '../store/sidebarStore';
@@ -46,10 +48,23 @@ import { useCampaignStore } from '../store/campaignStore';
 import { CrmShell } from '../components/CrmShell';
 import { LeadSummaryModal } from '../components/LeadSummaryModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { callService } from '../services/call.service';
 import { getDialerTelUrl, formatDisplayPhone, normalizePhoneDigits, isLeadLostOrSuppressed } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
 import { downloadOrShareCsv, convertLeadsToCsv } from '../utils/csvDownloader';
+
+// Helper to get safe initials from lead name (Zero crash)
+const getInitials = (name?: string): string => {
+  if (!name) return 'LD';
+  const clean = name.trim();
+  if (!clean) return 'LD';
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  }
+  return (clean.slice(0, 2) || 'LD').toUpperCase();
+};
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -100,7 +115,122 @@ const T = {
   },
 };
 
-export const MyLeadsScreen: React.FC = () => {
+const MobileLeadCard = React.memo<{
+  item: ScreenshotLead;
+  onDirectCall: (phone: string, name?: string, leadId?: string, status?: string) => void;
+  onOpenWhatsApp: (item: ScreenshotLead) => void;
+  onOpenLead: (item: ScreenshotLead) => void;
+  renderPriorityBadge: (p: ScreenshotLead['priority']) => React.ReactNode;
+  renderStatusBadge: (s: ScreenshotLead['status']) => React.ReactNode;
+}>(({
+  item,
+  onDirectCall,
+  onOpenWhatsApp,
+  onOpenLead,
+  renderPriorityBadge,
+  renderStatusBadge,
+}) => {
+  const initials = useMemo(() => getInitials(item.name), [item.name]);
+
+  return (
+    <View style={styles.mobileLeadCard}>
+      {/* Header Row: Avatar, Name & Phone, Badges */}
+      <View style={styles.cardHeaderRow}>
+        <View style={styles.avatarCircleLg}>
+          <Text style={styles.avatarTextLg}>{initials}</Text>
+        </View>
+
+        <View style={styles.cardLeadInfo}>
+          <Text style={styles.cardLeadName} numberOfLines={1}>
+            {item.name || 'Lead Contact'}
+          </Text>
+          <TouchableOpacity
+            onPress={() => onDirectCall(item.phone, item.name, item._id, item.status)}
+            activeOpacity={0.7}
+            style={styles.cardPhoneTouch}
+          >
+            <Phone size={12} color={T.color.primaryDark} strokeWidth={2} />
+            <Text style={styles.cardPhoneText}>{item.phone}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Badges on Right: Priority on top, Status below */}
+        <View style={styles.cardBadgesCol}>
+          {renderPriorityBadge(item.priority)}
+          <View style={{ marginTop: 4 }}>
+            {renderStatusBadge(item.status)}
+          </View>
+        </View>
+      </View>
+
+      {/* Metadata Row: Campaign, Attempts, Last Contact */}
+      <View style={styles.cardMetaRow}>
+        <View style={styles.cardCampaignBadge}>
+          <Text style={styles.cardCampaignBadgeText} numberOfLines={1}>
+            {item.campaignName || 'General'}
+          </Text>
+        </View>
+
+        <Text style={styles.cardMetaDot}>•</Text>
+
+        <Text style={styles.cardMetaText}>
+          {item.attempts} {item.attempts === 1 ? 'attempt' : 'attempts'}
+        </Text>
+
+        <Text style={styles.cardMetaDot}>•</Text>
+
+        <Text style={styles.cardMetaText}>
+          {item.lastContact || 'Just now'}
+        </Text>
+      </View>
+
+      {/* Assigned Agent Row */}
+      {item.assignedAgent ? (
+        <View style={styles.cardAgentRow}>
+          <Users size={12} color={T.color.textFaint} />
+          <Text style={styles.cardAgentText} numberOfLines={1}>
+            {item.assignedAgent}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Action Buttons Row */}
+      <View style={styles.cardActionRow}>
+        {/* Call Button */}
+        <TouchableOpacity
+          style={styles.cardCallBtn}
+          onPress={() => onDirectCall(item.phone, item.name, item._id, item.status)}
+          activeOpacity={0.8}
+        >
+          <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={styles.cardCallBtnText} numberOfLines={1}>Call</Text>
+        </TouchableOpacity>
+
+        {/* WhatsApp Button */}
+        <TouchableOpacity
+          style={styles.cardWhatsAppBtn}
+          onPress={() => onOpenWhatsApp(item)}
+          activeOpacity={0.8}
+        >
+          <MessageCircle size={13} color={T.color.primaryDark} strokeWidth={2.5} />
+          <Text style={styles.cardWhatsAppBtnText} numberOfLines={1}>WhatsApp</Text>
+        </TouchableOpacity>
+
+        {/* Open Lead Button */}
+        <TouchableOpacity
+          style={styles.cardOpenLeadBtn}
+          onPress={() => onOpenLead(item)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.cardOpenLeadBtnText} numberOfLines={1}>Open lead</Text>
+          <ArrowUpRight size={12} color={T.color.info} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+const MyLeadsScreenContent: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
@@ -220,89 +350,93 @@ export const MyLeadsScreen: React.FC = () => {
   // Real backend leads (backend /api/leads/my is already strictly scoped to logged-in user)
   const combinedLeads: ScreenshotLead[] = useMemo(() => {
     const rawLeads = effectiveLeadsData?.leads || [];
+    if (!Array.isArray(rawLeads) || rawLeads.length === 0) return [];
+
     const realLeads = [...rawLeads].sort((a: Lead, b: Lead) => {
-      const aCalled = (a.attemptCount && a.attemptCount > 0) || a.lastContactedAt ? 1 : 0;
-      const bCalled = (b.attemptCount && b.attemptCount > 0) || b.lastContactedAt ? 1 : 0;
+      const aCalled = (a?.attemptCount && a.attemptCount > 0) || a?.lastContactedAt ? 1 : 0;
+      const bCalled = (b?.attemptCount && b.attemptCount > 0) || b?.lastContactedAt ? 1 : 0;
       if (aCalled !== bCalled) return aCalled - bCalled;
       if (aCalled === 1 && bCalled === 1) {
-        const aTime = a.lastContactedAt ? new Date(a.lastContactedAt).getTime() : 0;
-        const bTime = b.lastContactedAt ? new Date(b.lastContactedAt).getTime() : 0;
+        const aTime = a?.lastContactedAt ? new Date(a.lastContactedAt).getTime() : 0;
+        const bTime = b?.lastContactedAt ? new Date(b.lastContactedAt).getTime() : 0;
         if (aTime !== bTime) return aTime - bTime;
       }
       return 0;
     });
-    if (realLeads.length > 0) {
-      return realLeads.map((l: Lead, idx: number) => {
-        const camp =
-          typeof l.campaign === 'object' && l.campaign
-            ? l.campaign.name
-            : (l as any).campaignName || 'General';
-        const cId =
-          typeof l.campaign === 'object' && l.campaign
-            ? l.campaign._id
-            : l.campaignId;
 
-        const normalizedStage = l.stage.trim().toLowerCase();
-        const stg =
-          normalizedStage === 'new'
-            ? 'New'
-            : normalizedStage === 'interested'
-            ? 'Interested'
-            : normalizedStage === 'not interested' ||
-              normalizedStage === 'closed' ||
-              normalizedStage === 'lost' ||
-              l.status === 'CLOSED'
-            ? 'Not Interested'
-            : normalizedStage === 'not connected'
-            ? 'Not connected'
-            : normalizedStage === 'contacted'
-            ? 'Interested'
-            : 'Follow-up';
+    return realLeads.map((l: Lead) => {
+      const camp =
+        typeof l?.campaign === 'object' && l.campaign
+          ? l.campaign.name || 'General'
+          : (l as any)?.campaignName || 'General';
+      const cId =
+        typeof l?.campaign === 'object' && l.campaign
+          ? l.campaign._id
+          : l?.campaignId;
 
-        const agentDisplay = isAgent
-          ? `${user?.name || 'You'} (${user?.branch || 'Agent'})`
-          : l.assignedTo
-          ? typeof l.assignedTo === 'object'
-            ? l.assignedTo.name
-            : 'Assigned Agent'
-          : 'Assigned Agent';
+      const normalizedStage = (l?.stage || 'New').toString().trim().toLowerCase();
+      const stg =
+        normalizedStage === 'new'
+          ? 'New'
+          : normalizedStage === 'interested'
+          ? 'Interested'
+          : normalizedStage === 'not interested' ||
+            normalizedStage === 'closed' ||
+            normalizedStage === 'lost' ||
+            l?.status === 'CLOSED'
+          ? 'Not Interested'
+          : normalizedStage === 'not connected'
+          ? 'Not connected'
+          : normalizedStage === 'contacted'
+          ? 'Interested'
+          : 'Follow-up';
 
-        const leadPriority: 'High' | 'Medium' | 'Low' =
-          l.tag?.toUpperCase() === 'HOT'
-            ? 'High'
-            : l.tag?.toUpperCase() === 'COLD'
-            ? 'Low'
-            : typeof l.campaign === 'object' && (l.campaign as any)?.priority === 'HIGH'
-            ? 'High'
-            : typeof l.campaign === 'object' && (l.campaign as any)?.priority === 'LOW'
-            ? 'Low'
-            : 'Medium';
+      const agentDisplay = isAgent
+        ? `${user?.name || 'You'} (${user?.branch || 'Agent'})`
+        : l?.assignedTo
+        ? typeof l.assignedTo === 'object'
+          ? (l.assignedTo as any)?.name || 'Assigned Agent'
+          : 'Assigned Agent'
+        : 'Assigned Agent';
 
-        return {
-          _id: l._id,
-          name: l.name,
-          phone: formatDisplayPhone(l.phone),
-          campaignName: camp,
-          campaignId: cId,
-          attempts: l.attemptCount || 0,
-          assignedAgent: agentDisplay,
-          status: stg as any,
-          priority: leadPriority,
-          lastContact: new Date(l.updatedAt || Date.now()).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        };
-      });
-    }
+      const tagUpper = (l?.tag || '').toString().toUpperCase();
+      const campPriority = typeof l?.campaign === 'object' ? (l.campaign as any)?.priority : undefined;
 
-    return [];
-  }, [leadsData, isAgent, user]);
+      const leadPriority: 'High' | 'Medium' | 'Low' =
+        tagUpper === 'HOT'
+          ? 'High'
+          : tagUpper === 'COLD'
+          ? 'Low'
+          : campPriority === 'HIGH'
+          ? 'High'
+          : campPriority === 'LOW'
+          ? 'Low'
+          : 'Medium';
+
+      return {
+        _id: l?._id || 'lead-' + Math.random().toString(36).substring(7),
+        name: (l?.name || 'Lead Contact').toString(),
+        phone: formatDisplayPhone(l?.phone || ''),
+        campaignName: camp,
+        campaignId: cId,
+        attempts: Number(l?.attemptCount || 0),
+        assignedAgent: agentDisplay,
+        status: stg as any,
+        priority: leadPriority,
+        lastContact: l?.updatedAt
+          ? new Date(l.updatedAt).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : 'Recently',
+      };
+    });
+  }, [effectiveLeadsData, isAgent, user]);
 
   // Dynamic available campaign options from backend & leads
   const availableCampaignOptions = useMemo(() => {
     const list = ['All campaigns'];
-    const backendNames = (campaignData?.campaigns || []).map((c) => c.name);
+    const backendNames = (campaignData?.campaigns || []).map((c) => c?.name).filter(Boolean);
     combinedLeads.forEach((l) => {
       if (l.campaignName && !backendNames.includes(l.campaignName)) {
         backendNames.push(l.campaignName);
@@ -313,10 +447,11 @@ export const MyLeadsScreen: React.FC = () => {
 
   // Compute status pill counts based on active campaign selection
   const counts = useMemo(() => {
+    const selCampLower = (selectedCampaign || 'All campaigns').toLowerCase();
     const scopedLeads = combinedLeads.filter((l) => {
       if (selectedCampaign === 'All campaigns') return true;
       return (
-        l.campaignName.toLowerCase() === selectedCampaign.toLowerCase() ||
+        (l.campaignName || '').toLowerCase() === selCampLower ||
         (selectedCampaignId && l.campaignId === selectedCampaignId)
       );
     });
@@ -332,10 +467,13 @@ export const MyLeadsScreen: React.FC = () => {
 
   // Filtered Leads
   const filteredLeads = useMemo(() => {
+    const selCampLower = (selectedCampaign || 'All campaigns').toLowerCase();
+    const q = searchQuery.toLowerCase().trim();
+
     return combinedLeads.filter((lead) => {
       // Campaign filter (scoped strictly to selected campaign)
       if (selectedCampaign !== 'All campaigns') {
-        const matchesName = lead.campaignName.toLowerCase() === selectedCampaign.toLowerCase();
+        const matchesName = (lead.campaignName || '').toLowerCase() === selCampLower;
         const matchesId = selectedCampaignId && lead.campaignId === selectedCampaignId;
         if (!matchesName && !matchesId) {
           return false;
@@ -360,12 +498,11 @@ export const MyLeadsScreen: React.FC = () => {
       }
 
       // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
+      if (q) {
         return (
-          lead.name.toLowerCase().includes(q) ||
-          lead.phone.toLowerCase().includes(q) ||
-          lead.campaignName.toLowerCase().includes(q)
+          (lead.name || '').toLowerCase().includes(q) ||
+          (lead.phone || '').toLowerCase().includes(q) ||
+          (lead.campaignName || '').toLowerCase().includes(q)
         );
       }
       return true;
@@ -628,461 +765,400 @@ export const MyLeadsScreen: React.FC = () => {
     }
   };
 
+  // 1. Memoized Header Component (Workspace banner, title, search, filter tabs)
+  const renderHeader = (
+    <View style={{ marginBottom: 14 }}>
+      {/* Campaign Workspace Context Banner */}
+      {selectedCampaign !== 'All campaigns' ? (
+        <View style={styles.activeWorkspaceBanner}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: T.space.sm, flex: 1 }}>
+            <View style={styles.activeWorkspaceIcon}>
+              <Megaphone size={16} color={T.color.primaryDark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activeWorkspaceTitle} numberOfLines={1}>
+                Campaign: {selectedCampaign}
+              </Text>
+              <Text style={styles.activeWorkspaceSub}>
+                {counts.all} numbers strictly isolated in this campaign
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.switchCampBtn}
+            onPress={() => navigation.navigate('CampaignSelect' as any)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.switchCampBtnText}>Change</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {/* Banner Section: Your lead queue & Actions */}
+      <View style={[styles.bannerRow, !isWide && styles.bannerRowMobile]}>
+        <View style={!isWide ? styles.bannerTitleBlockMobile : { flex: 1 }}>
+          <Text style={styles.bannerTitle}>
+            {isAgent ? 'My telecalling queue' : 'Your lead queue'}
+          </Text>
+          <Text style={styles.bannerSubtitle}>
+            {isAgent
+              ? `${counts.all} leads assigned to ${user?.name || 'You'} (${user?.branch || 'General'} Branch)`
+              : `${counts.all} leads ready for your next conversation`}
+          </Text>
+        </View>
+
+        <View style={[styles.bannerActions, !isWide && styles.bannerActionsMobile]}>
+          {isManagerOrAdmin && (
+            <TouchableOpacity
+              style={[styles.campaignNavBtn, !isWide && styles.campaignNavBtnMobile]}
+              onPress={handleNavigateToCampaigns}
+              activeOpacity={0.7}
+            >
+              <Megaphone size={14} color="#0D9488" strokeWidth={2.4} />
+              <Text style={styles.campaignNavBtnText}>Campaigns</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.walkInBtn, !isWide && styles.walkInBtnMobile]}
+            onPress={() => setShowWalkInModal(true)}
+            activeOpacity={0.7}
+          >
+            <Plus size={14} color={T.color.text} strokeWidth={2.5} />
+            <Text style={styles.walkInText}>Walk-in</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.startCallingBtn, !isWide && styles.startCallingBtnMobile]}
+            onPress={handleStartCalling}
+            activeOpacity={0.8}
+          >
+            <PhoneCall size={14} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.startCallingText}>Start calling</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Search & Filter Bar */}
+      <View style={[styles.searchBarRow, !isWide && styles.searchBarRowMobile]}>
+        <View style={[styles.searchInputWrap, isWide ? { flex: 1 } : styles.searchInputWrapMobile]}>
+          <Search size={16} color={T.color.textFaint} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name or phone number"
+            placeholderTextColor={T.color.textFaint}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={14} color={T.color.textFaint} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={[styles.filterControlsRow, !isWide && styles.filterControlsRowMobile]}>
+          {/* Campaign Selector Pill */}
+          <TouchableOpacity
+            style={[styles.campaignSelectBtn, !isWide && styles.campaignSelectBtnMobile]}
+            onPress={() => setShowCampaignDropdown(!showCampaignDropdown)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.campaignSelectText} numberOfLines={1}>{selectedCampaign}</Text>
+            <ChevronDown size={14} color={T.color.textMuted} />
+          </TouchableOpacity>
+
+          {/* Export Icon Button */}
+          <TouchableOpacity
+            style={styles.exportIconBtn}
+            onPress={handleExportLeads}
+            disabled={isExporting}
+            activeOpacity={0.7}
+          >
+            {isExporting ? (
+              <ActivityIndicator size="small" color={T.color.primary} />
+            ) : (
+              <Download size={15} color={T.color.textMuted} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Campaign Dropdown Menu */}
+      {showCampaignDropdown && (
+        <View style={styles.dropdownMenu}>
+          {availableCampaignOptions.map((camp) => (
+            <TouchableOpacity
+              key={camp}
+              style={styles.dropdownItem}
+              onPress={() => {
+                const matched = (campaignData?.campaigns || []).find((c) => c.name === camp);
+                setStoreCampaign(matched ? matched._id : null, camp);
+                setShowCampaignDropdown(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.dropdownText,
+                  selectedCampaign === camp && styles.dropdownTextActive,
+                ]}
+              >
+                {camp}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Status Filter Tabs Row */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterPillsRow}
+      >
+        {/* All */}
+        <TouchableOpacity
+          style={[styles.filterPill, selectedFilter === 'All' && styles.filterPillActive]}
+          onPress={() => setSelectedFilter('All')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterPillLabel, selectedFilter === 'All' && styles.filterPillLabelActive]}>
+            All
+          </Text>
+          <View style={[styles.filterCountBadge, selectedFilter === 'All' && styles.filterCountBadgeActive]}>
+            <Text style={[styles.filterCountText, selectedFilter === 'All' && styles.filterCountTextActive]}>
+              {counts.all}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* New */}
+        <TouchableOpacity
+          style={[styles.filterPill, selectedFilter === 'New' && styles.filterPillActive]}
+          onPress={() => setSelectedFilter('New')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterPillLabel, selectedFilter === 'New' && styles.filterPillLabelActive]}>
+            New
+          </Text>
+          <View style={[styles.filterCountBadge, selectedFilter === 'New' && styles.filterCountBadgeActive]}>
+            <Text style={[styles.filterCountText, selectedFilter === 'New' && styles.filterCountTextActive]}>
+              {counts.new}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Interested */}
+        <TouchableOpacity
+          style={[styles.filterPill, selectedFilter === 'Interested' && styles.filterPillActive]}
+          onPress={() => setSelectedFilter('Interested')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterPillLabel, selectedFilter === 'Interested' && styles.filterPillLabelActive]}>
+            Interested
+          </Text>
+          <View style={[styles.filterCountBadge, selectedFilter === 'Interested' && styles.filterCountBadgeActive]}>
+            <Text style={[styles.filterCountText, selectedFilter === 'Interested' && styles.filterCountTextActive]}>
+              {counts.interested}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Follow-up */}
+        <TouchableOpacity
+          style={[styles.filterPill, selectedFilter === 'Follow-up' && styles.filterPillActive]}
+          onPress={() => setSelectedFilter('Follow-up')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterPillLabel, selectedFilter === 'Follow-up' && styles.filterPillLabelActive]}>
+            Follow-up
+          </Text>
+          <View style={[styles.filterCountBadge, selectedFilter === 'Follow-up' && styles.filterCountBadgeActive]}>
+            <Text style={[styles.filterCountText, selectedFilter === 'Follow-up' && styles.filterCountTextActive]}>
+              {counts.followup}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Not connected */}
+        <TouchableOpacity
+          style={[styles.filterPill, selectedFilter === 'Not connected' && styles.filterPillActive]}
+          onPress={() => setSelectedFilter('Not connected')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterPillLabel, selectedFilter === 'Not connected' && styles.filterPillLabelActive]}>
+            Not connected
+          </Text>
+          <View style={[styles.filterCountBadge, selectedFilter === 'Not connected' && styles.filterCountBadgeActive]}>
+            <Text style={[styles.filterCountText, selectedFilter === 'Not connected' && styles.filterCountTextActive]}>
+              {counts.notConnected}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {!isAgent && (
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              selectedFilter === 'Not Interested' && styles.filterPillActive,
+              selectedFilter === 'Not Interested' && { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
+            ]}
+            onPress={() => setSelectedFilter('Not Interested')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.filterPillLabel,
+                selectedFilter === 'Not Interested' && { color: '#B91C1C', fontWeight: '800' },
+              ]}
+            >
+              Not Interested
+            </Text>
+            <View
+              style={[
+                styles.filterCountBadge,
+                selectedFilter === 'Not Interested' && { backgroundColor: T.color.danger },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterCountText,
+                  selectedFilter === 'Not Interested' && { color: '#FFFFFF' },
+                ]}
+              >
+                {counts.notInterested}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </View>
+  );
+
+  // 2. Empty / Loading / Error State Component
+  const renderEmpty = (
+    <View>
+      {isLeadsLoading && !combinedLeads.length ? (
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="large" color={T.color.primary} />
+          <Text style={styles.loadingCardText}>Loading lead queue from server...</Text>
+        </View>
+      ) : isLeadsError && !combinedLeads.length ? (
+        <View style={styles.errorCard}>
+          <RotateCcw size={32} color={T.color.danger} />
+          <Text style={styles.errorTitle}>Server reconnecting</Text>
+          <Text style={styles.errorSub}>
+            {(leadsError as any)?.response?.data?.message || (leadsError as any)?.message || 'Connecting to server backend. Please tap below to retry.'}
+          </Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()} activeOpacity={0.8}>
+            <Text style={styles.retryBtnText}>Retry fetching leads</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.emptyStateCard}>
+          <Users size={36} color={T.color.textFaint} />
+          <Text style={styles.emptyStateTitle}>No leads found</Text>
+          <Text style={styles.emptyStateSubtitle}>
+            {selectedCampaign !== 'All campaigns'
+              ? `No leads found under "${selectedCampaign}". Switch campaign or reset filter.`
+              : 'No leads match your current search query or filter selection.'}
+          </Text>
+          {(selectedFilter !== 'All' || selectedCampaign !== 'All campaigns' || searchQuery.length > 0) && (
+            <TouchableOpacity
+              style={styles.emptyResetBtn}
+              onPress={() => {
+                setSelectedFilter('All');
+                setStoreCampaign(null, 'All campaigns');
+                setSearchQuery('');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.emptyResetBtnText}>Reset to all campaigns</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.emptyUploadBtn}
+            onPress={() => navigation.navigate('UploadLeads')}
+            activeOpacity={0.8}
+          >
+            <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.emptyUploadBtnText}>Upload leads CSV</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
+  // 3. Footer Summary Count
+  const renderFooter = filteredLeads.length > 0 ? (
+    <View style={styles.mobileFooterSummary}>
+      <Text style={styles.tableFooterCount}>Showing {filteredLeads.length} leads</Text>
+      <Text style={styles.tableFooterStatus}>All leads synced</Text>
+    </View>
+  ) : null;
+
   return (
     <CrmShell
       title="My Leads"
       headerIcon={<Users size={15} color={colors.textSecondary} />}
       breadcrumb="Workspace"
     >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isLeadsRefetching}
-            onRefresh={() => {
-              refetch();
-              refetchCampaigns();
-            }}
-            colors={[T.color.primary]}
-          />
-        }
-      >
-        {/* Campaign Workspace Context Banner */}
-        {selectedCampaign !== 'All campaigns' ? (
-          <View style={styles.activeWorkspaceBanner}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: T.space.sm, flex: 1 }}>
-              <View style={styles.activeWorkspaceIcon}>
-                <Megaphone size={16} color={T.color.primaryDark} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.activeWorkspaceTitle} numberOfLines={1}>
-                  Campaign: {selectedCampaign}
-                </Text>
-                <Text style={styles.activeWorkspaceSub}>
-                  {counts.all} numbers strictly isolated in this campaign
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.switchCampBtn}
-              onPress={() => navigation.navigate('CampaignSelect' as any)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.switchCampBtnText}>Change</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {/* Banner Section: Your lead queue & Actions */}
-        <View style={[styles.bannerRow, !isWide && styles.bannerRowMobile]}>
-          <View style={!isWide ? styles.bannerTitleBlockMobile : { flex: 1 }}>
-            <Text style={styles.bannerTitle}>
-              {isAgent ? 'My telecalling queue' : 'Your lead queue'}
-            </Text>
-            <Text style={styles.bannerSubtitle}>
-              {isAgent
-                ? `${counts.all} leads assigned to ${user?.name || 'You'} (${user?.branch || 'General'} Branch)`
-                : `${counts.all} leads ready for your next conversation`}
-            </Text>
-          </View>
-
-          <View style={[styles.bannerActions, !isWide && styles.bannerActionsMobile]}>
-            {isManagerOrAdmin && (
-              <TouchableOpacity
-                style={[styles.campaignNavBtn, !isWide && styles.campaignNavBtnMobile]}
-                onPress={handleNavigateToCampaigns}
-                activeOpacity={0.7}
-              >
-                <Megaphone size={14} color="#0D9488" strokeWidth={2.4} />
-                <Text style={styles.campaignNavBtnText}>Campaigns</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[styles.walkInBtn, !isWide && styles.walkInBtnMobile]}
-              onPress={() => setShowWalkInModal(true)}
-              activeOpacity={0.7}
-            >
-              <Plus size={14} color={T.color.text} strokeWidth={2.5} />
-              <Text style={styles.walkInText}>Walk-in</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.startCallingBtn, !isWide && styles.startCallingBtnMobile]}
-              onPress={handleStartCalling}
-              activeOpacity={0.8}
-            >
-              <PhoneCall size={14} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.startCallingText}>Start calling</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Search & Filter Bar */}
-        <View style={[styles.searchBarRow, !isWide && styles.searchBarRowMobile]}>
-          <View style={[styles.searchInputWrap, isWide ? { flex: 1 } : styles.searchInputWrapMobile]}>
-            <Search size={16} color={T.color.textFaint} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search by name or phone number"
-              placeholderTextColor={T.color.textFaint}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+      {!isWide ? (
+        /* NeoDove-Grade Ultra-Fast Virtualized FlatList for Mobile (Zero OOM / Zero Freeze) */
+        <FlatList
+          data={filteredLeads}
+          keyExtractor={(item) => item._id}
+          renderItem={({ item }) => (
+            <MobileLeadCard
+              item={item}
+              onDirectCall={handleDirectCall}
+              onOpenWhatsApp={handleOpenWhatsApp}
+              onOpenLead={handleOpenLead}
+              renderPriorityBadge={renderPriorityBadge}
+              renderStatusBadge={renderStatusBadge}
             />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <X size={14} color={T.color.textFaint} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={[styles.filterControlsRow, !isWide && styles.filterControlsRowMobile]}>
-            {/* Campaign Selector Pill */}
-            <TouchableOpacity
-              style={[styles.campaignSelectBtn, !isWide && styles.campaignSelectBtnMobile]}
-              onPress={() => setShowCampaignDropdown(!showCampaignDropdown)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.campaignSelectText} numberOfLines={1}>{selectedCampaign}</Text>
-              <ChevronDown size={14} color={T.color.textMuted} />
-            </TouchableOpacity>
-
-            {/* Export Icon Button */}
-            <TouchableOpacity
-              style={styles.exportIconBtn}
-              onPress={handleExportLeads}
-              disabled={isExporting}
-              activeOpacity={0.7}
-            >
-              {isExporting ? (
-                <ActivityIndicator size="small" color={T.color.primary} />
-              ) : (
-                <Download size={15} color={T.color.textMuted} />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Campaign Dropdown Menu */}
-        {showCampaignDropdown && (
-          <View style={styles.dropdownMenu}>
-            {availableCampaignOptions.map((camp) => (
-              <TouchableOpacity
-                key={camp}
-                style={styles.dropdownItem}
-                onPress={() => {
-                  const matched = (campaignData?.campaigns || []).find((c) => c.name === camp);
-                  setStoreCampaign(matched ? matched._id : null, camp);
-                  setShowCampaignDropdown(false);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.dropdownText,
-                    selectedCampaign === camp && styles.dropdownTextActive,
-                  ]}
-                >
-                  {camp}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Status Filter Tabs Row */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterPillsRow}
-        >
-          {/* All */}
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === 'All' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('All')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterPillLabel, selectedFilter === 'All' && styles.filterPillLabelActive]}>
-              All
-            </Text>
-            <View style={[styles.filterCountBadge, selectedFilter === 'All' && styles.filterCountBadgeActive]}>
-              <Text style={[styles.filterCountText, selectedFilter === 'All' && styles.filterCountTextActive]}>
-                {counts.all}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* New */}
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === 'New' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('New')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterPillLabel, selectedFilter === 'New' && styles.filterPillLabelActive]}>
-              New
-            </Text>
-            <View style={[styles.filterCountBadge, selectedFilter === 'New' && styles.filterCountBadgeActive]}>
-              <Text style={[styles.filterCountText, selectedFilter === 'New' && styles.filterCountTextActive]}>
-                {counts.new}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Interested */}
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === 'Interested' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('Interested')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterPillLabel, selectedFilter === 'Interested' && styles.filterPillLabelActive]}>
-              Interested
-            </Text>
-            <View style={[styles.filterCountBadge, selectedFilter === 'Interested' && styles.filterCountBadgeActive]}>
-              <Text style={[styles.filterCountText, selectedFilter === 'Interested' && styles.filterCountTextActive]}>
-                {counts.interested}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Follow-up */}
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === 'Follow-up' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('Follow-up')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterPillLabel, selectedFilter === 'Follow-up' && styles.filterPillLabelActive]}>
-              Follow-up
-            </Text>
-            <View style={[styles.filterCountBadge, selectedFilter === 'Follow-up' && styles.filterCountBadgeActive]}>
-              <Text style={[styles.filterCountText, selectedFilter === 'Follow-up' && styles.filterCountTextActive]}>
-                {counts.followup}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Not connected */}
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === 'Not connected' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('Not connected')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterPillLabel, selectedFilter === 'Not connected' && styles.filterPillLabelActive]}>
-              Not connected
-            </Text>
-            <View style={[styles.filterCountBadge, selectedFilter === 'Not connected' && styles.filterCountBadgeActive]}>
-              <Text style={[styles.filterCountText, selectedFilter === 'Not connected' && styles.filterCountTextActive]}>
-                {counts.notConnected}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {!isAgent && (
-            <TouchableOpacity
-              style={[
-                styles.filterPill,
-                selectedFilter === 'Not Interested' && styles.filterPillActive,
-                selectedFilter === 'Not Interested' && { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
-              ]}
-              onPress={() => setSelectedFilter('Not Interested')}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.filterPillLabel,
-                  selectedFilter === 'Not Interested' && { color: '#B91C1C', fontWeight: '800' },
-                ]}
-              >
-                Not Interested
-              </Text>
-              <View
-                style={[
-                  styles.filterCountBadge,
-                  selectedFilter === 'Not Interested' && { backgroundColor: T.color.danger },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.filterCountText,
-                    selectedFilter === 'Not Interested' && { color: '#FFFFFF' },
-                  ]}
-                >
-                  {counts.notInterested}
-                </Text>
-              </View>
-            </TouchableOpacity>
           )}
-        </ScrollView>
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={renderEmpty}
+          ListFooterComponent={renderFooter}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          style={styles.container}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLeadsRefetching}
+              onRefresh={() => {
+                refetch();
+                refetchCampaigns();
+              }}
+              colors={[T.color.primary]}
+            />
+          }
+        />
+      ) : (
+        /* Spacious Table for Desktop / Tablet View */
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLeadsRefetching}
+              onRefresh={() => {
+                refetch();
+                refetchCampaigns();
+              }}
+              colors={[T.color.primary]}
+            />
+          }
+        >
+          {renderHeader}
 
-        {/* Leads Display: Clean Mobile Cards for Mobile, Spacious Table for Wide Desktop */}
-        {!isWide ? (
-          <View style={styles.mobileListContainer}>
-            {isLeadsLoading && !combinedLeads.length ? (
-              <View style={styles.loadingCard}>
-                <ActivityIndicator size="large" color={T.color.primary} />
-                <Text style={styles.loadingCardText}>Loading lead queue from server...</Text>
-              </View>
-            ) : isLeadsError && !combinedLeads.length ? (
-              <View style={styles.errorCard}>
-                <RotateCcw size={32} color={T.color.danger} />
-                <Text style={styles.errorTitle}>Server reconnecting</Text>
-                <Text style={styles.errorSub}>
-                  {(leadsError as any)?.response?.data?.message || (leadsError as any)?.message || 'Connecting to Render cloud backend. Please tap below to retry.'}
-                </Text>
-                <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()} activeOpacity={0.8}>
-                  <Text style={styles.retryBtnText}>Retry fetching leads</Text>
-                </TouchableOpacity>
-              </View>
-            ) : filteredLeads.length === 0 ? (
-              <View style={styles.emptyStateCard}>
-                <Users size={36} color={T.color.textFaint} />
-                <Text style={styles.emptyStateTitle}>No leads found</Text>
-                <Text style={styles.emptyStateSubtitle}>
-                  {selectedCampaign !== 'All campaigns'
-                    ? `No leads found under "${selectedCampaign}". Switch campaign or reset filter.`
-                    : 'No leads match your current search query or filter selection.'}
-                </Text>
-                {(selectedFilter !== 'All' || selectedCampaign !== 'All campaigns' || searchQuery.length > 0) && (
-                  <TouchableOpacity
-                    style={styles.emptyResetBtn}
-                    onPress={() => {
-                      setSelectedFilter('All');
-                      setStoreCampaign(null, 'All campaigns');
-                      setSearchQuery('');
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.emptyResetBtnText}>Reset to all campaigns</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={styles.emptyUploadBtn}
-                  onPress={() => navigation.navigate('UploadLeads')}
-                  activeOpacity={0.8}
-                >
-                  <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
-                  <Text style={styles.emptyUploadBtnText}>Upload leads CSV</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              filteredLeads.map((item) => {
-                const initials = item.name
-                  .split(' ')
-                  .filter(Boolean)
-                  .map((w) => w[0])
-                  .join('')
-                  .toUpperCase()
-                  .slice(0, 2) || 'LD';
-
-                return (
-                  <View key={item._id} style={styles.mobileLeadCard}>
-                    {/* Header Row: Avatar, Name & Phone, Badges */}
-                    <View style={styles.cardHeaderRow}>
-                      <View style={styles.avatarCircleLg}>
-                        <Text style={styles.avatarTextLg}>{initials}</Text>
-                      </View>
-
-                      <View style={styles.cardLeadInfo}>
-                        <Text style={styles.cardLeadName} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => handleDirectCall(item.phone, item.name, item._id, item.status)}
-                          activeOpacity={0.7}
-                          style={styles.cardPhoneTouch}
-                        >
-                          <Phone size={12} color={T.color.primaryDark} strokeWidth={2} />
-                          <Text style={styles.cardPhoneText}>{item.phone}</Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Badges on Right: Priority on top, Status below */}
-                      <View style={styles.cardBadgesCol}>
-                        {renderPriorityBadge(item.priority)}
-                        <View style={{ marginTop: 4 }}>
-                          {renderStatusBadge(item.status)}
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Metadata Row: Campaign, Attempts, Last Contact */}
-                    <View style={styles.cardMetaRow}>
-                      <View style={styles.cardCampaignBadge}>
-                        <Text style={styles.cardCampaignBadgeText} numberOfLines={1}>
-                          {item.campaignName}
-                        </Text>
-                      </View>
-
-                      <Text style={styles.cardMetaDot}>•</Text>
-
-                      <Text style={styles.cardMetaText}>
-                        {item.attempts} {item.attempts === 1 ? 'attempt' : 'attempts'}
-                      </Text>
-
-                      <Text style={styles.cardMetaDot}>•</Text>
-
-                      <Text style={styles.cardMetaText}>
-                        {item.lastContact}
-                      </Text>
-                    </View>
-
-                    {/* Assigned Agent Row */}
-                    {item.assignedAgent ? (
-                      <View style={styles.cardAgentRow}>
-                        <Users size={12} color={T.color.textFaint} />
-                        <Text style={styles.cardAgentText} numberOfLines={1}>
-                          {item.assignedAgent}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {/* Action Buttons Row */}
-                    <View style={styles.cardActionRow}>
-                      {/* Call Button */}
-                      <TouchableOpacity
-                        style={styles.cardCallBtn}
-                        onPress={() => handleDirectCall(item.phone, item.name, item._id, item.status)}
-                        activeOpacity={0.8}
-                      >
-                        <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
-                        <Text style={styles.cardCallBtnText} numberOfLines={1}>Call</Text>
-                      </TouchableOpacity>
-
-                      {/* WhatsApp Button */}
-                      <TouchableOpacity
-                        style={styles.cardWhatsAppBtn}
-                        onPress={() => handleOpenWhatsApp(item)}
-                        activeOpacity={0.8}
-                      >
-                        <MessageCircle size={13} color={T.color.primaryDark} strokeWidth={2.5} />
-                        <Text style={styles.cardWhatsAppBtnText} numberOfLines={1}>WhatsApp</Text>
-                      </TouchableOpacity>
-
-                      {/* Open Lead Button */}
-                      <TouchableOpacity
-                        style={styles.cardOpenLeadBtn}
-                        onPress={() => handleOpenLead(item)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.cardOpenLeadBtnText} numberOfLines={1}>Open lead</Text>
-                        <ArrowUpRight size={12} color={T.color.info} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-
-            {/* Mobile Footer Count */}
-            {filteredLeads.length > 0 && (
-              <View style={styles.mobileFooterSummary}>
-                <Text style={styles.tableFooterCount}>Showing {filteredLeads.length} leads</Text>
-                <Text style={styles.tableFooterStatus}>All leads synced</Text>
-              </View>
-            )}
-          </View>
-        ) : (
-          /* Desktop / Wide Screen Table */
           <View style={styles.tableCard}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={{ minWidth: 920 }}>
@@ -1099,13 +1175,7 @@ export const MyLeadsScreen: React.FC = () => {
                 {/* Table Rows */}
                 {filteredLeads.map((item, idx) => {
                   const isLast = idx === filteredLeads.length - 1;
-                  const initials = item.name
-                    .split(' ')
-                    .filter(Boolean)
-                    .map((w) => w[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2) || 'LD';
+                  const initials = getInitials(item.name);
 
                   return (
                     <View
@@ -1191,8 +1261,8 @@ export const MyLeadsScreen: React.FC = () => {
               </View>
             </ScrollView>
           </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
       {/* Walk-in Add Lead Modal */}
       <Modal
@@ -1280,6 +1350,15 @@ export const MyLeadsScreen: React.FC = () => {
       />
 
     </CrmShell>
+  );
+};
+
+// Top-level exported screen with resilient ErrorBoundary protection
+export const MyLeadsScreen: React.FC = () => {
+  return (
+    <ErrorBoundary fallbackMessage="Unable to display My Leads view. Please tap Retry to reload your queue.">
+      <MyLeadsScreenContent />
+    </ErrorBoundary>
   );
 };
 
