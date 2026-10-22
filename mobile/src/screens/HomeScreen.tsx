@@ -57,6 +57,7 @@ import {
   fetchMyLeads,
   fetchCampaigns,
   fetchBranches,
+  MyLeadsResponse,
 } from '../api/leadApi';
 import { RootStackParamList, Lead } from '../types';
 import { colors, borderRadius, shadows } from '../theme';
@@ -264,6 +265,22 @@ export const HomeScreen: React.FC = () => {
     refetchIntervalInBackground: false,
   });
 
+  // Instant Offline / Cold-Start Cache State (loads in < 2ms)
+  const [cachedLeadsData, setCachedLeadsData] = useState<MyLeadsResponse | null>(null);
+
+  useEffect(() => {
+    storage.getItem('tele_crm_my_leads_cache_v2').then((saved) => {
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && Array.isArray(parsed.leads) && parsed.leads.length > 0) {
+            setCachedLeadsData(parsed);
+          }
+        } catch {}
+      }
+    });
+  }, []);
+
   // 3. Agent's Prioritized Queue (auto-polls for newly assigned leads from admin/manager)
   const {
     data: myLeadsData,
@@ -280,7 +297,17 @@ export const HomeScreen: React.FC = () => {
       }),
     refetchInterval: 15000,
     refetchIntervalInBackground: false,
+    staleTime: 1000 * 60 * 3, // 3 minutes cache TTL
   });
+
+  useEffect(() => {
+    if (myLeadsData && Array.isArray(myLeadsData.leads) && myLeadsData.leads.length > 0) {
+      setCachedLeadsData(myLeadsData);
+      storage.setItem('tele_crm_my_leads_cache_v2', JSON.stringify(myLeadsData)).catch(() => {});
+    }
+  }, [myLeadsData]);
+
+  const effectiveMyLeadsData = myLeadsData || cachedLeadsData;
 
   // 4. Subscribe to Zustand Local Activity Store (Guarantees Instant Re-render on call)
   const historyMap = useLeadHistoryStore((s) => s.historyMap);
@@ -296,7 +323,7 @@ export const HomeScreen: React.FC = () => {
     return calls.filter((activity) => {
       const b = (activity as any).branch;
       if (b) return b.trim().toLowerCase() === target;
-      const l = (myLeadsData?.leads || []).find((lead) => lead._id === activity.leadId);
+      const l = (effectiveMyLeadsData?.leads || []).find((lead) => lead._id === activity.leadId);
       if (l?.branch) return l.branch.trim().toLowerCase() === target;
       return false;
     });
@@ -441,7 +468,7 @@ export const HomeScreen: React.FC = () => {
 
   // Leads scoped by branch selection
   const allBranchFilteredLeads = useMemo(() => {
-    const list = myLeadsData?.leads || [];
+    const list = effectiveMyLeadsData?.leads || [];
     if (effectiveBranch === 'ALL') return list;
     const target = effectiveBranch.trim().toLowerCase();
     return list.filter((l) => (l.branch || '').trim().toLowerCase() === target);
@@ -452,7 +479,7 @@ export const HomeScreen: React.FC = () => {
   // ==============================================================
   const myAssignedLeadsCount =
     effectiveBranch === 'ALL'
-      ? (myLeadsData?.total ?? (myLeadsData?.leads?.length || 0))
+      ? (effectiveMyLeadsData?.total ?? (effectiveMyLeadsData?.leads?.length || 0))
       : allBranchFilteredLeads.length;
 
   // Calls made and connected (combines local session with backend reports)

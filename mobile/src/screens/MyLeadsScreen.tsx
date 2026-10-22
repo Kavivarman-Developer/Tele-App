@@ -37,7 +37,8 @@ import {
   RotateCcw,
 } from 'lucide-react-native';
 
-import { fetchMyLeads, fetchCampaigns, createWalkInLead } from '../api/leadApi';
+import { fetchMyLeads, fetchCampaigns, createWalkInLead, MyLeadsResponse } from '../api/leadApi';
+import { storage } from '../utils/storage';
 import { Lead, RootStackParamList } from '../types';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
@@ -152,6 +153,22 @@ export const MyLeadsScreen: React.FC = () => {
     queryFn: fetchCampaigns,
   });
 
+  // Instant Offline / Cold-Start Cache State (loads in < 2ms)
+  const [cachedLeadsData, setCachedLeadsData] = useState<MyLeadsResponse | null>(null);
+
+  useEffect(() => {
+    storage.getItem('tele_crm_my_leads_cache_v2').then((saved) => {
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && Array.isArray(parsed.leads) && parsed.leads.length > 0) {
+            setCachedLeadsData(parsed);
+          }
+        } catch {}
+      }
+    });
+  }, []);
+
   const {
     data: leadsData,
     isLoading: isLeadsLoading,
@@ -164,7 +181,17 @@ export const MyLeadsScreen: React.FC = () => {
     queryFn: () => fetchMyLeads({ limit: 5000 }),
     refetchInterval: 15000,
     refetchIntervalInBackground: false,
+    staleTime: 1000 * 60 * 3, // 3 minutes cache TTL
   });
+
+  useEffect(() => {
+    if (leadsData && Array.isArray(leadsData.leads) && leadsData.leads.length > 0) {
+      setCachedLeadsData(leadsData);
+      storage.setItem('tele_crm_my_leads_cache_v2', JSON.stringify(leadsData)).catch(() => {});
+    }
+  }, [leadsData]);
+
+  const effectiveLeadsData = leadsData || cachedLeadsData;
 
   // Mutation to add walk-in lead
   const walkInMutation = useMutation({
@@ -192,7 +219,7 @@ export const MyLeadsScreen: React.FC = () => {
 
   // Real backend leads (backend /api/leads/my is already strictly scoped to logged-in user)
   const combinedLeads: ScreenshotLead[] = useMemo(() => {
-    const rawLeads = leadsData?.leads || [];
+    const rawLeads = effectiveLeadsData?.leads || [];
     const realLeads = [...rawLeads].sort((a: Lead, b: Lead) => {
       const aCalled = (a.attemptCount && a.attemptCount > 0) || a.lastContactedAt ? 1 : 0;
       const bCalled = (b.attemptCount && b.attemptCount > 0) || b.lastContactedAt ? 1 : 0;

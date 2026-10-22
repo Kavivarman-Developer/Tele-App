@@ -12,8 +12,8 @@ import { notificationService } from './src/services/notification.service';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 2, // 2 minutes client-side cache TTL: eliminates redundant DB traffic
-      gcTime: 1000 * 60 * 15, // 15 minutes memory retention
+      staleTime: 1000 * 60 * 5, // 2 minutes client-side cache TTL: eliminates redundant DB traffic
+      gcTime: 1000 * 60 * 30, // 15 minutes memory retention
       refetchOnWindowFocus: false, // Prevents sudden DB queries when switching tabs/apps
       retry: 1,
     },

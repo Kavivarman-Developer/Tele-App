@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import apiRoutes from './routes';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
+import { compressionMiddleware } from './middleware/compression.middleware';
 import { AppError } from './utils/AppError';
 
 const app: Application = express();
@@ -13,6 +14,7 @@ const app: Application = express();
 app.set('trust proxy', 1);
 
 // Security and utility middlewares
+app.use(compressionMiddleware);
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
