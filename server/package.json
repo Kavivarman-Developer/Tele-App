@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
+    "postbuild": "node scripts/sync-public.js",
     "start": "node dist/server.js",
     "lint": "eslint \"src/**/*.ts\"",
     "seed": "ts-node-dev --transpile-only src/scripts/seed.ts",
