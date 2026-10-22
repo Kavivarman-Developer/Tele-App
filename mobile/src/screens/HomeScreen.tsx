@@ -70,8 +70,21 @@ import { callService } from '../services/call.service';
 import { getDialerTelUrl, formatDisplayPhone, isLeadLostOrSuppressed } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
 import { storage } from '../utils/storage';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// Helper to get safe initials from name (Zero crash)
+const getInitials = (name?: string, fallback = 'LD'): string => {
+  if (!name) return fallback;
+  const clean = name.trim();
+  if (!clean) return fallback;
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  }
+  return (clean.slice(0, 2) || fallback).toUpperCase();
+};
 
 // ======================================================================
 // DESIGN TOKENS
@@ -116,7 +129,7 @@ const T = {
   },
 };
 
-export const HomeScreen: React.FC = () => {
+const HomeScreenContent: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
@@ -771,15 +784,7 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const heroLeadInitials = heroLead?.name
-    ? heroLead.name
-        .split(' ')
-        .filter(Boolean)
-        .map((w) => w[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    : 'LD';
+  const heroLeadInitials = getInitials(heroLead?.name, 'LD');
 
   const heroLeadCampaign =
     typeof heroLead?.campaign === 'object' && heroLead?.campaign?.name
@@ -1445,13 +1450,7 @@ export const HomeScreen: React.FC = () => {
                   <Text style={styles.tabEmptyText}>No other leads in queue. Ready for new list!</Text>
                 ) : (
                   nextInQueueLeads.map((item, idx) => {
-                    const initials = item.name
-                      .split(' ')
-                      .filter(Boolean)
-                      .map((w) => w[0])
-                      .join('')
-                      .toUpperCase()
-                      .slice(0, 2) || 'LD';
+                    const initials = getInitials(item.name, 'LD');
 
                     return (
                       <View key={item._id} style={styles.queueItemRow}>
@@ -1660,13 +1659,7 @@ export const HomeScreen: React.FC = () => {
                   <Text style={styles.tabEmptyText}>No agents active in this branch.</Text>
                 ) : (
                   agentCallsList.map((agentItem) => {
-                    const initials = agentItem.name
-                      .split(' ')
-                      .filter(Boolean)
-                      .map((w) => w[0])
-                      .join('')
-                      .toUpperCase()
-                      .slice(0, 2) || 'AG';
+                    const initials = getInitials(agentItem.name, 'AG');
 
                     const cRate =
                       agentItem.calls > 0
@@ -1752,6 +1745,14 @@ export const HomeScreen: React.FC = () => {
         />
       )}
     </CrmShell>
+  );
+};
+
+export const HomeScreen: React.FC = () => {
+  return (
+    <ErrorBoundary fallbackMessage="Unable to display Home Dashboard. Please tap Retry to reload.">
+      <HomeScreenContent />
+    </ErrorBoundary>
   );
 };
 

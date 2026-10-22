@@ -35,6 +35,7 @@ import { CallHistoryScreen } from '../screens/CallHistoryScreen';
 import { AgentReportScreen } from '../screens/AgentReportScreen';
 import { RootStackParamList } from '../types';
 import { notificationService } from '../services/notification.service';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -156,32 +157,34 @@ export const RootNavigator: React.FC = () => {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!token ? (
-          <Stack.Screen name="Login" component={LoginScreen} />
-        ) : (
-          <>
-            <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen name="CampaignSelect" component={CampaignSelectScreen} />
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="MyLeads" component={MyLeadsScreen} />
-            <Stack.Screen name="FollowUps" component={FollowUpsScreen} />
-            <Stack.Screen name="CallHistory" component={CallHistoryScreen} />
-            <Stack.Screen name="AgentReports" component={AgentReportScreen} />
-            <Stack.Screen name="Team" component={TeamScreen} />
-            <Stack.Screen name="Campaigns" component={CampaignsScreen} />
-            <Stack.Screen name="UploadLeads" component={UploadLeadsScreen} />
-            <Stack.Screen name="Settings" component={SettingsScreen} />
-            <Stack.Screen name="RetryRules" component={RetryRulesScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
-            <Stack.Screen name="LeadDetail" component={LeadDetailScreen} />
-            <Stack.Screen name="Dispose" component={DisposeScreen} />
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
-            <Stack.Screen name="AddWalkInLead" component={AddWalkInLeadScreen} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <ErrorBoundary fallbackMessage="The app encountered an unexpected error. Please tap Retry to reload.">
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {!token ? (
+            <Stack.Screen name="Login" component={LoginScreen} />
+          ) : (
+            <>
+              <Stack.Screen name="Main" component={MainTabs} />
+              <Stack.Screen name="CampaignSelect" component={CampaignSelectScreen} />
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="MyLeads" component={MyLeadsScreen} />
+              <Stack.Screen name="FollowUps" component={FollowUpsScreen} />
+              <Stack.Screen name="CallHistory" component={CallHistoryScreen} />
+              <Stack.Screen name="AgentReports" component={AgentReportScreen} />
+              <Stack.Screen name="Team" component={TeamScreen} />
+              <Stack.Screen name="Campaigns" component={CampaignsScreen} />
+              <Stack.Screen name="UploadLeads" component={UploadLeadsScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+              <Stack.Screen name="RetryRules" component={RetryRulesScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="LeadDetail" component={LeadDetailScreen} />
+              <Stack.Screen name="Dispose" component={DisposeScreen} />
+              <Stack.Screen name="Dashboard" component={DashboardScreen} />
+              <Stack.Screen name="AddWalkInLead" component={AddWalkInLeadScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </ErrorBoundary>
   );
 };
