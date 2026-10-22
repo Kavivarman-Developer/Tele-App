@@ -43,8 +43,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "19a947fd-58c9-4aaa-893c-c8e4ef666d6a"
+        "projectId": "ef15f170-3371-4183-a1fc-86f0fcfd8e42"
       }
-    }
+    },
+    "owner": "okboz"
   }
 }
