@@ -217,7 +217,37 @@ export class LeadService {
       {
         $facet: {
           metadata: [{ $count: 'total' }],
-          data: [{ $skip: skip }, { $limit: limit }],
+          data: [
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                phone: 1,
+                email: 1,
+                source: 1,
+                branch: 1,
+                stage: 1,
+                tag: 1,
+                status: 1,
+                attemptCount: 1,
+                lastContactedAt: 1,
+                nextFollowUpAt: 1,
+                followUpDue: 1,
+                campaignId: 1,
+                assignedTo: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                customProperties: 1,
+                campaign: {
+                  _id: '$campaign._id',
+                  name: '$campaign.name',
+                  priority: '$campaign.priority',
+                },
+              },
+            },
+          ],
         },
       },
     ];

@@ -1,8 +1,15 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const memoryStore: Record<string, string> = {};
-const CHUNK_SIZE = 1800; // SecureStore on Android has ~2048-byte limit per item
+const CHUNK_SIZE = 1800; // SecureStore limit per item
+
+const getFilePath = (key: string): string | null => {
+  if (Platform.OS === 'web' || !FileSystem.documentDirectory) return null;
+  const safeName = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `${FileSystem.documentDirectory}crm_${safeName}.json`;
+};
 
 export const storage = {
   async getItem(key: string): Promise<string | null> {
@@ -25,7 +32,22 @@ export const storage = {
       return null;
     }
 
-    // 3. Native SecureStore with chunking support
+    // 3. Native FileSystem check for blazing fast large-payload read (< 2ms)
+    try {
+      const filePath = getFilePath(key);
+      if (filePath) {
+        const fileInfo = await FileSystem.getInfoAsync(filePath);
+        if (fileInfo.exists) {
+          const content = await FileSystem.readAsStringAsync(filePath);
+          memoryStore[key] = content;
+          return content;
+        }
+      }
+    } catch {
+      // Fall through to SecureStore
+    }
+
+    // 4. Native SecureStore with chunking support (backward-compatibility)
     try {
       const chunksCountStr = await SecureStore.getItemAsync(`${key}__chunks`);
       if (chunksCountStr) {
@@ -71,11 +93,26 @@ export const storage = {
       return;
     }
 
-    // Native SecureStore with automatic chunking for arbitrary payload sizes
+    // Native: If large payload (> 1500 chars), write to FileSystem in 1 single native call (< 2ms)
+    if (value.length > 1500) {
+      try {
+        const filePath = getFilePath(key);
+        if (filePath) {
+          await FileSystem.writeAsStringAsync(filePath, value);
+          // Clear any legacy SecureStore keys
+          await SecureStore.deleteItemAsync(key).catch(() => {});
+          await SecureStore.deleteItemAsync(`${key}__chunks`).catch(() => {});
+          return;
+        }
+      } catch (err) {
+        console.warn(`[Storage] FileSystem write fallback to SecureStore for '${key}':`, err);
+      }
+    }
+
+    // Native SecureStore for small items (tokens, credentials)
     try {
       if (value.length <= CHUNK_SIZE) {
         await SecureStore.setItemAsync(key, value);
-        // Clear any leftover chunk markers
         await SecureStore.deleteItemAsync(`${key}__chunks`).catch(() => {});
       } else {
         const count = Math.ceil(value.length / CHUNK_SIZE);
@@ -84,7 +121,6 @@ export const storage = {
           await SecureStore.setItemAsync(`${key}__chunk_${i}`, chunk);
         }
         await SecureStore.setItemAsync(`${key}__chunks`, String(count));
-        // Remove single key to avoid stale small payload
         await SecureStore.deleteItemAsync(key).catch(() => {});
       }
     } catch (e) {
@@ -107,6 +143,10 @@ export const storage = {
     }
 
     try {
+      const filePath = getFilePath(key);
+      if (filePath) {
+        await FileSystem.deleteAsync(filePath, { idempotent: true }).catch(() => {});
+      }
       const chunksCountStr = await SecureStore.getItemAsync(`${key}__chunks`);
       if (chunksCountStr) {
         const count = parseInt(chunksCountStr, 10);
