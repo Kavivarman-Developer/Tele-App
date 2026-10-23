@@ -48,6 +48,7 @@ import {
   Megaphone,
   RotateCw,
   Ban,
+  PhoneOutgoing,
 } from 'lucide-react-native';
 
 import { callService } from '../services/call.service';
@@ -144,6 +145,59 @@ const OUTCOME_OPTIONS = [
   { stage: 'FOLLOW UP', label: 'Follow-up', icon: CalendarClock, color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
   { stage: 'NOT INTERESTED', label: 'Customer Lost / Not Interested', icon: Ban, color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
   { stage: 'CONVERTED', label: 'Converted / Won', icon: CheckCircle2, color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+];
+
+const formatDuration = (seconds?: number, connected?: boolean) => {
+  if (!connected) return 'Not connected';
+  if (!seconds || seconds <= 0) return 'Connected (0s)';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s}s`;
+};
+
+// NeoDove-Grade 1-Tap Core Outcomes
+const PRIMARY_OUTCOMES = [
+  {
+    stage: 'NOT CONNECTED',
+    label: 'Not Connected',
+    sublabel: 'No answer / Busy',
+    emoji: '📵',
+    activeColor: '#DC2626',
+    activeBg: '#FEF2F2',
+    activeBorder: '#FCA5A5',
+    tag: 'Cold' as const,
+  },
+  {
+    stage: 'FOLLOW UP',
+    label: 'Follow Up',
+    sublabel: 'Callback needed',
+    emoji: '📅',
+    activeColor: '#D97706',
+    activeBg: '#FFFBEB',
+    activeBorder: '#FCD34D',
+    tag: 'Warm' as const,
+  },
+  {
+    stage: 'INTERESTED',
+    label: 'Interested',
+    sublabel: 'Prospect agreed',
+    emoji: '⭐',
+    activeColor: '#059669',
+    activeBg: '#ECFDF5',
+    activeBorder: '#86EFAC',
+    tag: 'Hot' as const,
+  },
+  {
+    stage: 'NOT INTERESTED',
+    label: 'Not Interested',
+    sublabel: 'Declined / Lost',
+    emoji: '❌',
+    activeColor: '#64748B',
+    activeBg: '#F1F5F9',
+    activeBorder: '#CBD5E1',
+    tag: 'Cold' as const,
+  },
 ];
 
 export const LeadDetailScreen: React.FC = () => {
@@ -287,6 +341,23 @@ export const LeadDetailScreen: React.FC = () => {
     setActionNextFollowUp(true);
   };
 
+  // 1-Tap Quick Outcome Selection (NeoDove Standard)
+  const handleSelectOutcome = (stage: string, defaultTag?: 'Hot' | 'Cold' | 'Warm') => {
+    setSelectedState(stage);
+    if (stage === 'NOT CONNECTED') {
+      if (!selectedNotConnectedReason) setSelectedNotConnectedReason('DID_NOT_PICK');
+    } else if (stage === 'INTERESTED') {
+      setSelectedTag(defaultTag || 'Hot');
+      setActionNextFollowUp(true);
+    } else if (stage === 'FOLLOW UP') {
+      setSelectedTag(defaultTag || 'Warm');
+      setActionNextFollowUp(true);
+    } else if (stage === 'NOT INTERESTED') {
+      setSelectedTag('Cold');
+      setActionNextFollowUp(false);
+    }
+  };
+
   const formatScheduledDate = (isoStr: string) => {
     try {
       const d = new Date(isoStr);
@@ -341,6 +412,25 @@ export const LeadDetailScreen: React.FC = () => {
             setSelectedState('FOLLOW UP');
           }
         }
+
+        // ⚡ NeoDove-Grade Auto-Log: Immediately record this call outreach
+        useLeadHistoryStore.getState().addActivity(currentLead._id, {
+          phone: currentLead.phone,
+          customerName: currentLead.name,
+          agentName: user?.name,
+          agentId: user?._id,
+          branch: user?.branch,
+          connected: result.connected,
+          type: 'CALL',
+          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
+          stage: result.connected
+            ? currentLead.stage === 'New'
+              ? 'Connected'
+              : currentLead.stage
+            : 'Not Connected',
+          durationSeconds: result.connected ? result.durationSeconds : 0,
+          remark: result.connected ? 'Call completed' : 'Call not answered',
+        });
 
         // Seamlessly switch to DISPOSE LEAD tab
         setActiveTab('DISPOSE LEAD');
@@ -844,18 +934,87 @@ export const LeadDetailScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            {/* 1. Update State* */}
+            {/* NeoDove-Grade Post-Call Feedback Banner */}
+            {isCallAttempt && (
+              <View
+                style={[
+                  styles.callFeedbackBanner,
+                  callDurationSeconds > 0 ? styles.callFeedbackConnected : styles.callFeedbackMissed,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.callFeedbackBadge,
+                    callDurationSeconds > 0 ? styles.callFeedbackBadgeGreen : styles.callFeedbackBadgeRed,
+                  ]}
+                >
+                  {callDurationSeconds > 0 ? (
+                    <PhoneOutgoing size={12} color="#FFFFFF" strokeWidth={2.5} />
+                  ) : (
+                    <PhoneOff size={12} color="#FFFFFF" strokeWidth={2.5} />
+                  )}
+                  <Text style={styles.callFeedbackBadgeText}>
+                    {callDurationSeconds > 0 ? 'Connected' : 'Not Connected'}
+                  </Text>
+                </View>
+                <Text style={styles.callFeedbackDetailText}>
+                  {callDurationSeconds > 0
+                    ? `Talk Time: ${formatDuration(callDurationSeconds, true)}`
+                    : 'Customer did not pick up / busy'}
+                </Text>
+              </View>
+            )}
+
+            {/* 1. Primary Outcomes (1-Tap Fast Selection) */}
             <View style={styles.fieldSection}>
               <Text style={styles.fieldLabel}>
-                Update State<Text style={styles.asterisk}>*</Text>
+                Select Outcome / State<Text style={styles.asterisk}>*</Text>
               </Text>
+              <View style={styles.primaryOutcomeGrid}>
+                {PRIMARY_OUTCOMES.map((item) => {
+                  const isSelected = selectedState === item.stage;
+                  return (
+                    <TouchableOpacity
+                      key={item.stage}
+                      style={[
+                        styles.outcomeCard,
+                        isSelected && {
+                          backgroundColor: item.activeBg,
+                          borderColor: item.activeBorder,
+                          borderWidth: 1.5,
+                        },
+                      ]}
+                      onPress={() => handleSelectOutcome(item.stage, item.tag)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.outcomeCardTop}>
+                        <Text style={styles.outcomeEmoji}>{item.emoji}</Text>
+                        <Text
+                          style={[
+                            styles.outcomeLabel,
+                            isSelected && { color: item.activeColor, fontWeight: '700' },
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                      </View>
+                      <Text style={styles.outcomeSublabel}>{item.sublabel}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Other Stages (Fallback Dropdown) */}
               <TouchableOpacity
-                style={styles.dropdownBox}
+                style={styles.moreStagesBtn}
                 onPress={() => setShowStatePicker(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.dropdownValueText}>{selectedState}</Text>
-                <Text style={styles.dropdownCaret}>▼</Text>
+                <Text style={styles.moreStagesBtnText}>
+                  Other Stages:{' '}
+                  <Text style={{ fontWeight: '700', color: '#1E293B' }}>{selectedState}</Text>
+                </Text>
+                <ChevronDown size={14} color="#64748B" />
               </TouchableOpacity>
             </View>
 
@@ -865,18 +1024,6 @@ export const LeadDetailScreen: React.FC = () => {
                 <Text style={styles.fieldLabel}>
                   Reason for Not Connected<Text style={styles.asterisk}>*</Text>
                 </Text>
-                <TouchableOpacity
-                  style={styles.dropdownBox}
-                  onPress={() => setShowNotConnectedReasonPicker(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.dropdownValueText}>
-                    {NOT_CONNECTED_LABELS[selectedNotConnectedReason] || selectedNotConnectedReason}
-                  </Text>
-                  <Text style={styles.dropdownCaret}>▼</Text>
-                </TouchableOpacity>
-
-                {/* 1-Tap Quick Presets */}
                 <View style={styles.quickReasonRow}>
                   {QUICK_NOT_CONNECTED_PRESETS.map((preset) => {
                     const isSelected = selectedNotConnectedReason === preset.reason;
@@ -890,7 +1037,7 @@ export const LeadDetailScreen: React.FC = () => {
                         onPress={() => setSelectedNotConnectedReason(preset.reason)}
                         activeOpacity={0.7}
                       >
-                        <Text style={{ fontSize: 11 }}>{preset.emoji}</Text>
+                        <Text style={{ fontSize: 12 }}>{preset.emoji}</Text>
                         <Text
                           style={[
                             styles.reasonChipText,
@@ -1613,6 +1760,104 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '500',
   },
+  // Post-Call Feedback Banner (NeoDove Standard)
+  callFeedbackBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 10,
+    borderWidth: 1,
+  },
+  callFeedbackConnected: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  callFeedbackMissed: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  callFeedbackBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    gap: 4,
+  },
+  callFeedbackBadgeGreen: {
+    backgroundColor: '#059669',
+  },
+  callFeedbackBadgeRed: {
+    backgroundColor: '#DC2626',
+  },
+  callFeedbackBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  callFeedbackDetailText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    flex: 1,
+  },
+
+  // 1-Tap Primary Outcome Cards
+  primaryOutcomeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  outcomeCard: {
+    flex: 1,
+    minWidth: '47%',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  outcomeCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  outcomeEmoji: {
+    fontSize: 15,
+  },
+  outcomeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  outcomeSublabel: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 2,
+    marginLeft: 21,
+  },
+  moreStagesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 4,
+  },
+  moreStagesBtnText: {
+    fontSize: 12.5,
+    color: '#64748B',
+  },
+
   fieldSection: {
     marginBottom: 16,
   },
