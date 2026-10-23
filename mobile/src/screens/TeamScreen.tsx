@@ -446,25 +446,25 @@ export const TeamScreen: React.FC = () => {
                 key={item._id}
                 style={{
                   backgroundColor: '#FFFFFF',
-                  borderRadius: 14,
-                  padding: 16,
+                  borderRadius: 12,
+                  padding: 10,
                   borderWidth: 1,
                   borderColor: '#E2E8F0',
                   shadowColor: '#0F172A',
                   shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.05,
+                  shadowOpacity: 0.04,
                   shadowRadius: 3,
-                  elevation: 2,
+                  elevation: 1,
                 }}
               >
                 {/* Card Top: Avatar, Name, Role & Edit */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                     <View
                       style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
                         backgroundColor: item.role === 'ADMIN' ? '#EFF6FF' : item.role === 'MANAGER' ? '#F5F3FF' : '#ECFDF5',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -474,7 +474,7 @@ export const TeamScreen: React.FC = () => {
                     >
                       <Text
                         style={{
-                          fontSize: 15,
+                          fontSize: 13,
                           fontWeight: '800',
                           color: item.role === 'ADMIN' ? '#1D4ED8' : item.role === 'MANAGER' ? '#6D28D9' : '#047857',
                         }}
@@ -484,22 +484,22 @@ export const TeamScreen: React.FC = () => {
                     </View>
 
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>
                         {item.name}
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
                         {/* Role Pill */}
                         <View
                           style={{
-                            paddingHorizontal: 8,
-                            paddingVertical: 2,
-                            borderRadius: 6,
+                            paddingHorizontal: 6,
+                            paddingVertical: 1,
+                            borderRadius: 4,
                             backgroundColor: item.role === 'ADMIN' ? '#EFF6FF' : item.role === 'MANAGER' ? '#F5F3FF' : '#F1F5F9',
                           }}
                         >
                           <Text
                             style={{
-                              fontSize: 10.5,
+                              fontSize: 10,
                               fontWeight: '700',
                               color: item.role === 'ADMIN' ? '#2563EB' : item.role === 'MANAGER' ? '#7C3AED' : '#475569',
                             }}
@@ -514,16 +514,16 @@ export const TeamScreen: React.FC = () => {
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 3,
-                            paddingHorizontal: 7,
-                            paddingVertical: 2,
-                            borderRadius: 6,
+                            paddingHorizontal: 6,
+                            paddingVertical: 1,
+                            borderRadius: 4,
                             backgroundColor: '#F0FDFA',
                             borderWidth: 1,
                             borderColor: '#CCFBF1',
                           }}
                         >
-                          <MapPin size={10} color="#0F766E" />
-                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0F766E' }}>
+                          <MapPin size={9} color="#0F766E" />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#0F766E' }}>
                             {item.branch ? `${item.branch}` : 'HQ / All'}
                           </Text>
                         </View>
@@ -536,9 +536,9 @@ export const TeamScreen: React.FC = () => {
                     onPress={() => setEditingMember(item)}
                     activeOpacity={0.7}
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
+                      width: 30,
+                      height: 30,
+                      borderRadius: 15,
                       backgroundColor: '#F8FAFC',
                       borderWidth: 1,
                       borderColor: '#E2E8F0',
@@ -546,7 +546,7 @@ export const TeamScreen: React.FC = () => {
                       justifyContent: 'center',
                     }}
                   >
-                    <Edit2 size={15} color="#475569" />
+                    <Edit2 size={13} color="#475569" />
                   </TouchableOpacity>
                 </View>
 
@@ -554,25 +554,26 @@ export const TeamScreen: React.FC = () => {
                 <View
                   style={{
                     backgroundColor: '#F8FAFC',
-                    borderRadius: 10,
-                    padding: 10,
+                    borderRadius: 8,
+                    paddingVertical: 5,
+                    paddingHorizontal: 8,
                     flexDirection: 'row',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: 12,
+                    marginBottom: 8,
                     borderWidth: 1,
                     borderColor: '#F1F5F9',
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Phone size={13} color="#64748B" />
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Phone size={12} color="#0F9D58" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>
                       {item.phone}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '55%' }}>
-                    <Mail size={13} color="#64748B" />
-                    <Text style={{ fontSize: 12, color: '#64748B' }} numberOfLines={1}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '58%' }}>
+                    <Mail size={12} color="#64748B" />
+                    <Text style={{ fontSize: 11.5, color: '#64748B' }} numberOfLines={1}>
                       {item.email}
                     </Text>
                   </View>
@@ -584,27 +585,27 @@ export const TeamScreen: React.FC = () => {
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    paddingTop: 8,
+                    paddingTop: 6,
                     borderTopWidth: 1,
                     borderTopColor: '#F1F5F9',
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <View
                       style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
+                        width: 7,
+                        height: 7,
+                        borderRadius: 3.5,
                         backgroundColor: item.canReceiveLeads ? '#10B981' : '#94A3B8',
                       }}
                     />
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: item.canReceiveLeads ? '#047857' : '#64748B' }}>
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: item.canReceiveLeads ? '#047857' : '#64748B' }}>
                       {item.canReceiveLeads ? 'Inbound Calling Active' : 'Queue Paused'}
                     </Text>
                   </View>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '600' }}>
                       {item.canReceiveLeads ? 'Accepting' : 'Off'}
                     </Text>
                     <Switch
@@ -612,6 +613,7 @@ export const TeamScreen: React.FC = () => {
                       onValueChange={() => handleToggleReceiveLeads(item)}
                       trackColor={{ false: '#E2E8F0', true: '#10B981' }}
                       thumbColor="#FFFFFF"
+                      style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
                     />
                   </View>
                 </View>
@@ -952,14 +954,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   contentContainer: {
-    padding: 16,
+    padding: 12,
     paddingBottom: 110,
   },
   bannerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
+    gap: 8,
+    flexWrap: 'wrap',
   },
   bannerTitle: {
     fontSize: 16,
@@ -967,28 +971,28 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   bannerSubtitle: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
   },
   addAgentBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#0F9D58',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 4,
+    paddingHorizontal: 10,
+    height: 32,
     borderRadius: 8,
   },
   addAgentText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
   },
   branchTabsRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 8,
   },
   branchTab: {
     flexDirection: 'row',
@@ -997,9 +1001,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    height: 28,
+    borderRadius: 14,
   },
   branchTabActive: {
     backgroundColor: '#F0FDFA',
@@ -1018,8 +1023,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 12,
+    marginBottom: 10,
+    gap: 8,
   },
   searchInputWrap: {
     flex: 1,
@@ -1029,13 +1034,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 36,
-    gap: 8,
+    paddingHorizontal: 8,
+    height: 34,
+    gap: 6,
   },
   searchInput: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#0F172A',
     padding: 0,
   },
@@ -1043,9 +1048,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
     borderRadius: 6,
+    height: 34,
     borderWidth: 1,
     borderColor: '#A7F3D0',
     gap: 6,
