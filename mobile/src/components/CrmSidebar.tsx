@@ -108,13 +108,6 @@ export const CrmSidebarContent: React.FC<{
 
   const WORKSPACE_ITEMS: NavItemConfig[] = [
     { name: 'Dashboard', route: 'Home', label: 'Dashboard', icon: LayoutGrid },
-    {
-      name: 'DirectDialer',
-      route: 'DirectDialer',
-      label: 'Phone Keypad',
-      icon: PhoneCall,
-      action: () => useDialerStore.getState().openDialer(),
-    },
     { name: 'MyLeads', route: 'MyLeads', label: 'My Leads', icon: Users },
     { name: 'CallHistory', route: 'CallHistory', label: 'Call History', icon: History },
     { name: 'MyTasks', route: 'FollowUps', label: 'My Tasks', icon: CalendarCheck2, badge: unreadCount > 0 ? unreadCount : undefined },

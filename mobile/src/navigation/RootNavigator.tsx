@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Platform, useWindowDimensions } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +39,9 @@ import { RootStackParamList } from '../types';
 import { notificationService } from '../services/notification.service';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { DirectDialpadModal } from '../components/DirectDialpadModal';
+import { callSession } from '../services/callSession';
+
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -153,6 +156,7 @@ export const RootNavigator: React.FC = () => {
     restoreSession();
     useCampaignStore.getState().restoreCampaignSelection();
     notificationService.requestPermissions();
+    callSession.init();
   }, [restoreSession]);
 
   if (isLoading) {
@@ -161,7 +165,7 @@ export const RootNavigator: React.FC = () => {
 
   return (
     <ErrorBoundary fallbackMessage="The app encountered an unexpected error. Please tap Retry to reload.">
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {!token ? (
             <Stack.Screen name="Login" component={LoginScreen} />

@@ -36,6 +36,7 @@ import {
 import { fetchMyLeads, disposeLead } from '../api/leadApi';
 import { notificationService } from '../services/notification.service';
 import { callService } from '../services/call.service';
+import { callSession } from '../services/callSession';
 import { Lead, RootStackParamList } from '../types';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
@@ -340,78 +341,17 @@ export const FollowUpsScreen: React.FC = () => {
       }
     }
 
-    isCallingRef.current = true;
-    callStartTimeRef.current = Date.now();
-    callingLeadRef.current = fullLead;
-
     try {
-      await callService.startCall(fullLead);
+      await callSession.startCall(fullLead, {
+        callerSource: 'FOLLOW_UPS',
+        onCallComplete: () => {
+          refetch();
+        },
+      });
     } catch {
-      isCallingRef.current = false;
-      callStartTimeRef.current = null;
-      callingLeadRef.current = null;
       Alert.alert('Unable to dial', `Could not open phone dialer for ${item.phone}`);
     }
-  }, []);
-
-  // AppState Listener: Detect call completion, capture duration, auto-log & open Disposition
-  useEffect(() => {
-    const handleAppStateChange = async (nextState: AppStateStatus) => {
-      const prev = appStateRef.current;
-      appStateRef.current = nextState;
-
-      if (
-        (prev === 'background' || prev === 'inactive') &&
-        nextState === 'active' &&
-        isCallingRef.current &&
-        callStartTimeRef.current !== null &&
-        callingLeadRef.current !== null
-      ) {
-        const startTime = callStartTimeRef.current;
-        const dialedLead = callingLeadRef.current;
-        isCallingRef.current = false;
-        callStartTimeRef.current = null;
-        callingLeadRef.current = null;
-
-        let result: { connected: boolean; durationSeconds: number };
-        try {
-          result = await callService.getCallResult(dialedLead.phone, startTime);
-        } catch {
-          result = { connected: false, durationSeconds: 0 };
-        }
-
-        // ⚡ NeoDove-Grade Auto-Log: Immediately record this call outreach
-        useLeadHistoryStore.getState().addActivity(dialedLead._id, {
-          phone: dialedLead.phone,
-          customerName: dialedLead.name,
-          agentName: user?.name,
-          agentId: user?._id,
-          branch: user?.branch,
-          connected: result.connected,
-          type: 'CALL',
-          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
-          stage: result.connected ? 'Follow Up' : 'Not Connected',
-          durationSeconds: result.connected ? result.durationSeconds : 0,
-          remark: result.connected ? 'Follow-up call completed' : 'Follow-up call not answered',
-        });
-
-        refetch();
-
-        // Direct to Disposition
-        navigation.navigate('Dispose', {
-          lead: dialedLead,
-          initialTab: 'DISPOSE LEAD',
-          callDurationSeconds: result.connected ? result.durationSeconds : 0,
-          isCallConnected: result.connected,
-          callAttempt: true,
-          detectionMethod: 'AUTOMATIC',
-        });
-      }
-    };
-
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [navigation, refetch, user]);
+  }, [refetch]);
 
   // Direct WhatsApp Handler
   const handleOpenWhatsApp = useCallback((item: FollowUpItem) => {
