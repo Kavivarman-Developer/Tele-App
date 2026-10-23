@@ -33,6 +33,7 @@ import { DisposeScreen } from '../screens/DisposeScreen';
 import { AddWalkInLeadScreen } from '../screens/AddWalkInLeadScreen';
 import { CallHistoryScreen } from '../screens/CallHistoryScreen';
 import { AgentReportScreen } from '../screens/AgentReportScreen';
+import { CampaignDetailScreen } from '../screens/CampaignDetailScreen';
 import { RootStackParamList } from '../types';
 import { notificationService } from '../services/notification.service';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -173,6 +174,7 @@ export const RootNavigator: React.FC = () => {
               <Stack.Screen name="AgentReports" component={AgentReportScreen} />
               <Stack.Screen name="Team" component={TeamScreen} />
               <Stack.Screen name="Campaigns" component={CampaignsScreen} />
+              <Stack.Screen name="CampaignDetail" component={CampaignDetailScreen} />
               <Stack.Screen name="UploadLeads" component={UploadLeadsScreen} />
               <Stack.Screen name="Settings" component={SettingsScreen} />
               <Stack.Screen name="RetryRules" component={RetryRulesScreen} />

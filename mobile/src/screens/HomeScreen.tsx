@@ -45,6 +45,9 @@ import {
   ListOrdered,
   MapPin,
   Building2,
+  Megaphone,
+  UserPlus,
+  BarChart2,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
@@ -898,6 +901,103 @@ const HomeScreenContent: React.FC = () => {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* =========================================================================
+            NEODOVE AGENT LAUNCHPAD HUB (Image 1 Standard)
+           ========================================================================= */}
+        <View style={styles.launchpadContainer}>
+          <Text style={styles.welcomeHeroText}>Welcome {user?.name || 'Caller'}</Text>
+
+          {/* Prominent "Start Calling" Hero Pill Button */}
+          <TouchableOpacity
+            style={styles.heroStartCallingBtn}
+            onPress={() => {
+              const activeQueue =
+                newUnattemptedLeads.length > 0
+                  ? newUnattemptedLeads
+                  : followUpLeads.length > 0
+                  ? followUpLeads
+                  : allBranchFilteredLeads;
+              handleStartCallingQueue(activeQueue, 'Calling Queue');
+            }}
+            activeOpacity={0.88}
+          >
+            <Phone size={17} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 8 }} />
+            <Text style={styles.heroStartCallingText}>Start Calling</Text>
+          </TouchableOpacity>
+
+          {/* 6 Grid Action Cards (2 Columns x 3 Rows) */}
+          <View style={styles.actionGridContainer}>
+            {/* Row 1 */}
+            <View style={styles.gridRow}>
+              {/* Card 1: My Campaigns */}
+              <TouchableOpacity
+                style={[styles.gridActionCard, { backgroundColor: '#6366F1' }]}
+                onPress={() => navigation.navigate('CampaignSelect')}
+                activeOpacity={0.85}
+              >
+                <Megaphone size={38} color="#FFFFFF" strokeWidth={2.2} />
+                <Text style={styles.gridActionLabel}>My Campaigns</Text>
+              </TouchableOpacity>
+
+              {/* Card 2: My Leads */}
+              <TouchableOpacity
+                style={[styles.gridActionCard, { backgroundColor: '#EA580C' }]}
+                onPress={() => navigation.navigate('MyLeads')}
+                activeOpacity={0.85}
+              >
+                <PhoneCall size={38} color="#FFFFFF" strokeWidth={2.2} />
+                <Text style={styles.gridActionLabel}>My Leads</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Row 2 */}
+            <View style={styles.gridRow}>
+              {/* Card 3: My Tasks */}
+              <TouchableOpacity
+                style={[styles.gridActionCard, { backgroundColor: '#EC4899' }]}
+                onPress={() => navigation.navigate('FollowUps')}
+                activeOpacity={0.85}
+              >
+                <CalendarClock size={38} color="#FFFFFF" strokeWidth={2.2} />
+                <Text style={styles.gridActionLabel}>My Tasks</Text>
+              </TouchableOpacity>
+
+              {/* Card 4: My Report */}
+              <TouchableOpacity
+                style={[styles.gridActionCard, { backgroundColor: '#84CC16' }]}
+                onPress={() => navigation.navigate('AgentReports')}
+                activeOpacity={0.85}
+              >
+                <BarChart2 size={38} color="#FFFFFF" strokeWidth={2.2} />
+                <Text style={styles.gridActionLabel}>My Report</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Row 3 */}
+            <View style={styles.gridRow}>
+              {/* Card 5: Call Logs (highlighted in user image 1) */}
+              <TouchableOpacity
+                style={[styles.gridActionCard, { backgroundColor: '#8B5CF6' }]}
+                onPress={() => navigation.navigate('CallHistory')}
+                activeOpacity={0.85}
+              >
+                <Clock3 size={38} color="#FFFFFF" strokeWidth={2.2} />
+                <Text style={styles.gridActionLabel}>Call Logs</Text>
+              </TouchableOpacity>
+
+              {/* Card 6: Walk-in Leads */}
+              <TouchableOpacity
+                style={[styles.gridActionCard, { backgroundColor: '#0284C7' }]}
+                onPress={() => navigation.navigate('AddWalkInLead')}
+                activeOpacity={0.85}
+              >
+                <UserPlus size={38} color="#FFFFFF" strokeWidth={2.2} />
+                <Text style={styles.gridActionLabel}>Walk-in Leads</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
 
         {/* =========================================================================
             PERFORMANCE SUMMARY — date banner + 2x2 metric grid, unified card
@@ -1784,6 +1884,76 @@ const styles = StyleSheet.create({
     maxWidth: 1240,
     width: '100%',
     alignSelf: 'center',
+  },
+  launchpadContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  welcomeHeroText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 14,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  heroStartCallingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4C1D95',
+    paddingVertical: 12,
+    paddingHorizontal: 44,
+    borderRadius: 28,
+    marginBottom: 20,
+    shadowColor: '#4C1D95',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  heroStartCallingText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  actionGridContainer: {
+    width: '100%',
+    gap: 12,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  gridActionCard: {
+    flex: 1,
+    height: 125,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  gridActionLabel: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   headerAddBtn: {
     flexDirection: 'row',
