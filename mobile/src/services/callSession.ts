@@ -108,6 +108,26 @@ class CallSessionManager {
         result = { connected: false, durationSeconds: 0 };
       }
 
+      // ==============================================================
+      // NEODOVE-GRADE VERIFICATION: Was a call actually placed?
+      // If the agent opened the dialer and pressed Back without dialing,
+      // NO call log entry exists. DO NOT increment call count or log activity!
+      // ==============================================================
+      const wasCallActuallyPlaced = result.callPlaced ?? result.matchedLog ?? false;
+
+      if (!wasCallActuallyPlaced) {
+        console.log(
+          '[CallSession] Outbound call was not placed or cancelled before dialing. Discarding without logging.',
+        );
+        this.isProcessingReturn = false;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { toast } = require('../store/toastStore');
+          toast.info('Call was cancelled without dialing.', 'Call Cancelled');
+        } catch {}
+        return;
+      }
+
       // Record strictly 1 single deduplicated activity in useLeadHistoryStore
       try {
         const user = useAuthStore.getState().user;

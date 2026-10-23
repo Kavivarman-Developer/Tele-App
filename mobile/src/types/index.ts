@@ -207,6 +207,7 @@ export interface DetectedCallResult {
   connected: boolean;
   rawType?: string;
   matchedLog?: boolean;
+  callPlaced?: boolean;
 }
 
 export type RootStackParamList = {
