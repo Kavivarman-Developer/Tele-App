@@ -49,6 +49,7 @@ import {
   RotateCw,
   Ban,
   PhoneOutgoing,
+  BookmarkCheck,
 } from 'lucide-react-native';
 
 import { callService } from '../services/call.service';
@@ -67,6 +68,7 @@ import { colors, borderRadius, shadows } from '../theme';
 import { CallPermissionModal } from '../components/CallPermissionModal';
 import { LeadTimeline, deduplicateActivities } from '../components/LeadTimeline';
 import { CrmDateTimePickerModal } from '../components/CrmDateTimePickerModal';
+import { TagManagerModal } from '../components/TagManagerModal';
 import { notificationService } from '../services/notification.service';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
@@ -286,6 +288,7 @@ export const LeadDetailScreen: React.FC = () => {
   // Modals for LEAD INFO
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const [showEditContactModal, setShowEditContactModal] = useState<boolean>(false);
+  const [showTagManagerModal, setShowTagManagerModal] = useState<boolean>(false);
   const [editName, setEditName] = useState<string>(lead.name);
   const [editPhone, setEditPhone] = useState<string>(lead.phone);
 
@@ -706,6 +709,12 @@ export const LeadDetailScreen: React.FC = () => {
       : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const openEditContact = () => {
+    setEditName(currentLead.name || '');
+    setEditPhone(currentLead.phone || '');
+    setShowEditContactModal(true);
+  };
+
   const handleSaveContactEdit = async () => {
     const newName = editName.trim() || currentLead.name;
     const newPhone = editPhone.trim() || currentLead.phone;
@@ -800,9 +809,10 @@ export const LeadDetailScreen: React.FC = () => {
                 <Text style={styles.contactLabel}>Contact name: </Text>
                 <Text style={styles.contactValue}>{currentLead.name}</Text>
                 <TouchableOpacity
-                  onPress={() => setShowEditContactModal(true)}
+                  onPress={openEditContact}
                   style={styles.pencilBtn}
                   activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Edit2 size={13} color="#059669" />
                 </TouchableOpacity>
@@ -812,9 +822,10 @@ export const LeadDetailScreen: React.FC = () => {
                 <Text style={styles.contactLabel}>Contact number: </Text>
                 <Text style={styles.contactValue}>{formatDisplayPhone(currentLead.phone)}</Text>
                 <TouchableOpacity
-                  onPress={() => setShowEditContactModal(true)}
+                  onPress={openEditContact}
                   style={styles.pencilBtn}
                   activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Edit2 size={13} color="#059669" />
                 </TouchableOpacity>
@@ -826,6 +837,16 @@ export const LeadDetailScreen: React.FC = () => {
                   {campaignName}
                 </Text>
               </View>
+
+              {/* Tag to Manager / Admin Button */}
+              <TouchableOpacity
+                style={styles.leadInfoTagBtn}
+                onPress={() => setShowTagManagerModal(true)}
+                activeOpacity={0.8}
+              >
+                <BookmarkCheck size={14} color="#D97706" strokeWidth={2.5} />
+                <Text style={styles.leadInfoTagBtnText}>Tag Lead to Branch Manager / Admin</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Card 2: Contact History */}
@@ -918,20 +939,51 @@ export const LeadDetailScreen: React.FC = () => {
           <View style={styles.disposeContainer}>
             {/* Customer Quick Summary Card */}
             <View style={styles.leadHeaderBanner}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.leadHeaderName}>{currentLead.name}</Text>
-                <Text style={styles.leadHeaderPhone}>
-                  {formatDisplayPhone(currentLead.phone)} • {campaignName}
-                </Text>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.leadHeaderName} numberOfLines={1}>{currentLead.name}</Text>
+                  <TouchableOpacity
+                    onPress={openEditContact}
+                    style={styles.headerEditBtn}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Edit2 size={13} color="#059669" />
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  onPress={openEditContact}
+                  activeOpacity={0.7}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+                >
+                  <Text style={styles.leadHeaderPhone} numberOfLines={1}>
+                    {formatDisplayPhone(currentLead.phone)} • {campaignName}
+                  </Text>
+                  <Edit2 size={11} color="#64748B" />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.quickDialBtn}
-                onPress={handlePressCall}
-                activeOpacity={0.8}
-              >
-                <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={styles.quickDialBtnText}>{callActive ? 'Calling…' : 'Call'}</Text>
-              </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {/* Tag Manager Button */}
+                <TouchableOpacity
+                  style={styles.quickTagBtn}
+                  onPress={() => setShowTagManagerModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <BookmarkCheck size={13} color="#D97706" strokeWidth={2.5} />
+                  <Text style={styles.quickTagBtnText}>Tag</Text>
+                </TouchableOpacity>
+
+                {/* Call Button */}
+                <TouchableOpacity
+                  style={styles.quickDialBtn}
+                  onPress={handlePressCall}
+                  activeOpacity={0.8}
+                >
+                  <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={styles.quickDialBtnText}>{callActive ? 'Calling…' : 'Call'}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* NeoDove-Grade Post-Call Feedback Banner */}
@@ -1512,6 +1564,18 @@ export const LeadDetailScreen: React.FC = () => {
           await initiateCall();
         }}
       />
+
+      {/* Tag Manager / Admin Modal */}
+      <TagManagerModal
+        visible={showTagManagerModal}
+        onClose={() => setShowTagManagerModal(false)}
+        customerName={currentLead.name}
+        customerPhone={currentLead.phone}
+        leadId={currentLead._id}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['leadHistory', currentLead._id] });
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -1744,6 +1808,45 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '500',
+  },
+  headerEditBtn: {
+    padding: 3,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 6,
+  },
+  quickTagBtn: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  quickTagBtnText: {
+    color: '#D97706',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  leadInfoTagBtn: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  leadInfoTagBtnText: {
+    color: '#D97706',
+    fontSize: 13,
+    fontWeight: '700',
   },
   goToDisposeBtn: {
     backgroundColor: '#0F9D58',

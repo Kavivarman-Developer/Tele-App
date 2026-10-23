@@ -162,6 +162,34 @@ export class NotificationService {
       console.warn('[NotificationService] Failed to cancel notification:', error);
     }
   }
+
+  /**
+   * Fires an immediate high-priority alert notification (e.g. when an agent tags Admin or Branch Manager).
+   */
+  public async sendImmediateNotification(
+    title: string,
+    body: string,
+    data?: Record<string, any>,
+  ): Promise<string | null> {
+    if (Platform.OS === 'web') return null;
+
+    try {
+      const notifId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: data || {},
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.MAX,
+        },
+        trigger: null,
+      });
+      return notifId;
+    } catch (error) {
+      console.warn('[NotificationService] Failed to send immediate alert notification:', error);
+      return null;
+    }
+  }
 }
 
 export const notificationService = new NotificationService();

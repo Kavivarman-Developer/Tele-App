@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   CheckCheck,
   Sparkles,
+  BookmarkCheck,
 } from 'lucide-react-native';
 
 import { fetchMyLeads } from '../api/leadApi';
@@ -36,8 +37,10 @@ import { useNotificationStore } from '../store/notificationStore';
 import { Lead, Activity } from '../types';
 import { WhatsAppTemplateModal } from './WhatsAppTemplateModal';
 import { LeadQuickModal } from './LeadQuickModal';
+import { TaggedLeadRecord } from './TagManagerModal';
 import { toast } from '../store/toastStore';
 import { storage } from '../utils/storage';
+import { formatDisplayPhone } from '../utils/phoneUtils';
 import { colors, borderRadius, shadows } from '../theme';
 
 interface NotificationFollowUp {
@@ -81,9 +84,11 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
     timestamp: string;
   } | null>(null);
 
+  const [taggedList, setTaggedList] = useState<TaggedLeadRecord[]>([]);
+
   useEffect(() => {
     if (!visible) return;
-    const loadAssigned = async () => {
+    const loadNotifications = async () => {
       try {
         const raw = await storage.getItem('tele_crm_assigned_lead_notifications');
         if (raw) {
@@ -99,9 +104,83 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
           setAssignedNotif(relevant || null);
         }
       } catch {}
+
+      try {
+        const tagRaw = await storage.getItem('tele_crm_tagged_lead_notifications');
+        if (tagRaw) {
+          const list: TaggedLeadRecord[] = JSON.parse(tagRaw);
+          const relevant = list.filter((item) => {
+            if (!user?.role || user.role === 'ADMIN') return true;
+            if (user.role === 'MANAGER') {
+              if (item.targetRole === 'ADMIN') return false;
+              if (item.branch && user.branch && item.branch.toLowerCase() !== user.branch.toLowerCase()) return false;
+              return true;
+            }
+            return true;
+          });
+          setTaggedList(relevant);
+        }
+      } catch {}
     };
-    loadAssigned();
+    loadNotifications();
   }, [visible, user]);
+
+  const handleDismissTag = async (id: string) => {
+    try {
+      const updated = taggedList.filter((item) => item.id !== id);
+      setTaggedList(updated);
+      const raw = await storage.getItem('tele_crm_tagged_lead_notifications');
+      if (raw) {
+        const full: TaggedLeadRecord[] = JSON.parse(raw);
+        await storage.setItem(
+          'tele_crm_tagged_lead_notifications',
+          JSON.stringify(full.filter((item) => item.id !== id)),
+        );
+      }
+    } catch {}
+  };
+
+  const handleCallTagged = async (item: TaggedLeadRecord) => {
+    toast.info(`Dialing ${item.customerName}...`);
+    try {
+      await callService.startCall({ phone: item.customerPhone, name: item.customerName } as any);
+    } catch {}
+    const syntheticLead: Lead = {
+      _id: item.leadId || `tagged-${item.id}`,
+      campaignId: 'default-camp',
+      name: item.customerName,
+      phone: item.customerPhone,
+      source: 'DIRECT_CALL',
+      stage: 'Follow Up',
+      tag: 'HOT',
+      temperature: 'HOT',
+      status: 'OPEN',
+      attemptCount: 1,
+      customProperties: {},
+      createdAt: item.createdAt,
+      updatedAt: new Date().toISOString(),
+    };
+    setQuickLead(syntheticLead);
+  };
+
+  const handleViewTagged = (item: TaggedLeadRecord) => {
+    const syntheticLead: Lead = {
+      _id: item.leadId || `tagged-${item.id}`,
+      campaignId: 'default-camp',
+      name: item.customerName,
+      phone: item.customerPhone,
+      source: 'DIRECT_CALL',
+      stage: 'Follow Up',
+      tag: 'HOT',
+      temperature: 'HOT',
+      status: 'OPEN',
+      attemptCount: 1,
+      customProperties: {},
+      createdAt: item.createdAt,
+      updatedAt: new Date().toISOString(),
+    };
+    setQuickLead(syntheticLead);
+  };
 
   // Fetch real follow-ups from backend if available
   const { data: myLeadsData, refetch } = useQuery({
@@ -369,6 +448,77 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
             style={styles.scrollArea}
             contentContainerStyle={{ paddingBottom: 16 }}
           >
+            {/* Tagged Leads Alert Cards (Management Escalations) */}
+            {taggedList.length > 0 && (
+              <View style={styles.taggedSection}>
+                <View style={styles.taggedSectionHeader}>
+                  <View style={styles.taggedSectionHeaderLeft}>
+                    <BookmarkCheck size={16} color="#D97706" />
+                    <Text style={styles.taggedSectionTitle}>
+                      Tagged Leads ({taggedList.length})
+                    </Text>
+                  </View>
+                  <Text style={styles.taggedSectionSubtitle}>
+                    Priority management alerts
+                  </Text>
+                </View>
+
+                {taggedList.map((tag) => (
+                  <View key={tag.id} style={styles.taggedCard}>
+                    <View style={styles.taggedCardHeader}>
+                      <View style={styles.taggedReasonBadge}>
+                        <Text style={styles.taggedReasonText}>🏷️ {tag.reason}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleDismissTag(tag.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <X size={15} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.taggedCustomerName}>{tag.customerName}</Text>
+                    <Text style={styles.taggedCustomerPhone}>
+                      📞 {formatDisplayPhone(tag.customerPhone)}
+                    </Text>
+
+                    <View style={styles.taggedAgentRow}>
+                      <Text style={styles.taggedAgentText}>
+                        Tagged by <Text style={{ fontWeight: '700', color: '#1E293B' }}>{tag.agentName}</Text> • {tag.branch}
+                      </Text>
+                    </View>
+
+                    {tag.note ? (
+                      <View style={styles.taggedNoteBox}>
+                        <Text style={styles.taggedNoteText}>"{tag.note}"</Text>
+                      </View>
+                    ) : null}
+
+                    {/* Actions: Call Now & View Details */}
+                    <View style={styles.taggedActionsRow}>
+                      <TouchableOpacity
+                        style={styles.taggedCallBtn}
+                        onPress={() => handleCallTagged(tag)}
+                        activeOpacity={0.8}
+                      >
+                        <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                        <Text style={styles.taggedCallBtnText}>Call Customer Now</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.taggedViewBtn}
+                        onPress={() => handleViewTagged(tag)}
+                        activeOpacity={0.8}
+                      >
+                        <ExternalLink size={13} color="#0284C7" />
+                        <Text style={styles.taggedViewBtnText}>View Lead</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {/* New Leads Notification Box */}
             {assignedNotif && (
               <View style={styles.assignedLeadsBox}>
@@ -951,6 +1101,124 @@ const styles = StyleSheet.create({
   assignedLeadsActionBtnText: {
     color: '#FFFFFF',
     fontSize: 11,
+    fontWeight: '700',
+  },
+  // Tagged Section Styles
+  taggedSection: {
+    marginBottom: 16,
+  },
+  taggedSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  taggedSectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  taggedSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  taggedSectionSubtitle: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  taggedCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  taggedCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  taggedReasonBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  taggedReasonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  taggedCustomerName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  taggedCustomerPhone: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#475569',
+    marginTop: 2,
+  },
+  taggedAgentRow: {
+    marginTop: 4,
+  },
+  taggedAgentText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  taggedNoteBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+    padding: 8,
+    marginTop: 8,
+  },
+  taggedNoteText: {
+    fontSize: 12,
+    color: '#334155',
+    fontStyle: 'italic',
+  },
+  taggedActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  taggedCallBtn: {
+    flex: 1.3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#0F9D58',
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  taggedCallBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  taggedViewBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  taggedViewBtnText: {
+    color: '#1D4ED8',
+    fontSize: 12,
     fontWeight: '700',
   },
 });
