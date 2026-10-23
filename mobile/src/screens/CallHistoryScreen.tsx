@@ -27,13 +27,11 @@ import {
   Flame,
   Sun,
   Snowflake,
-  ArrowUpRight,
   CheckCircle2,
   PhoneOff,
   RotateCw,
   TrendingUp,
   PhoneOutgoing,
-  PhoneIncoming,
   BookmarkCheck,
   Filter,
 } from 'lucide-react-native';
@@ -111,8 +109,12 @@ const CallHistoryCard = React.memo<CallCardProps>(
     const isIncoming = (act as any).direction === 'INCOMING' || (act as any).callType === 'INCOMING';
 
     return (
-      <View style={styles.logCard}>
-        {/* Main Content Row: Info Details on Left + Quick Dial Button on Right */}
+      <TouchableOpacity
+        style={styles.logCard}
+        onPress={() => onOpenLead(act)}
+        activeOpacity={0.88}
+      >
+        {/* Main Content Row: Info Details on Left + Quick Call Button on Right */}
         <View style={styles.logCardTopRow}>
           <View style={styles.logFieldsCol}>
             {/* Name */}
@@ -126,7 +128,10 @@ const CallHistoryCard = React.memo<CallCardProps>(
             {/* Number */}
             <TouchableOpacity
               style={styles.logFieldRow}
-              onPress={() => onCallAgain(act)}
+              onPress={(e) => {
+                e.stopPropagation();
+                onCallAgain(act);
+              }}
               activeOpacity={0.7}
             >
               <Text style={styles.logFieldLabel}>Number: </Text>
@@ -152,18 +157,17 @@ const CallHistoryCard = React.memo<CallCardProps>(
             </View>
           </View>
 
-          {/* Quick Dial Arrow Button (Top Right as in Image 2) */}
+          {/* Quick Call Button (Top Right as requested) */}
           <TouchableOpacity
-            style={styles.quickDialArrowBtn}
-            onPress={() => onCallAgain(act)}
-            activeOpacity={0.7}
+            style={styles.topRightCallBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              onCallAgain(act);
+            }}
+            activeOpacity={0.8}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {isIncoming ? (
-              <PhoneIncoming size={20} color="#0F9D58" strokeWidth={2.3} />
-            ) : (
-              <ArrowUpRight size={22} color="#7C3AED" strokeWidth={2.5} />
-            )}
+            <Phone size={18} color="#FFFFFF" strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
 
@@ -221,46 +225,7 @@ const CallHistoryCard = React.memo<CallCardProps>(
             </View>
           ) : null}
         </View>
-
-        {/* Action Buttons Row: [ 📞 Call Again ] [ 💬 WhatsApp ] [ 🏷️ Tag Manager ] [ 📋 Details ] */}
-        <View style={styles.cardActionsRow}>
-          <TouchableOpacity
-            style={styles.callAgainBtn}
-            onPress={() => onCallAgain(act)}
-            activeOpacity={0.8}
-          >
-            <Phone size={12} color="#FFFFFF" strokeWidth={2.5} />
-            <Text style={styles.callAgainBtnText}>Call Again</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.whatsAppBtn}
-            onPress={() => onOpenWhatsApp(act)}
-            activeOpacity={0.8}
-          >
-            <MessageCircle size={12} color="#0F9D58" strokeWidth={2.5} />
-            <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tagLeadBtn}
-            onPress={() => onTagLead(act)}
-            activeOpacity={0.8}
-          >
-            <BookmarkCheck size={12} color="#D97706" strokeWidth={2.5} />
-            <Text style={styles.tagLeadBtnText}>Tag Manager</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.openLeadBtn}
-            onPress={() => onOpenLead(act)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.openLeadBtnText}>Details</Text>
-            <ArrowUpRight size={12} color="#0284C7" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      </TouchableOpacity>
     );
   },
 );
@@ -1416,16 +1381,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Quick Dial Arrow (Image 2)
-  quickDialArrowBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F3FF',
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
+  // Top Right Quick Call Button
+  topRightCallBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#0F9D58',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#0F9D58',
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
     marginTop: 2,
   },
 
@@ -1507,86 +1475,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Card Actions
-  cardActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  callAgainBtn: {
-    flex: 1.15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0F9D58',
-    paddingVertical: 7.5,
-    borderRadius: 8,
-    gap: 4,
-    shadowColor: '#0F9D58',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  callAgainBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  whatsAppBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    paddingVertical: 7,
-    borderRadius: 8,
-    gap: 3,
-  },
-  whatsAppBtnText: {
-    color: '#15803D',
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  tagLeadBtn: {
-    flex: 1.15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    paddingVertical: 7,
-    borderRadius: 8,
-    gap: 3,
-  },
-  tagLeadBtnText: {
-    color: '#D97706',
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  openLeadBtn: {
-    flex: 0.95,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    paddingVertical: 7,
-    borderRadius: 8,
-    gap: 2,
-  },
-  openLeadBtnText: {
-    color: '#0284C7',
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
+
 
   // Empty State
   emptyStateBox: {

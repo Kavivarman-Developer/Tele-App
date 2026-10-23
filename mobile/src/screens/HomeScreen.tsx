@@ -814,8 +814,9 @@ const HomeScreenContent: React.FC = () => {
 
   return (
     <CrmShell
-      title="Hi Talk"
+      title="Calling Desk"
       headerIcon={<LayoutGrid size={15} color={T.color.textMuted} />}
+      showBack={true}
       customSubtitleNode={
         <TouchableOpacity
           style={styles.campaignSwitch}
@@ -902,102 +903,6 @@ const HomeScreenContent: React.FC = () => {
           </View>
         )}
 
-        {/* =========================================================================
-            NEODOVE AGENT LAUNCHPAD HUB (Image 1 Standard)
-           ========================================================================= */}
-        <View style={styles.launchpadContainer}>
-          <Text style={styles.welcomeHeroText}>Welcome {user?.name || 'Caller'}</Text>
-
-          {/* Prominent "Start Calling" Hero Pill Button */}
-          <TouchableOpacity
-            style={styles.heroStartCallingBtn}
-            onPress={() => {
-              const activeQueue =
-                newUnattemptedLeads.length > 0
-                  ? newUnattemptedLeads
-                  : followUpLeads.length > 0
-                  ? followUpLeads
-                  : allBranchFilteredLeads;
-              handleStartCallingQueue(activeQueue, 'Calling Queue');
-            }}
-            activeOpacity={0.88}
-          >
-            <Phone size={17} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 8 }} />
-            <Text style={styles.heroStartCallingText}>Start Calling</Text>
-          </TouchableOpacity>
-
-          {/* 6 Grid Action Cards (2 Columns x 3 Rows) */}
-          <View style={styles.actionGridContainer}>
-            {/* Row 1 */}
-            <View style={styles.gridRow}>
-              {/* Card 1: My Campaigns */}
-              <TouchableOpacity
-                style={[styles.gridActionCard, { backgroundColor: '#6366F1' }]}
-                onPress={() => navigation.navigate('CampaignSelect')}
-                activeOpacity={0.85}
-              >
-                <Megaphone size={38} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.gridActionLabel}>My Campaigns</Text>
-              </TouchableOpacity>
-
-              {/* Card 2: My Leads */}
-              <TouchableOpacity
-                style={[styles.gridActionCard, { backgroundColor: '#EA580C' }]}
-                onPress={() => navigation.navigate('MyLeads')}
-                activeOpacity={0.85}
-              >
-                <PhoneCall size={38} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.gridActionLabel}>My Leads</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Row 2 */}
-            <View style={styles.gridRow}>
-              {/* Card 3: My Tasks */}
-              <TouchableOpacity
-                style={[styles.gridActionCard, { backgroundColor: '#EC4899' }]}
-                onPress={() => navigation.navigate('FollowUps')}
-                activeOpacity={0.85}
-              >
-                <CalendarClock size={38} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.gridActionLabel}>My Tasks</Text>
-              </TouchableOpacity>
-
-              {/* Card 4: My Report */}
-              <TouchableOpacity
-                style={[styles.gridActionCard, { backgroundColor: '#84CC16' }]}
-                onPress={() => navigation.navigate('AgentReports')}
-                activeOpacity={0.85}
-              >
-                <BarChart2 size={38} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.gridActionLabel}>My Report</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Row 3 */}
-            <View style={styles.gridRow}>
-              {/* Card 5: Call Logs (highlighted in user image 1) */}
-              <TouchableOpacity
-                style={[styles.gridActionCard, { backgroundColor: '#8B5CF6' }]}
-                onPress={() => navigation.navigate('CallHistory')}
-                activeOpacity={0.85}
-              >
-                <Clock3 size={38} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.gridActionLabel}>Call Logs</Text>
-              </TouchableOpacity>
-
-              {/* Card 6: Walk-in Leads */}
-              <TouchableOpacity
-                style={[styles.gridActionCard, { backgroundColor: '#0284C7' }]}
-                onPress={() => navigation.navigate('AddWalkInLead')}
-                activeOpacity={0.85}
-              >
-                <UserPlus size={38} color="#FFFFFF" strokeWidth={2.2} />
-                <Text style={styles.gridActionLabel}>Walk-in Leads</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
 
         {/* =========================================================================
             PERFORMANCE SUMMARY — date banner + 2x2 metric grid, unified card

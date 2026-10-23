@@ -214,6 +214,8 @@ export type RootStackParamList = {
   CampaignSelect: undefined;
   Main: undefined;
   Home: undefined;
+  Launchpad: undefined;
+  CallingDesk: undefined;
   MyLeads: { campaignId?: string; campaignName?: string } | undefined;
   FollowUps: undefined;
   CallHistory: { campaignId?: string; campaignName?: string } | undefined;
