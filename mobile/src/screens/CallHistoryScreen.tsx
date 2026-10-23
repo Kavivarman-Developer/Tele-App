@@ -13,7 +13,7 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import {
   PhoneCall,
@@ -33,14 +33,16 @@ import {
   RotateCw,
   TrendingUp,
   PhoneOutgoing,
+  PhoneIncoming,
   BookmarkCheck,
+  Filter,
 } from 'lucide-react-native';
 
 import { CrmShell } from '../components/CrmShell';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
-import { fetchUserActivities } from '../api/leadApi';
-import { Activity, CustomerTemperature, Lead } from '../types';
+import { fetchUserActivities, fetchCampaigns } from '../api/leadApi';
+import { Activity, CustomerTemperature, Lead, RootStackParamList } from '../types';
 import { formatDisplayPhone } from '../utils/phoneUtils';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
 import { LeadQuickModal } from '../components/LeadQuickModal';
@@ -50,10 +52,11 @@ import { callService } from '../services/call.service';
 import { toast } from '../store/toastStore';
 import { colors } from '../theme';
 
-type DateFilter = 'TODAY' | 'YESTERDAY' | 'CUSTOM' | 'ALL';
+type DateFilter = 'TODAY' | 'YESTERDAY' | 'WEEK' | 'CUSTOM' | 'ALL';
 type StageFilter = 'ALL' | 'CONNECTED' | 'INTERESTED' | 'FOLLOW_UP' | 'NOT_CONNECTED';
+type DirectionTab = 'ALL' | 'OUTGOING' | 'INCOMING';
 
-// Safe initials helper (guaranteed zero crash)
+// Safe initials helper
 const getInitials = (name?: string, fallback = 'CL') => {
   if (!name || typeof name !== 'string') return fallback;
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -62,17 +65,17 @@ const getInitials = (name?: string, fallback = 'CL') => {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 };
 
-const formatActivityTime = (isoString: string) => {
+// Formats date & time matching NeoDove format: "04:52 PM, 29 Aug 2023"
+const formatCallDetails = (isoString?: string) => {
+  if (!isoString) return 'Recent';
   try {
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return isoString;
-    const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (isToday) {
-      return `Today, ${timeStr}`;
-    }
-    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`;
+    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    const day = d.getDate();
+    const month = d.toLocaleDateString([], { month: 'short' });
+    const year = d.getFullYear();
+    return `${timeStr}, ${day} ${month} ${year}`;
   } catch {
     return isoString;
   }
@@ -88,10 +91,11 @@ const formatDuration = (seconds?: number, connected?: boolean) => {
 };
 
 // ======================================================================
-// MEMOIZED NEODOVE-GRADE CALL CARD
+// MEMOIZED NEODOVE CALL LOG CARD (MATCHING IMAGE 2 EXACTLY)
 // ======================================================================
 interface CallCardProps {
   act: Activity;
+  campaignName: string;
   onCallAgain: (act: Activity) => void;
   onOpenWhatsApp: (act: Activity) => void;
   onOpenLead: (act: Activity) => void;
@@ -99,144 +103,127 @@ interface CallCardProps {
 }
 
 const CallHistoryCard = React.memo<CallCardProps>(
-  ({ act, onCallAgain, onOpenWhatsApp, onOpenLead, onTagLead }) => {
-    const isHot = act.temperature === 'HOT' || act.tag === 'HOT';
-    const isCold = act.temperature === 'COLD' || act.tag === 'COLD';
+  ({ act, campaignName, onCallAgain, onOpenWhatsApp, onOpenLead, onTagLead }) => {
     const displayName =
       act.customerName ||
       (act.phone ? `Customer (${formatDisplayPhone(act.phone)})` : 'Lead Contact');
-    const initials = getInitials(act.customerName);
     const isConnected = Boolean(act.connected);
+    const isIncoming = (act as any).direction === 'INCOMING' || (act as any).callType === 'INCOMING';
 
     return (
-      <View style={styles.callCard}>
-        {/* Card Header: Avatar + Customer Info + Time & Duration */}
-        <View style={styles.callCardHeader}>
-          {/* Avatar with direction indicator */}
-          <View style={styles.avatarWrap}>
-            <View style={[styles.avatarCircle, isConnected ? styles.avatarConnected : styles.avatarMissed]}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
-            <View style={[styles.directionDot, isConnected ? styles.directionConnected : styles.directionMissed]}>
-              {isConnected ? (
-                <PhoneOutgoing size={9} color="#FFFFFF" strokeWidth={2.5} />
-              ) : (
-                <PhoneOff size={9} color="#FFFFFF" strokeWidth={2.5} />
-              )}
-            </View>
-          </View>
-
-          {/* Customer Info */}
-          <View style={styles.customerInfoCol}>
-            <View style={styles.nameRow}>
-              <Text style={styles.customerNameText} numberOfLines={1}>
+      <View style={styles.logCard}>
+        {/* Main Content Row: Info Details on Left + Quick Dial Button on Right */}
+        <View style={styles.logCardTopRow}>
+          <View style={styles.logFieldsCol}>
+            {/* Name */}
+            <View style={styles.logFieldRow}>
+              <Text style={styles.logFieldLabel}>Name: </Text>
+              <Text style={styles.logFieldValueBold} numberOfLines={1}>
                 {displayName}
               </Text>
-
-              {/* Temperature Pill */}
-              <View
-                style={[
-                  styles.tempPill,
-                  isHot ? styles.tempHot : isCold ? styles.tempCold : styles.tempWarm,
-                ]}
-              >
-                {isHot ? (
-                  <Flame size={10} color="#DC2626" fill="#DC2626" />
-                ) : isCold ? (
-                  <Snowflake size={10} color="#2563EB" />
-                ) : (
-                  <Sun size={10} color="#D97706" />
-                )}
-                <Text
-                  style={[
-                    styles.tempPillText,
-                    { color: isHot ? '#DC2626' : isCold ? '#2563EB' : '#D97706' },
-                  ]}
-                >
-                  {isHot ? 'Hot' : isCold ? 'Cold' : 'Warm'}
-                </Text>
-              </View>
             </View>
 
-            {/* Phone Number */}
+            {/* Number */}
             <TouchableOpacity
-              style={styles.phoneClickableRow}
+              style={styles.logFieldRow}
               onPress={() => onCallAgain(act)}
               activeOpacity={0.7}
             >
-              <Phone size={12} color="#0F9D58" />
-              <Text style={styles.customerPhoneText}>
+              <Text style={styles.logFieldLabel}>Number: </Text>
+              <Text style={styles.logFieldValuePhone}>
                 {act.phone ? formatDisplayPhone(act.phone) : 'No phone'}
               </Text>
             </TouchableOpacity>
-          </View>
 
-          {/* Time & Duration Column */}
-          <View style={styles.timeDurationCol}>
-            <View style={styles.callTimePill}>
-              <Clock size={11} color="#64748B" />
-              <Text style={styles.callTimeText}>{formatActivityTime(act.createdAt)}</Text>
+            {/* Campaign */}
+            <View style={styles.logFieldRow}>
+              <Text style={styles.logFieldLabel}>Campaign: </Text>
+              <Text style={styles.logFieldValueCampaign} numberOfLines={1}>
+                {campaignName}
+              </Text>
             </View>
 
-            <View
-              style={[
-                styles.durationBadge,
-                isConnected ? styles.durationConnected : styles.durationMissed,
-              ]}
-            >
-              {isConnected ? (
-                <Phone size={10} color="#0F9D58" />
-              ) : (
-                <PhoneOff size={10} color="#DC2626" />
-              )}
-              <Text
-                style={[
-                  styles.durationText,
-                  isConnected ? { color: '#0F9D58' } : { color: '#DC2626' },
-                ]}
-              >
-                {formatDuration(act.durationSeconds, isConnected)}
+            {/* Call Details */}
+            <View style={styles.logFieldRow}>
+              <Text style={styles.logFieldLabel}>Call Details: </Text>
+              <Text style={styles.logFieldValueDetails}>
+                {formatCallDetails(act.createdAt)}
               </Text>
             </View>
           </View>
+
+          {/* Quick Dial Arrow Button (Top Right as in Image 2) */}
+          <TouchableOpacity
+            style={styles.quickDialArrowBtn}
+            onPress={() => onCallAgain(act)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {isIncoming ? (
+              <PhoneIncoming size={20} color="#0F9D58" strokeWidth={2.3} />
+            ) : (
+              <ArrowUpRight size={22} color="#7C3AED" strokeWidth={2.5} />
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Metadata Row: Stage Pill, Follow-up tag */}
-        <View style={styles.cardMetaRow}>
-          <View style={[styles.stageBadge, isConnected ? styles.stageBadgeConnected : styles.stageBadgeNeutral]}>
-            <Text style={[styles.stageBadgeText, isConnected ? styles.stageTextConnected : styles.stageTextNeutral]}>
+        {/* Status / Duration / Remark pill strip */}
+        <View style={styles.logMetaStrip}>
+          <View
+            style={[
+              styles.stageBadge,
+              isConnected ? styles.stageBadgeConnected : styles.stageBadgeNeutral,
+            ]}
+          >
+            <Text
+              style={[
+                styles.stageBadgeText,
+                isConnected ? styles.stageTextConnected : styles.stageTextNeutral,
+              ]}
+            >
               {act.stage || (isConnected ? 'Connected' : 'Not Connected')}
             </Text>
           </View>
 
-          {act.notConnectedReason && !isConnected ? (
-            <View style={styles.reasonBadge}>
-              <Text style={styles.reasonBadgeText}>
-                {act.notConnectedReason.replace(/_/g, ' ')}
-              </Text>
-            </View>
-          ) : null}
+          <View
+            style={[
+              styles.durationBadge,
+              isConnected ? styles.durationConnected : styles.durationMissed,
+            ]}
+          >
+            {isConnected ? (
+              <Phone size={10} color="#0F9D58" />
+            ) : (
+              <PhoneOff size={10} color="#DC2626" />
+            )}
+            <Text
+              style={[
+                styles.durationText,
+                isConnected ? { color: '#0F9D58' } : { color: '#DC2626' },
+              ]}
+            >
+              {formatDuration(act.durationSeconds, isConnected)}
+            </Text>
+          </View>
 
           {act.followUpAt ? (
             <View style={styles.followUpScheduledTag}>
               <Calendar size={11} color="#0D9488" />
-              <Text style={styles.followUpScheduledText}>Callback scheduled</Text>
+              <Text style={styles.followUpScheduledText}>Callback</Text>
+            </View>
+          ) : null}
+
+          {act.remark && act.remark !== 'Call completed' && act.remark !== 'Call not answered' ? (
+            <View style={styles.logRemarkBadge}>
+              <Text style={styles.logRemarkText} numberOfLines={1}>
+                "{act.remark}"
+              </Text>
             </View>
           ) : null}
         </View>
 
-        {/* Remark / Notes (if present) */}
-        {act.remark && act.remark !== 'Call completed' && act.remark !== 'Call not answered' ? (
-          <View style={styles.remarkBox}>
-            <Text style={styles.remarkText} numberOfLines={2}>
-              "{act.remark}"
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Action Buttons Row: [ 📞 Call Again ] [ 💬 WhatsApp ] [ 🏷️ Tag ] [ 📋 Lead Details ] */}
+        {/* Action Buttons Row: [ 📞 Call Again ] [ 💬 WhatsApp ] [ 🏷️ Tag Manager ] [ 📋 Details ] */}
         <View style={styles.cardActionsRow}>
-          {/* Call Again (Triggers full AppState & Duration tracking) */}
           <TouchableOpacity
             style={styles.callAgainBtn}
             onPress={() => onCallAgain(act)}
@@ -246,7 +233,6 @@ const CallHistoryCard = React.memo<CallCardProps>(
             <Text style={styles.callAgainBtnText}>Call Again</Text>
           </TouchableOpacity>
 
-          {/* WhatsApp */}
           <TouchableOpacity
             style={styles.whatsAppBtn}
             onPress={() => onOpenWhatsApp(act)}
@@ -256,17 +242,15 @@ const CallHistoryCard = React.memo<CallCardProps>(
             <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
           </TouchableOpacity>
 
-          {/* Tag Manager Button */}
           <TouchableOpacity
             style={styles.tagLeadBtn}
             onPress={() => onTagLead(act)}
             activeOpacity={0.8}
           >
             <BookmarkCheck size={12} color="#D97706" strokeWidth={2.5} />
-            <Text style={styles.tagLeadBtnText}>Tag</Text>
+            <Text style={styles.tagLeadBtnText}>Tag Manager</Text>
           </TouchableOpacity>
 
-          {/* Open Lead */}
           <TouchableOpacity
             style={styles.openLeadBtn}
             onPress={() => onOpenLead(act)}
@@ -278,29 +262,38 @@ const CallHistoryCard = React.memo<CallCardProps>(
         </View>
       </View>
     );
-  }
+  },
 );
 
 // ======================================================================
-// MAIN CALL HISTORY SCREEN
+// MAIN CALL HISTORY / LOGS SCREEN
 // ======================================================================
 export const CallHistoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<RouteProp<RootStackParamList, 'CallHistory'>>();
   const { width } = useWindowDimensions();
-  const isWide = width >= 860;
 
   const { user } = useAuthStore();
   const isAgent = user?.role === 'AGENT';
 
   const { getAllActivities, loadHistory } = useLeadHistoryStore();
 
-  // Redial Tracking Refs (NeoDove-Grade Tracking)
+  // Campaign Filter from Navigation Route (e.g. from Campaign Analytics)
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | undefined>(
+    route.params?.campaignId,
+  );
+  const [selectedCampaignName, setSelectedCampaignName] = useState<string | undefined>(
+    route.params?.campaignName,
+  );
+
+  // Redial Tracking Refs (NeoDove Tracking)
   const isCallingRef = useRef(false);
   const callStartTimeRef = useRef<number | null>(null);
   const callingActRef = useRef<Activity | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   // Filters
+  const [directionTab, setDirectionTab] = useState<DirectionTab>('ALL');
   const [dateFilter, setDateFilter] = useState<DateFilter>('TODAY');
   const [selectedCustomDate, setSelectedCustomDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -336,18 +329,74 @@ export const CallHistoryScreen: React.FC = () => {
     loadHistory();
   }, [loadHistory]);
 
+  // Update selected campaign if route params change
+  useEffect(() => {
+    if (route.params?.campaignId) {
+      setSelectedCampaignId(route.params.campaignId);
+      setSelectedCampaignName(route.params.campaignName);
+    }
+  }, [route.params?.campaignId, route.params?.campaignName]);
+
+  // Fetch campaigns for campaign name lookup
+  const { data: campaignData } = useQuery({
+    queryKey: ['campaigns'],
+    queryFn: fetchCampaigns,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const campaignMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (campaignData?.campaigns) {
+      for (const c of campaignData.campaigns) {
+        map[c._id] = c.name;
+      }
+    }
+    return map;
+  }, [campaignData]);
+
+  // Date boundary helpers
+  const { startOfToday, startOfYesterday, endOfYesterday, startOfWeek } = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterday = today - 24 * 60 * 60 * 1000;
+    const endYesterday = today - 1;
+    const week = today - 7 * 24 * 60 * 60 * 1000;
+    return {
+      startOfToday: today,
+      startOfYesterday: yesterday,
+      endOfYesterday: endYesterday,
+      startOfWeek: week,
+    };
+  }, []);
+
+  // Fetch activities from server with date bounds
   const {
     data: serverActivities = [],
     isLoading: isLoadingServer,
     refetch: refetchServer,
   } = useQuery({
-    queryKey: ['myCallActivities', user?._id],
-    queryFn: () => fetchUserActivities(),
+    queryKey: ['myCallActivities', user?._id, dateFilter, selectedCustomDate],
+    queryFn: () => {
+      let from: string | undefined;
+      let to: string | undefined;
+      if (dateFilter === 'TODAY') {
+        from = new Date(startOfToday).toISOString();
+      } else if (dateFilter === 'YESTERDAY') {
+        from = new Date(startOfYesterday).toISOString();
+        to = new Date(endOfYesterday).toISOString();
+      } else if (dateFilter === 'WEEK') {
+        from = new Date(startOfWeek).toISOString();
+      } else if (dateFilter === 'CUSTOM' && selectedCustomDate) {
+        const cd = new Date(selectedCustomDate);
+        from = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate(), 0, 0, 0).toISOString();
+        to = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate(), 23, 59, 59, 999).toISOString();
+      }
+      return fetchUserActivities({ from, to });
+    },
     staleTime: 1000 * 15,
   });
 
-  // ⚡ CRITICAL NEODOVE-GRADE TRACKING:
-  // AppState Listener to detect when user returns from phone dialer after "Call Again"
+  // AppState Listener to detect redial completion
   useEffect(() => {
     const handleAppStateChange = async (nextState: AppStateStatus) => {
       const prevState = appStateRef.current;
@@ -387,7 +436,7 @@ export const CallHistoryScreen: React.FC = () => {
           updatedAt: '',
         };
 
-        // ⚡ Auto-log this redial outreach immediately into store (so count increases!)
+        // Auto-log redial activity
         useLeadHistoryStore.getState().addActivity(syntheticLead._id, {
           phone: syntheticLead.phone,
           customerName: syntheticLead.name,
@@ -397,15 +446,17 @@ export const CallHistoryScreen: React.FC = () => {
           connected: result.connected,
           type: 'CALL',
           notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
-          stage: result.connected ? (dialedAct.stage === 'New' ? 'Connected' : dialedAct.stage) : 'Not Connected',
+          stage: result.connected
+            ? dialedAct.stage === 'New'
+              ? 'Connected'
+              : dialedAct.stage
+            : 'Not Connected',
           durationSeconds: result.connected ? result.durationSeconds : 0,
           remark: result.connected ? 'Call completed' : 'Call not answered',
         });
 
-        // Refetch query to update list
         refetchServer();
 
-        // Navigate to Dispose so agent can update notes or schedule callback
         navigation.navigate('Dispose', {
           lead: syntheticLead,
           initialTab: 'DISPOSE LEAD',
@@ -432,13 +483,13 @@ export const CallHistoryScreen: React.FC = () => {
       const uName = typeof a.userId === 'object' && a.userId ? (a.userId as any).name : '';
       return Boolean(
         (cleanId && uId && String(uId).toLowerCase() === cleanId) ||
-        (cleanId && a.agentId && String(a.agentId).toLowerCase() === cleanId) ||
-        (cleanName && uName && String(uName).toLowerCase() === cleanName) ||
-        (cleanName && a.agentName && String(a.agentName).toLowerCase() === cleanName)
+          (cleanId && a.agentId && String(a.agentId).toLowerCase() === cleanId) ||
+          (cleanName && uName && String(uName).toLowerCase() === cleanName) ||
+          (cleanName && a.agentName && String(a.agentName).toLowerCase() === cleanName),
       );
     };
 
-    const targetAgentId = isAgent ? (user?._id || user?.name) : undefined;
+    const targetAgentId = isAgent ? user?._id || user?.name : undefined;
     const local = getAllActivities(targetAgentId).filter(
       (activity) => activity.type === 'CALL' && matchesMe(activity),
     );
@@ -461,18 +512,6 @@ export const CallHistoryScreen: React.FC = () => {
     );
   }, [serverActivities, getAllActivities, user, isAgent]);
 
-  const { startOfToday, startOfYesterday, endOfYesterday } = useMemo(() => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const yesterday = today - 24 * 60 * 60 * 1000;
-    const endYesterday = today - 1;
-    return {
-      startOfToday: today,
-      startOfYesterday: yesterday,
-      endOfYesterday: endYesterday,
-    };
-  }, []);
-
   const customDateDisplay = useMemo(() => {
     if (!selectedCustomDate) return null;
     const d = new Date(selectedCustomDate);
@@ -480,16 +519,22 @@ export const CallHistoryScreen: React.FC = () => {
     return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
   }, [selectedCustomDate]);
 
-  // Filter activities strictly by date, stage, and search query
-  const filteredActivities = useMemo(() => {
+  // Base list filtered by Campaign & Date
+  const dateAndCampaignFiltered = useMemo(() => {
     return userActivities.filter((act) => {
-      const actTime = new Date(act.createdAt).getTime();
+      // Campaign filter
+      if (selectedCampaignId && act.campaignId !== selectedCampaignId) {
+        return false;
+      }
 
       // Date Filter
+      const actTime = new Date(act.createdAt).getTime();
       if (dateFilter === 'TODAY') {
         if (actTime < startOfToday) return false;
       } else if (dateFilter === 'YESTERDAY') {
         if (actTime < startOfYesterday || actTime > endOfYesterday) return false;
+      } else if (dateFilter === 'WEEK') {
+        if (actTime < startOfWeek) return false;
       } else if (dateFilter === 'CUSTOM' && selectedCustomDate) {
         const cd = new Date(selectedCustomDate);
         const startOfCustom = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate()).getTime();
@@ -497,7 +542,35 @@ export const CallHistoryScreen: React.FC = () => {
         if (actTime < startOfCustom || actTime > endOfCustom) return false;
       }
 
-      // Stage / Connection Filter
+      return true;
+    });
+  }, [userActivities, selectedCampaignId, dateFilter, selectedCustomDate, startOfToday, startOfYesterday, endOfYesterday, startOfWeek]);
+
+  // Direction counts based on current date & campaign filter
+  const directionCounts = useMemo(() => {
+    let outCount = 0;
+    let inCount = 0;
+    for (const a of dateAndCampaignFiltered) {
+      const isInc = (a as any).direction === 'INCOMING' || (a as any).callType === 'INCOMING';
+      if (isInc) inCount++;
+      else outCount++;
+    }
+    return {
+      all: dateAndCampaignFiltered.length,
+      outgoing: outCount,
+      incoming: inCount,
+    };
+  }, [dateAndCampaignFiltered]);
+
+  // Final filtered list including Direction, Stage, and Search Query
+  const filteredActivities = useMemo(() => {
+    return dateAndCampaignFiltered.filter((act) => {
+      // Direction filter
+      const isInc = (act as any).direction === 'INCOMING' || (act as any).callType === 'INCOMING';
+      if (directionTab === 'OUTGOING' && isInc) return false;
+      if (directionTab === 'INCOMING' && !isInc) return false;
+
+      // Stage filter
       if (stageFilter === 'CONNECTED' && !act.connected) return false;
       if (stageFilter === 'NOT_CONNECTED' && act.connected) return false;
       if (stageFilter === 'INTERESTED' && !act.stage.toLowerCase().includes('interested')) return false;
@@ -515,20 +588,30 @@ export const CallHistoryScreen: React.FC = () => {
 
       return true;
     });
-  }, [userActivities, dateFilter, selectedCustomDate, stageFilter, searchQuery, startOfToday, startOfYesterday, endOfYesterday]);
+  }, [dateAndCampaignFiltered, directionTab, stageFilter, searchQuery]);
 
+  // Date Tab Badge Counts (scoped by campaign if selected)
   const todayCount = useMemo(() => {
-    return userActivities.filter(
-      (a) => new Date(a.createdAt).getTime() >= startOfToday,
-    ).length;
-  }, [userActivities, startOfToday]);
+    return userActivities.filter((a) => {
+      if (selectedCampaignId && a.campaignId !== selectedCampaignId) return false;
+      return new Date(a.createdAt).getTime() >= startOfToday;
+    }).length;
+  }, [userActivities, selectedCampaignId, startOfToday]);
 
   const yesterdayCount = useMemo(() => {
     return userActivities.filter((a) => {
+      if (selectedCampaignId && a.campaignId !== selectedCampaignId) return false;
       const t = new Date(a.createdAt).getTime();
       return t >= startOfYesterday && t <= endOfYesterday;
     }).length;
-  }, [userActivities, startOfYesterday, endOfYesterday]);
+  }, [userActivities, selectedCampaignId, startOfYesterday, endOfYesterday]);
+
+  const weekCount = useMemo(() => {
+    return userActivities.filter((a) => {
+      if (selectedCampaignId && a.campaignId !== selectedCampaignId) return false;
+      return new Date(a.createdAt).getTime() >= startOfWeek;
+    }).length;
+  }, [userActivities, selectedCampaignId, startOfWeek]);
 
   // Computed metrics for currently filtered call activities
   const callStats = useMemo(() => {
@@ -557,7 +640,7 @@ export const CallHistoryScreen: React.FC = () => {
     };
   }, [filteredActivities]);
 
-  // Redial handler with NeoDove tracking
+  // Redial handler
   const handleCallAgain = (act: Activity) => {
     if (!act.phone) {
       Alert.alert('No Number', 'Customer phone number is unavailable.');
@@ -633,13 +716,94 @@ export const CallHistoryScreen: React.FC = () => {
   // Header Component for Virtualized FlatList
   const renderListHeader = () => (
     <View style={styles.headerContainer}>
+      {/* NeoDove Direction Segmented Tabs: ALL | OUTGOING | INCOMING */}
+      <View style={styles.directionTabsBar}>
+        <TouchableOpacity
+          style={[styles.directionTabBtn, directionTab === 'ALL' && styles.directionTabBtnActive]}
+          onPress={() => setDirectionTab('ALL')}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.directionTabText,
+              directionTab === 'ALL' && styles.directionTabTextActive,
+            ]}
+          >
+            ALL ({directionCounts.all})
+          </Text>
+          {directionTab === 'ALL' && <View style={styles.directionActiveBar} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.directionTabBtn,
+            directionTab === 'OUTGOING' && styles.directionTabBtnActive,
+          ]}
+          onPress={() => setDirectionTab('OUTGOING')}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.directionTabText,
+              directionTab === 'OUTGOING' && styles.directionTabTextActive,
+            ]}
+          >
+            OUTGOING ({directionCounts.outgoing})
+          </Text>
+          {directionTab === 'OUTGOING' && <View style={styles.directionActiveBar} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.directionTabBtn,
+            directionTab === 'INCOMING' && styles.directionTabBtnActive,
+          ]}
+          onPress={() => setDirectionTab('INCOMING')}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.directionTabText,
+              directionTab === 'INCOMING' && styles.directionTabTextActive,
+            ]}
+          >
+            INCOMING ({directionCounts.incoming})
+          </Text>
+          {directionTab === 'INCOMING' && <View style={styles.directionActiveBar} />}
+        </TouchableOpacity>
+      </View>
+
+      {/* Campaign Filter Pill Banner (if filtered by Campaign) */}
+      {selectedCampaignId ? (
+        <View style={styles.campaignFilterBanner}>
+          <View style={styles.campaignFilterInfo}>
+            <Filter size={13} color="#0F9D58" />
+            <Text style={styles.campaignFilterLabel}>Campaign:</Text>
+            <Text style={styles.campaignFilterValue} numberOfLines={1}>
+              {selectedCampaignName || campaignMap[selectedCampaignId] || 'Selected Campaign'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.campaignClearBtn}
+            onPress={() => {
+              setSelectedCampaignId(undefined);
+              setSelectedCampaignName(undefined);
+            }}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <X size={13} color="#DC2626" />
+            <Text style={styles.campaignClearText}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       {/* Top Search Bar & Refresh */}
       <View style={styles.topSearchRow}>
         <View style={styles.searchInputWrap}>
           <Search size={16} color="#64748B" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search customer or phone..."
+            placeholder="Search customer, phone or remark..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -659,7 +823,7 @@ export const CallHistoryScreen: React.FC = () => {
           onPress={() => {
             loadHistory();
             refetchServer();
-            toast.info('Refreshed call history');
+            toast.info('Refreshed call logs');
           }}
           activeOpacity={0.7}
         >
@@ -702,7 +866,7 @@ export const CallHistoryScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Date Filter Tabs */}
+      {/* Date Filter Tabs with Historical Browsing */}
       <View style={styles.dateTabsRow}>
         <TouchableOpacity
           style={[styles.dateTab, dateFilter === 'TODAY' && styles.dateTabActive]}
@@ -736,6 +900,24 @@ export const CallHistoryScreen: React.FC = () => {
           <View style={[styles.tabBadge, dateFilter === 'YESTERDAY' && styles.tabBadgeActive]}>
             <Text style={[styles.tabBadgeText, dateFilter === 'YESTERDAY' && styles.tabBadgeTextActive]}>
               {yesterdayCount}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.dateTab, dateFilter === 'WEEK' && styles.dateTabActive]}
+          onPress={() => {
+            setDateFilter('WEEK');
+            setSelectedCustomDate(null);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.dateTabText, dateFilter === 'WEEK' && styles.dateTabTextActive]}>
+            Last 7 Days
+          </Text>
+          <View style={[styles.tabBadge, dateFilter === 'WEEK' && styles.tabBadgeActive]}>
+            <Text style={[styles.tabBadgeText, dateFilter === 'WEEK' && styles.tabBadgeTextActive]}>
+              {weekCount}
             </Text>
           </View>
         </TouchableOpacity>
@@ -791,7 +973,7 @@ export const CallHistoryScreen: React.FC = () => {
           (stg) => {
             const isSelected = stageFilter === stg;
             const labelMap: Record<StageFilter, string> = {
-              ALL: 'All Calls',
+              ALL: 'All Statuses',
               CONNECTED: 'Connected',
               NOT_CONNECTED: 'Not Connected',
               INTERESTED: 'Interested',
@@ -825,14 +1007,17 @@ export const CallHistoryScreen: React.FC = () => {
       <Text style={styles.emptySub}>
         {dateFilter === 'TODAY'
           ? "You haven't placed any calls today yet. Calls you make will automatically appear here with duration and connection status."
-          : 'No calls match the selected date and filter criteria.'}
+          : 'No call logs match the selected direction, date, and filter criteria.'}
       </Text>
       <TouchableOpacity
         style={styles.emptyResetBtn}
         onPress={() => {
           setDateFilter('TODAY');
           setStageFilter('ALL');
+          setDirectionTab('ALL');
           setSearchQuery('');
+          setSelectedCustomDate(null);
+          setSelectedCampaignId(undefined);
         }}
         activeOpacity={0.7}
       >
@@ -843,9 +1028,10 @@ export const CallHistoryScreen: React.FC = () => {
 
   return (
     <CrmShell
-      title="Call History"
-      headerIcon={<PhoneCall size={15} color={colors.textSecondary} />}
+      title="Call Logs"
+      headerIcon={<PhoneCall size={16} color={colors.textSecondary} />}
       breadcrumb="Workspace"
+      showBack={true}
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -857,6 +1043,11 @@ export const CallHistoryScreen: React.FC = () => {
           renderItem={({ item }) => (
             <CallHistoryCard
               act={item}
+              campaignName={
+                (item.campaignId && campaignMap[item.campaignId]) ||
+                (item as any).campaignName ||
+                'General Campaign'
+              }
               onCallAgain={handleCallAgain}
               onOpenWhatsApp={handleOpenWhatsApp}
               onOpenLead={handleOpenLead}
@@ -904,7 +1095,7 @@ export const CallHistoryScreen: React.FC = () => {
         }}
       />
 
-      {/* Custom Date Picker Modal */}
+      {/* Custom Date Picker Modal for Past Dates */}
       <CrmDateTimePickerModal
         visible={showDatePicker}
         mode="date"
@@ -926,8 +1117,93 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   headerContainer: {
-    paddingTop: 12,
+    paddingTop: 10,
     marginBottom: 8,
+  },
+
+  // Direction Segmented Tabs Bar (Image 2)
+  directionTabsBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    marginBottom: 12,
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+  },
+  directionTabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  directionTabBtnActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  directionTabText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.3,
+  },
+  directionTabTextActive: {
+    color: '#0F9D58',
+    fontWeight: '800',
+  },
+  directionActiveBar: {
+    position: 'absolute',
+    bottom: -1,
+    left: 12,
+    right: 12,
+    height: 3,
+    backgroundColor: '#0F9D58',
+    borderRadius: 2,
+  },
+
+  // Campaign Filter Banner
+  campaignFilterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  campaignFilterInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  campaignFilterLabel: {
+    fontSize: 12,
+    color: '#15803D',
+    fontWeight: '600',
+  },
+  campaignFilterValue: {
+    fontSize: 12,
+    color: '#0F172A',
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  campaignClearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 6,
+  },
+  campaignClearText: {
+    fontSize: 11,
+    color: '#DC2626',
+    fontWeight: '700',
   },
 
   // Top Search
@@ -1005,23 +1281,24 @@ const styles = StyleSheet.create({
   // Date Tabs
   dateTabsRow: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 6,
     marginBottom: 10,
   },
   dateTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5.5,
     borderRadius: 20,
     backgroundColor: '#F1F5F9',
-    gap: 6,
+    gap: 5,
   },
   dateTabActive: {
     backgroundColor: '#0F9D58',
   },
   dateTabText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#475569',
   },
@@ -1035,7 +1312,7 @@ const styles = StyleSheet.create({
   },
   tabBadge: {
     backgroundColor: '#E2E8F0',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 10,
   },
@@ -1043,7 +1320,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   tabBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#475569',
   },
@@ -1080,149 +1357,80 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Call Card
-  callCard: {
+  // ==========================================================
+  // NEODOVE LOG CARD (IMAGE 2)
+  // ==========================================================
+  logCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     padding: 14,
-    marginBottom: 10,
+    marginBottom: 12,
     shadowColor: '#0F172A',
     shadowOpacity: 0.04,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
-  callCardHeader: {
+  logCardTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  avatarWrap: {
-    position: 'relative',
-  },
-  avatarCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarConnected: {
-    backgroundColor: '#E6F4EA',
-  },
-  avatarMissed: {
-    backgroundColor: '#FEE2E2',
-  },
-  avatarText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#1E293B',
-  },
-  directionDot: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-  },
-  directionConnected: {
-    backgroundColor: '#0F9D58',
-  },
-  directionMissed: {
-    backgroundColor: '#DC2626',
-  },
-  customerInfoCol: {
+  logFieldsCol: {
     flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  customerNameText: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#0F172A',
-    flexShrink: 1,
-  },
-  phoneClickableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  customerPhoneText: {
-    fontSize: 12.5,
-    color: '#0F9D58',
-    fontWeight: '600',
-  },
-
-  // Time & Duration Col
-  timeDurationCol: {
-    alignItems: 'flex-end',
     gap: 4,
   },
-  callTimePill: {
+  logFieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    flexWrap: 'wrap',
   },
-  callTimeText: {
-    fontSize: 11,
+  logFieldLabel: {
+    fontSize: 13,
     color: '#64748B',
     fontWeight: '500',
   },
-  durationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 6,
-    gap: 4,
+  logFieldValueBold: {
+    fontSize: 13.5,
+    color: '#0F172A',
+    fontWeight: '700',
+    flexShrink: 1,
   },
-  durationConnected: {
-    backgroundColor: '#E6F4EA',
-  },
-  durationMissed: {
-    backgroundColor: '#FEE2E2',
-  },
-  durationText: {
-    fontSize: 10.5,
+  logFieldValuePhone: {
+    fontSize: 13,
+    color: '#0F9D58',
     fontWeight: '700',
   },
+  logFieldValueCampaign: {
+    fontSize: 12.5,
+    color: '#334155',
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  logFieldValueDetails: {
+    fontSize: 12.5,
+    color: '#475569',
+    fontWeight: '500',
+  },
 
-  // Temp Pills
-  tempPill: {
-    flexDirection: 'row',
+  // Quick Dial Arrow (Image 2)
+  quickDialArrowBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
-    gap: 3,
-  },
-  tempHot: {
-    backgroundColor: '#FEF2F2',
-  },
-  tempWarm: {
-    backgroundColor: '#FEF3C7',
-  },
-  tempCold: {
-    backgroundColor: '#EFF6FF',
-  },
-  tempPillText: {
-    fontSize: 10,
-    fontWeight: '700',
+    justifyContent: 'center',
+    marginTop: 2,
   },
 
-  // Meta Row
-  cardMetaRow: {
+  // Status / Metadata Strip
+  logMetaStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1252,17 +1460,23 @@ const styles = StyleSheet.create({
   stageTextNeutral: {
     color: '#475569',
   },
-  reasonBadge: {
-    backgroundColor: '#FEE2E2',
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 6,
+    gap: 4,
   },
-  reasonBadgeText: {
+  durationConnected: {
+    backgroundColor: '#E6F4EA',
+  },
+  durationMissed: {
+    backgroundColor: '#FEE2E2',
+  },
+  durationText: {
     fontSize: 10.5,
-    fontWeight: '600',
-    color: '#DC2626',
-    textTransform: 'capitalize',
+    fontWeight: '700',
   },
   followUpScheduledTag: {
     flexDirection: 'row',
@@ -1278,20 +1492,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0D9488',
   },
-
-  // Remark Box
-  remarkBox: {
+  logRemarkBadge: {
     backgroundColor: '#F8FAFC',
-    borderLeftWidth: 3,
-    borderLeftColor: '#0F9D58',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 4,
-    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    maxWidth: '100%',
   },
-  remarkText: {
-    fontSize: 12,
-    color: '#475569',
+  logRemarkText: {
+    fontSize: 10.5,
+    color: '#64748B',
     fontStyle: 'italic',
   },
 
@@ -1342,7 +1554,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   tagLeadBtn: {
-    flex: 0.85,
+    flex: 1.15,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Target,
   ChevronRight,
+  BarChart2,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
@@ -275,7 +276,22 @@ export const CampaignSelectScreen: React.FC = () => {
 
                 {/* CTA Action Bar */}
                 <View style={styles.campFooter}>
-                  <Text style={styles.campFooterHint}>Strict per-campaign lead isolation</Text>
+                  <TouchableOpacity
+                    style={styles.viewAnalyticsMiniBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      navigation.navigate('CampaignDetail', {
+                        campaignId: camp._id,
+                        campaignName: camp.name,
+                        campaign: camp,
+                      });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <BarChart2 size={13} color="#2563EB" />
+                    <Text style={styles.viewAnalyticsMiniText}>View Analytics</Text>
+                  </TouchableOpacity>
+
                   <View style={styles.enterQueueBtn}>
                     <Text style={styles.enterQueueBtnText}>Enter Calling Desk</Text>
                     <ArrowRight size={14} color="#FFFFFF" strokeWidth={2.5} />
@@ -604,6 +620,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     fontWeight: '500',
+  },
+  viewAnalyticsMiniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  viewAnalyticsMiniText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#2563EB',
   },
   enterQueueBtn: {
     flexDirection: 'row',

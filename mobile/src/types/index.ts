@@ -216,12 +216,13 @@ export type RootStackParamList = {
   Home: undefined;
   MyLeads: { campaignId?: string; campaignName?: string } | undefined;
   FollowUps: undefined;
-  CallHistory: undefined;
+  CallHistory: { campaignId?: string; campaignName?: string } | undefined;
   AgentReports: undefined;
   Dashboard: undefined;
   Profile: undefined;
   Team: undefined;
   Campaigns: undefined;
+  CampaignDetail: { campaignId?: string; campaignName?: string; campaign?: Campaign } | undefined;
   UploadLeads: undefined;
   Settings: undefined;
   RetryRules: undefined;
