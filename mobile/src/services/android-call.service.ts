@@ -38,7 +38,7 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
   }
 
   /**
-   * Checks whether the user has granted READ_CALL_LOG and READ_PHONE_STATE permissions.
+   * Checks whether the user has granted READ_CALL_LOG, READ_PHONE_STATE, and CALL_PHONE permissions.
    */
   public async checkPermissions(): Promise<boolean> {
     if (Platform.OS !== 'android') {
@@ -52,8 +52,11 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
       const hasReadPhoneState = await PermissionsAndroid.check(
         PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE,
       );
+      const hasCallPhone = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.CALL_PHONE,
+      );
 
-      return hasReadCallLog && hasReadPhoneState;
+      return hasReadCallLog && hasReadPhoneState && hasCallPhone;
     } catch (error) {
       console.warn('[AndroidCallService] checkPermissions error:', error);
       return false;
@@ -61,7 +64,7 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
   }
 
   /**
-   * Requests runtime READ_CALL_LOG and READ_PHONE_STATE permissions on Android.
+   * Requests runtime READ_CALL_LOG, READ_PHONE_STATE, and CALL_PHONE permissions on Android.
    */
   public async requestPermissions(): Promise<boolean> {
     if (Platform.OS !== 'android') {
@@ -72,6 +75,7 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
       const results = await PermissionsAndroid.requestMultiple([
         PermissionsAndroid.PERMISSIONS.READ_CALL_LOG,
         PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE,
+        PermissionsAndroid.PERMISSIONS.CALL_PHONE,
       ]);
 
       const callLogGranted =
@@ -80,12 +84,55 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
       const phoneStateGranted =
         results[PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE] ===
         PermissionsAndroid.RESULTS.GRANTED;
+      const callPhoneGranted =
+        results[PermissionsAndroid.PERMISSIONS.CALL_PHONE] ===
+        PermissionsAndroid.RESULTS.GRANTED;
 
-      return callLogGranted && phoneStateGranted;
+      return callLogGranted && phoneStateGranted && callPhoneGranted;
     } catch (error) {
       console.warn('[AndroidCallService] requestPermissions error:', error);
       return false;
     }
+  }
+
+  /**
+   * Initiates direct phone call without opening the phone keypad, using Intent.ACTION_CALL.
+   * Falls back gracefully to ACTION_DIAL if permission not granted or unsupported.
+   */
+  public override async startCall(lead: Lead): Promise<boolean> {
+    if (!lead || !lead.phone) {
+      console.warn('[AndroidCallService] Cannot start call: Missing phone number');
+      return false;
+    }
+
+    const cleanNumber = lead.phone.replace(/[^\d+*#]/g, '').trim();
+    if (!cleanNumber) return false;
+
+    // Check & request CALL_PHONE permission if needed
+    try {
+      const hasCallPerm = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CALL_PHONE);
+      if (!hasCallPerm) {
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CALL_PHONE);
+      }
+    } catch {
+      // Continue to call attempt
+    }
+
+    // Attempt direct phone call using IntentLauncher (android.intent.action.CALL)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const IntentLauncher = require('expo-intent-launcher');
+      if (IntentLauncher && IntentLauncher.startActivityAsync) {
+        await IntentLauncher.startActivityAsync('android.intent.action.CALL', {
+          data: `tel:${cleanNumber}`,
+        });
+        return true;
+      }
+    } catch (launcherErr) {
+      console.log('[AndroidCallService] Direct ACTION_CALL fallback to tel URL:', launcherErr);
+    }
+
+    return super.startCall(lead);
   }
 
   /**

@@ -51,6 +51,7 @@ import { LeadSummaryModal } from '../components/LeadSummaryModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { callService } from '../services/call.service';
+import { callSession } from '../services/callSession';
 import { getDialerTelUrl, formatDisplayPhone, normalizePhoneDigits, isLeadLostOrSuppressed } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
 import { downloadOrShareCsv, convertLeadsToCsv } from '../utils/csvDownloader';
@@ -537,18 +538,13 @@ const MyLeadsScreenContent: React.FC = () => {
         updatedAt: new Date().toISOString(),
       };
 
-      callingLeadRef.current = activeLead;
-      callStartTimeRef.current = Date.now();
-      isCallingRef.current = true;
-
       toast.info(`Calling ${customerName || phone}...`, 'Dialing');
 
       try {
-        await callService.startCall(activeLead);
+        await callSession.startCall(activeLead, {
+          callerSource: 'MY_LEADS',
+        });
       } catch (err) {
-        isCallingRef.current = false;
-        callStartTimeRef.current = null;
-        callingLeadRef.current = null;
         Alert.alert('Call Error', 'Unable to open phone dialer on this device.');
       }
     };
@@ -575,61 +571,6 @@ const MyLeadsScreenContent: React.FC = () => {
 
     await executeCall();
   };
-
-  // AppState Listener: Detect returning from dialer in MyLeadsScreen
-  useEffect(() => {
-    const handleAppStateChange = async (nextState: AppStateStatus) => {
-      const prevState = appStateRef.current;
-      appStateRef.current = nextState;
-
-      if (
-        (prevState === 'background' || prevState === 'inactive') &&
-        nextState === 'active' &&
-        isCallingRef.current &&
-        callStartTimeRef.current !== null &&
-        callingLeadRef.current !== null
-      ) {
-        const startTime = callStartTimeRef.current;
-        const dialedLead = callingLeadRef.current;
-        isCallingRef.current = false;
-        callStartTimeRef.current = null;
-
-        let result: { connected: boolean; durationSeconds: number };
-        try {
-          result = await callService.getCallResult(dialedLead.phone, startTime);
-        } catch {
-          result = { connected: false, durationSeconds: 0 };
-        }
-
-        // ⚡ NeoDove-Grade Auto-Log: Immediately record this call outreach
-        useLeadHistoryStore.getState().addActivity(dialedLead._id, {
-          phone: dialedLead.phone,
-          customerName: dialedLead.name,
-          agentName: user?.name,
-          agentId: user?._id,
-          branch: user?.branch,
-          connected: result.connected,
-          type: 'CALL',
-          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
-          stage: result.connected ? (dialedLead.stage === 'New' ? 'Connected' : dialedLead.stage) : 'Not Connected',
-          durationSeconds: result.connected ? result.durationSeconds : 0,
-          remark: result.connected ? 'Call completed' : 'Call not answered',
-        });
-
-        navigation.navigate('Dispose', {
-          lead: dialedLead,
-          initialTab: 'DISPOSE LEAD',
-          callDurationSeconds: result.connected ? result.durationSeconds : 0,
-          isCallConnected: result.connected,
-          callAttempt: true,
-          detectionMethod: 'AUTOMATIC',
-        });
-      }
-    };
-
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [navigation]);
 
   // Handle Direct WhatsApp
   const handleOpenWhatsApp = (lead: ScreenshotLead) => {

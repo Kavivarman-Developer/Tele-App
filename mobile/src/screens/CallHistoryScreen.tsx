@@ -38,7 +38,8 @@ import {
 } from 'lucide-react-native';
 
 import { CrmShell } from '../components/CrmShell';
-import { useLeadHistoryStore } from '../store/leadHistoryStore';
+import { useLeadHistoryStore, deduplicateActivities } from '../store/leadHistoryStore';
+import { callSession } from '../services/callSession';
 import { useAuthStore } from '../store/authStore';
 import { fetchUserActivities, fetchCampaigns } from '../api/leadApi';
 import { Activity, CustomerTemperature, Lead, RootStackParamList } from '../types';
@@ -362,87 +363,7 @@ export const CallHistoryScreen: React.FC = () => {
     staleTime: 1000 * 15,
   });
 
-  // AppState Listener to detect redial completion
-  useEffect(() => {
-    const handleAppStateChange = async (nextState: AppStateStatus) => {
-      const prevState = appStateRef.current;
-      appStateRef.current = nextState;
-
-      if (
-        (prevState === 'background' || prevState === 'inactive') &&
-        nextState === 'active' &&
-        isCallingRef.current &&
-        callStartTimeRef.current !== null &&
-        callingActRef.current !== null
-      ) {
-        const startTime = callStartTimeRef.current;
-        const dialedAct = callingActRef.current;
-        isCallingRef.current = false;
-        callStartTimeRef.current = null;
-        callingActRef.current = null;
-
-        let result: { connected: boolean; durationSeconds: number };
-        try {
-          result = await callService.getCallResult(dialedAct.phone || '', startTime);
-        } catch {
-          result = { connected: false, durationSeconds: 0 };
-        }
-
-        const leadId =
-          dialedAct.leadId ||
-          (dialedAct.phone ? normalizePhoneDigits(dialedAct.phone) : `lead-${Date.now()}`);
-
-        const syntheticLead: Lead = {
-          _id: leadId,
-          name: dialedAct.customerName || 'Customer',
-          phone: dialedAct.phone || '',
-          campaignId: dialedAct.campaignId || 'default-camp',
-          stage: dialedAct.stage || 'New',
-          source: 'DIRECT_CALL',
-          customProperties: {},
-          status: 'OPEN',
-          attemptCount: 1,
-          createdAt: '',
-          updatedAt: '',
-        };
-
-        // Auto-log redial activity
-        useLeadHistoryStore.getState().addActivity(syntheticLead._id, {
-          phone: syntheticLead.phone,
-          customerName: syntheticLead.name,
-          agentName: user?.name,
-          agentId: user?._id,
-          branch: user?.branch,
-          connected: result.connected,
-          type: 'CALL',
-          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
-          stage: result.connected
-            ? dialedAct.stage === 'New'
-              ? 'Connected'
-              : dialedAct.stage
-            : 'Not Connected',
-          durationSeconds: result.connected ? result.durationSeconds : 0,
-          remark: result.connected ? 'Call completed' : 'Call not answered',
-        });
-
-        refetchServer();
-
-        navigation.navigate('Dispose', {
-          lead: syntheticLead,
-          initialTab: 'DISPOSE LEAD',
-          callDurationSeconds: result.connected ? result.durationSeconds : 0,
-          isCallConnected: result.connected,
-          callAttempt: true,
-          detectionMethod: 'AUTOMATIC',
-        });
-      }
-    };
-
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [navigation, user, refetchServer]);
-
-  // Combined activities (Server DB + Local Store)
+  // Combined activities (Server DB + Local Store), fully deduplicated by phone + 5min window
   const userActivities = useMemo(() => {
     const cleanId = (user?._id || '').toLowerCase();
     const cleanName = (user?.name || '').toLowerCase();
@@ -463,23 +384,14 @@ export const CallHistoryScreen: React.FC = () => {
     const local = getAllActivities(targetAgentId).filter(
       (activity) => activity.type === 'CALL' && matchesMe(activity),
     );
-    const map = new Map<string, Activity>();
 
-    for (const a of serverActivities) {
-      if (a && a._id && a.type === 'CALL' && matchesMe(a)) {
-        map.set(a._id, a);
-      }
-    }
-
-    for (const a of local) {
-      if (a && a._id && !map.has(a._id)) {
-        map.set(a._id, a);
-      }
-    }
-
-    return Array.from(map.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    const serverMatched = serverActivities.filter(
+      (a) => a && a._id && a.type === 'CALL' && matchesMe(a),
     );
+
+    // Merge server activities (priority) and local activities with 5-min deduplication
+    const combined = [...serverMatched, ...local];
+    return deduplicateActivities(combined);
   }, [serverActivities, getAllActivities, user, isAgent]);
 
   const customDateDisplay = useMemo(() => {
@@ -610,16 +522,12 @@ export const CallHistoryScreen: React.FC = () => {
     };
   }, [filteredActivities]);
 
-  // Redial handler
+  // Redial handler using centralized callSession
   const handleCallAgain = (act: Activity) => {
     if (!act.phone) {
       Alert.alert('No Number', 'Customer phone number is unavailable.');
       return;
     }
-
-    isCallingRef.current = true;
-    callStartTimeRef.current = Date.now();
-    callingActRef.current = act;
 
     toast.info(`Dialing ${act.customerName || act.phone}...`, 'Calling');
 
@@ -637,12 +545,16 @@ export const CallHistoryScreen: React.FC = () => {
       updatedAt: '',
     };
 
-    callService.startCall(syntheticLead).catch(() => {
-      isCallingRef.current = false;
-      callStartTimeRef.current = null;
-      callingActRef.current = null;
-      Alert.alert('Call Error', 'Unable to launch dialer on this device.');
-    });
+    callSession
+      .startCall(syntheticLead, {
+        callerSource: 'CALL_HISTORY',
+        onCallComplete: () => {
+          refetchServer();
+        },
+      })
+      .catch(() => {
+        Alert.alert('Call Error', 'Unable to launch phone call on this device.');
+      });
   };
 
   const handleOpenWhatsApp = (act: Activity) => {

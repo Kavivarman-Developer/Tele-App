@@ -52,8 +52,9 @@ import {
 
 import { useAuthStore } from '../store/authStore';
 import { useCampaignStore } from '../store/campaignStore';
-import { useLeadHistoryStore } from '../store/leadHistoryStore';
+import { useLeadHistoryStore, deduplicateActivities } from '../store/leadHistoryStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { callSession } from '../services/callSession';
 import {
   fetchDashboardReports,
   fetchUserCallsReport,
@@ -333,7 +334,8 @@ const HomeScreenContent: React.FC = () => {
   }, [historyMap, period, customDate, user, getActivitiesForPeriod]);
 
   const periodCallActivities = useMemo(() => {
-    const calls = periodActivities.filter((activity) => activity.type === 'CALL');
+    const rawCalls = periodActivities.filter((activity) => activity.type === 'CALL');
+    const calls = deduplicateActivities(rawCalls);
     if (effectiveBranch === 'ALL') return calls;
     const target = effectiveBranch.trim().toLowerCase();
     return calls.filter((activity) => {
@@ -679,20 +681,16 @@ const HomeScreenContent: React.FC = () => {
       leadItem.stage === 'Lost';
 
     const executeDial = async () => {
-      // Set calling refs for AppState detection (Call is counted only after it completes!)
-      callingLeadRef.current = leadItem;
-      callStartTimeRef.current = Date.now();
-      isCallingRef.current = true;
-
       toast.info(`Calling ${leadItem.name}...`, 'Dialing');
 
-      // Initiate native dialer
       try {
-        await callService.startCall(leadItem);
+        const queueIndex = queueLeads.findIndex((lead: Lead) => lead._id === leadItem._id);
+        await callSession.startCall(leadItem, {
+          queue: queueLeads,
+          queueIndex: queueIndex >= 0 ? queueIndex : undefined,
+          callerSource: 'QUEUE',
+        });
       } catch (err) {
-        isCallingRef.current = false;
-        callStartTimeRef.current = null;
-        callingLeadRef.current = null;
         Alert.alert('Call Error', 'Could not open phone dialer on this device.');
       }
     };
@@ -719,64 +717,6 @@ const HomeScreenContent: React.FC = () => {
 
     await executeDial();
   };
-
-  // AppState Listener: Detect when user returns from phone dialer
-  useEffect(() => {
-    const handleAppStateChange = async (nextState: AppStateStatus) => {
-      const prevState = appStateRef.current;
-      appStateRef.current = nextState;
-
-      if (
-        (prevState === 'background' || prevState === 'inactive') &&
-        nextState === 'active' &&
-        isCallingRef.current &&
-        callStartTimeRef.current !== null &&
-        callingLeadRef.current !== null
-      ) {
-        const startTime = callStartTimeRef.current;
-        const dialedLead = callingLeadRef.current;
-        isCallingRef.current = false;
-        callStartTimeRef.current = null;
-
-        let result: { connected: boolean; durationSeconds: number };
-        try {
-          // Read native Android call log (with duration & connection detection)
-          result = await callService.getCallResult(dialedLead.phone, startTime);
-        } catch {
-          result = { connected: false, durationSeconds: 0 };
-        }
-
-        // ⚡ NeoDove-Grade Auto-Log: Immediately record this call outreach
-        useLeadHistoryStore.getState().addActivity(dialedLead._id, {
-          phone: dialedLead.phone,
-          customerName: dialedLead.name,
-          agentName: user?.name,
-          agentId: user?._id,
-          branch: user?.branch,
-          connected: result.connected,
-          type: 'CALL',
-          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
-          stage: result.connected ? (dialedLead.stage === 'New' ? 'Connected' : dialedLead.stage) : 'Not Connected',
-          durationSeconds: result.connected ? result.durationSeconds : 0,
-          remark: result.connected ? 'Call completed' : 'Call not answered',
-        });
-
-        const queueIndex = queueLeads.findIndex((lead) => lead._id === dialedLead._id);
-        navigation.navigate('Dispose', {
-          lead: dialedLead,
-          initialTab: 'DISPOSE LEAD',
-          callDurationSeconds: result.connected ? result.durationSeconds : 0,
-          isCallConnected: result.connected,
-          callAttempt: true,
-          detectionMethod: 'AUTOMATIC',
-          ...(queueIndex >= 0 ? { queue: queueLeads, queueIndex } : {}),
-        });
-      }
-    };
-
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [navigation, queueLeads]);
 
   const handleOpenWhatsApp = (leadItem: Lead) => {
     setWhatsAppTarget({ name: leadItem.name, phone: leadItem.phone });

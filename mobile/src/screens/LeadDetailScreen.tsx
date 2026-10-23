@@ -53,6 +53,7 @@ import {
 } from 'lucide-react-native';
 
 import { callService } from '../services/call.service';
+import { callSession } from '../services/callSession';
 import {
   fetchLeadHistory,
   reassignLead,
@@ -381,85 +382,34 @@ export const LeadDetailScreen: React.FC = () => {
     }
   };
 
-  // AppState Listener: Detect call completion and switch to DISPOSE LEAD tab
-  useEffect(() => {
-    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-      const prevAppState = appStateRef.current;
-      appStateRef.current = nextAppState;
-
-      if (
-        (prevAppState === 'background' || prevAppState === 'inactive') &&
-        nextAppState === 'active' &&
-        isCallingRef.current &&
-        callStartTimeRef.current !== null
-      ) {
-        const startedAt = callStartTimeRef.current;
-        isCallingRef.current = false;
-        callStartTimeRef.current = null;
-        setCallActive(false);
-        setIsCallAttempt(true);
-
-        let result = { connected: false, durationSeconds: 0 };
-        try {
-          result = await callService.getCallResult(currentLead.phone, startedAt);
-        } catch {
-          result = { connected: false, durationSeconds: 0 };
-        }
-
-        setCallDurationSeconds(result.connected ? result.durationSeconds : 0);
-        if (!result.connected) {
-          setSelectedState('NOT CONNECTED');
-          setSelectedNotConnectedReason('DID_NOT_PICK');
-        } else {
-          if (selectedState === 'NOT CONNECTED' || selectedState === 'NEW') {
-            setSelectedState('FOLLOW UP');
-          }
-        }
-
-        // ⚡ NeoDove-Grade Auto-Log: Immediately record this call outreach
-        useLeadHistoryStore.getState().addActivity(currentLead._id, {
-          phone: currentLead.phone,
-          customerName: currentLead.name,
-          agentName: user?.name,
-          agentId: user?._id,
-          branch: user?.branch,
-          connected: result.connected,
-          type: 'CALL',
-          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
-          stage: result.connected
-            ? currentLead.stage === 'New'
-              ? 'Connected'
-              : currentLead.stage
-            : 'Not Connected',
-          durationSeconds: result.connected ? result.durationSeconds : 0,
-          remark: result.connected ? 'Call completed' : 'Call not answered',
-        });
-
-        // Seamlessly switch to DISPOSE LEAD tab
-        setActiveTab('DISPOSE LEAD');
-        toast.info(
-          result.connected
-            ? 'Call completed. Please record the disposition below.'
-            : 'Call not answered. Please update lead state below.',
-          'Call Ended',
-        );
-      }
-    };
-
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [currentLead.phone, selectedState]);
-
   const initiateCall = async () => {
-    isCallingRef.current = true;
-    callStartTimeRef.current = Date.now();
     setCallActive(true);
 
     try {
-      await callService.startCall(currentLead);
+      await callSession.startCall(currentLead, {
+        callerSource: 'LEAD_DETAIL',
+        onCallComplete: (result) => {
+          setCallActive(false);
+          setIsCallAttempt(true);
+          setCallDurationSeconds(result.connected ? result.durationSeconds : 0);
+          if (!result.connected) {
+            setSelectedState('NOT CONNECTED');
+            setSelectedNotConnectedReason('DID_NOT_PICK');
+          } else {
+            if (selectedState === 'NOT CONNECTED' || selectedState === 'NEW') {
+              setSelectedState('FOLLOW UP');
+            }
+          }
+          setActiveTab('DISPOSE LEAD');
+          toast.info(
+            result.connected
+              ? 'Call completed. Please record the disposition below.'
+              : 'Call not answered. Please update lead state below.',
+            'Call Ended',
+          );
+        },
+      });
     } catch {
-      isCallingRef.current = false;
-      callStartTimeRef.current = null;
       setCallActive(false);
       Alert.alert('Call Failed', 'Unable to initiate phone call.');
     }

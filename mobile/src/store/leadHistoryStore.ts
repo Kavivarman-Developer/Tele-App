@@ -11,6 +11,60 @@ export const normalizePhone = (phone?: string): string => {
   return digits.length > 10 ? digits.slice(-10) : digits;
 };
 
+/**
+ * Deduplicates activities for the same phone call attempt within a 5-minute window.
+ * Prioritizes persistent MongoDB server IDs over ephemeral local IDs.
+ */
+export const deduplicateActivities = (activities: Activity[]): Activity[] => {
+  if (!activities || activities.length <= 1) return activities || [];
+
+  const sorted = [...activities].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  const result: Activity[] = [];
+
+  for (const act of sorted) {
+    if (!act || !act._id) continue;
+    const phone = normalizePhone(act.phone);
+    const actTime = new Date(act.createdAt).getTime();
+
+    // Look for duplicate within 5 minutes (300,000 ms) for the same phone
+    const existingIndex = result.findIndex((r) => {
+      const rPhone = normalizePhone(r.phone);
+      if (!phone || !rPhone || phone !== rPhone) return false;
+      const rTime = new Date(r.createdAt).getTime();
+      return Math.abs(actTime - rTime) <= 300000;
+    });
+
+    if (existingIndex >= 0) {
+      const existing = result[existingIndex];
+      const isActServer = !act._id.startsWith('act-') && act._id.length === 24;
+      const isExistingServer = !existing._id.startsWith('act-') && existing._id.length === 24;
+
+      const preferredId = isActServer ? act._id : existing._id;
+      const preferredUserId = isActServer ? act.userId : existing.userId;
+
+      result[existingIndex] = {
+        ...existing,
+        _id: preferredId,
+        userId: preferredUserId,
+        durationSeconds: Math.max(existing.durationSeconds || 0, act.durationSeconds || 0),
+        connected: Boolean(existing.connected || act.connected),
+        stage: existing.stage !== 'New' && existing.stage !== 'Dialing' ? existing.stage : act.stage,
+        remark:
+          existing.remark && existing.remark !== 'Agent opened phone dialer'
+            ? existing.remark
+            : act.remark,
+      };
+    } else {
+      result.push(act);
+    }
+  }
+
+  return result;
+};
+
 interface LeadHistoryStore {
   historyMap: Record<string, Activity[]>;
   isLoaded: boolean;
@@ -64,7 +118,7 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       const stored = await storage.getItem(HISTORY_STORAGE_KEY);
       if (stored) {
         const parsed: Record<string, Activity[]> = JSON.parse(stored);
-        // Clean out any stale demo activities
+        // Clean out any stale demo activities and collapse any duplicate entries
         const sanitized: Record<string, Activity[]> = {};
         for (const key of Object.keys(parsed)) {
           const list = parsed[key];
@@ -83,8 +137,9 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
               }
               return true;
             });
-            if (valid.length > 0) {
-              sanitized[key] = valid;
+            const deduped = deduplicateActivities(valid);
+            if (deduped.length > 0) {
+              sanitized[key] = deduped;
             }
           }
         }
@@ -104,20 +159,35 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
               const leadKey = act.leadId || `lead-${act._id}`;
               const normPhone = normalizePhone(act.phone);
 
+              const mergeIntoList = (list: Activity[]): Activity[] => {
+                const actTime = new Date(act.createdAt).getTime();
+                const matchedIdx = list.findIndex((e) => {
+                  if (e._id === act._id) return true;
+                  const ePhone = normalizePhone(e.phone);
+                  if (normPhone && ePhone && normPhone === ePhone) {
+                    const eTime = new Date(e.createdAt).getTime();
+                    return Math.abs(actTime - eTime) <= 300000;
+                  }
+                  return false;
+                });
+
+                if (matchedIdx >= 0) {
+                  const updated = [...list];
+                  updated[matchedIdx] = act;
+                  return updated;
+                }
+                return [act, ...list];
+              };
+
               // 1. Merge into leadKey list
               const existingLeadList = currentMap[leadKey] || [];
-              if (!existingLeadList.some((e) => e._id === act._id)) {
-                currentMap[leadKey] = [act, ...existingLeadList];
-                hasNew = true;
-              }
+              currentMap[leadKey] = deduplicateActivities(mergeIntoList(existingLeadList));
+              hasNew = true;
 
               // 2. Merge into phone list
               if (normPhone) {
                 const existingPhoneList = currentMap[normPhone] || [];
-                if (!existingPhoneList.some((e) => e._id === act._id)) {
-                  currentMap[normPhone] = [act, ...existingPhoneList];
-                  hasNew = true;
-                }
+                currentMap[normPhone] = deduplicateActivities(mergeIntoList(existingPhoneList));
               }
             }
 
@@ -166,9 +236,7 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       }
     }
 
-    return Array.from(foundMap.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    return deduplicateActivities(Array.from(foundMap.values()));
   },
 
   getTodayActivities: (agentId?: string): Activity[] => {
@@ -333,52 +401,52 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
 
-    const existingForLead = currentMap[leadId] || [];
+    // Look for existing activity for this same lead OR same phone number within 5 minutes (300,000 ms)
+    const existingList = [
+      ...(currentMap[leadId] || []),
+      ...(normPhone && currentMap[normPhone] ? currentMap[normPhone] : []),
+    ];
 
-    // Check if there is an existing auto-logged call for this lead created within 3 minutes
-    const recentAutoIndex = existingForLead.findIndex((a) => {
-      if (a.type !== 'CALL') return false;
+    const recentIndex = existingList.findIndex((a) => {
+      if (!a) return false;
       const ageMs = Date.now() - new Date(a.createdAt).getTime();
-      return (
-        ageMs < 180000 &&
-        (a.remark === 'Call completed' ||
-          a.remark === 'Call not answered' ||
-          a.remark === 'Agent opened phone dialer' ||
-          a.stage === 'Dialing')
-      );
+      if (ageMs > 300000) return false;
+
+      // Phone match takes absolute priority
+      if (normPhone && a.phone && normalizePhone(a.phone) === normPhone) return true;
+      if (leadId && a.leadId && a.leadId === leadId) return true;
+      return false;
     });
 
-    let updatedLeadActivities: Activity[];
     let resultingActivity: Activity;
+    const isUpdate = recentIndex >= 0;
 
-    const isDispositionUpdate =
-      recentAutoIndex >= 0 &&
-      data.remark &&
-      data.remark !== 'Call completed' &&
-      data.remark !== 'Call not answered' &&
-      data.remark !== 'Agent opened phone dialer';
-
-    if (isDispositionUpdate) {
-      const existing = existingForLead[recentAutoIndex];
+    if (isUpdate) {
+      const existing = existingList[recentIndex];
       resultingActivity = {
         ...existing,
-        stage: data.stage || existing.stage,
+        leadId: leadId || existing.leadId,
+        phone: normPhone || existing.phone,
+        customerName: data.customerName || existing.customerName,
+        stage: data.stage && data.stage !== 'Dialing' ? data.stage : existing.stage,
         tag: data.tag || data.temperature || existing.tag,
         temperature: (data.temperature || data.tag || existing.temperature) as any,
         remark: data.remark || existing.remark,
         followUpAt: data.followUpAt !== undefined ? data.followUpAt : existing.followUpAt,
-        durationSeconds:
-          data.durationSeconds && data.durationSeconds > 0
-            ? data.durationSeconds
-            : existing.durationSeconds,
+        connected: data.connected !== undefined ? Boolean(data.connected || existing.connected) : existing.connected,
+        durationSeconds: Math.max(existing.durationSeconds || 0, data.durationSeconds || 0),
         updatedAt: new Date().toISOString(),
       };
-      updatedLeadActivities = [...existingForLead];
-      updatedLeadActivities[recentAutoIndex] = resultingActivity;
     } else {
       resultingActivity = newActivity;
-      updatedLeadActivities = [newActivity, ...existingForLead];
     }
+
+    const existingForLead = currentMap[leadId] || [];
+    const updatedLeadActivities = deduplicateActivities(
+      isUpdate
+        ? existingForLead.map((a) => (a._id === resultingActivity._id ? resultingActivity : a))
+        : [resultingActivity, ...existingForLead],
+    );
 
     const updatedMap: Record<string, Activity[]> = {
       ...currentMap,
@@ -387,9 +455,11 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
 
     if (normPhone) {
       const existingForPhone = currentMap[normPhone] || [];
-      const updatedPhoneActivities = isDispositionUpdate
-        ? existingForPhone.map((a) => (a._id === resultingActivity._id ? resultingActivity : a))
-        : [resultingActivity, ...existingForPhone.filter((a) => a._id !== resultingActivity._id)];
+      const updatedPhoneActivities = deduplicateActivities(
+        isUpdate
+          ? existingForPhone.map((a) => (a._id === resultingActivity._id ? resultingActivity : a))
+          : [resultingActivity, ...existingForPhone],
+      );
       updatedMap[normPhone] = updatedPhoneActivities;
       updatedMap[`phone_${normPhone}`] = updatedPhoneActivities;
     }
