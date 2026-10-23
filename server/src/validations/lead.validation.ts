@@ -6,7 +6,7 @@ export const createLeadSchema = z.object({
   body: z.object({
     name: z.string({ required_error: 'Name is required' }).min(1).trim(),
     phone: z.string({ required_error: 'Phone number is required' }).min(5).trim(),
-    email: z.string().email('Invalid email address').trim().toLowerCase().optional(),
+    email: z.string().email('Invalid email address').trim().toLowerCase().optional().or(z.literal('')),
     customProperties: z.record(z.string(), z.string()).optional(),
   }),
 });

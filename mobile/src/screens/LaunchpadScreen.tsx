@@ -342,17 +342,17 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  // Start Calling Hero Button (Purple Pill as in Image 1)
+  // Start Calling Hero Button (Vibrant Emerald Green matching app branding)
   heroStartCallingBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4C1D95',
+    backgroundColor: '#0F9D58',
     paddingVertical: 11,
     paddingHorizontal: 32,
     borderRadius: 24,
     marginBottom: 24,
-    shadowColor: '#4C1D95',
+    shadowColor: '#0F9D58',
     shadowOpacity: 0.35,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
