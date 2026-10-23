@@ -197,6 +197,8 @@ export interface Activity {
   remark?: string | null;
   followUpAt?: string | null;
   durationSeconds: number;
+  direction?: 'OUTGOING' | 'INCOMING';
+  callType?: 'OUTGOING' | 'INCOMING' | 'MISSED';
   answers: Array<{ questionId: string; value: unknown }>;
   createdAt: string;
   updatedAt: string;
@@ -242,6 +244,7 @@ export type RootStackParamList = {
     isCallConnected?: boolean;
     callAttempt?: boolean;
     detectionMethod?: 'AUTOMATIC' | 'MANUAL';
+    autoOpenNotConnectedSheet?: boolean;
     queue?: Lead[];
     queueIndex?: number;
     initialTab?: 'LEAD INFO' | 'CAPTURE INFO' | 'DISPOSE LEAD' | 'OTHER';

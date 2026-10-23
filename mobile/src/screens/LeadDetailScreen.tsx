@@ -244,6 +244,13 @@ export const LeadDetailScreen: React.FC = () => {
   // ==========================================
   // DISPOSE LEAD TAB STATE (Clean Native Dropdowns)
   // ==========================================
+  const shouldAutoOpenNotConnected =
+    route.name === 'Dispose' &&
+    (routeParams.autoOpenNotConnectedSheet === true || detectedCallConnected === false);
+
+  const [showNotConnectedModal, setShowNotConnectedModal] = useState<boolean>(
+    Boolean(shouldAutoOpenNotConnected),
+  );
   const [selectedState, setSelectedState] = useState<string>(
     detectedCallConnected === false
       ? 'NOT CONNECTED'
@@ -350,6 +357,7 @@ export const LeadDetailScreen: React.FC = () => {
     setSelectedState(stage);
     if (stage === 'NOT CONNECTED') {
       if (!selectedNotConnectedReason) setSelectedNotConnectedReason('DID_NOT_PICK');
+      setShowNotConnectedModal(true);
     } else if (stage === 'INTERESTED') {
       setSelectedTag(defaultTag || 'Hot');
       setActionNextFollowUp(true);
@@ -360,6 +368,21 @@ export const LeadDetailScreen: React.FC = () => {
       setSelectedTag('Cold');
       setActionNextFollowUp(false);
     }
+  };
+
+  // NeoDove-Grade 1-Tap Auto-Save for Unanswered / Not Connected Calls
+  const handleQuickNotConnectedSubmit = (reason: NotConnectedReason) => {
+    setSelectedNotConnectedReason(reason);
+    setSelectedState('NOT CONNECTED');
+    setSelectedTag('Cold');
+    setShowNotConnectedModal(false);
+
+    disposeMutation.mutate({
+      stage: 'NOT CONNECTED',
+      notConnectedReason: reason,
+      tag: 'Cold',
+      remark: `Call Not Connected: ${NOT_CONNECTED_LABELS[reason] || reason}`,
+    });
   };
 
   const formatScheduledDate = (isoStr: string) => {
@@ -454,53 +477,71 @@ export const LeadDetailScreen: React.FC = () => {
 
   // Submit Disposition Mutation
   const disposeMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (override?: {
+      stage?: string;
+      notConnectedReason?: NotConnectedReason;
+      tag?: 'Hot' | 'Cold' | 'Warm';
+      remark?: string;
+    }) => {
+      const activeStage = override?.stage || selectedState;
       const isConnected =
-        selectedState !== 'NOT CONNECTED' &&
-        selectedState !== 'SWITCHED OFF' &&
-        selectedState !== 'BUSY';
+        activeStage !== 'NOT CONNECTED' &&
+        activeStage !== 'SWITCHED OFF' &&
+        activeStage !== 'BUSY';
 
       const notConnectedReason: NotConnectedReason | undefined = !isConnected
-        ? selectedNotConnectedReason
+        ? override?.notConnectedReason || selectedNotConnectedReason
         : undefined;
 
       const isClosing =
-        isLeadLostOrSuppressed({ stage: selectedState }) ||
-        selectedState === 'CONVERTED';
+        isLeadLostOrSuppressed({ stage: activeStage }) ||
+        activeStage === 'CONVERTED';
 
       const finalFollowUp =
         !isClosing && actionNextFollowUp
           ? followUpDate || new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
           : null;
 
+      const activeTag = override?.tag || selectedTag;
+      const activeRemark =
+        override?.remark ||
+        remarks.trim() ||
+        (!isConnected
+          ? `Call Not Connected: ${NOT_CONNECTED_LABELS[notConnectedReason || 'DID_NOT_PICK'] || notConnectedReason || 'Did Not Pick'}`
+          : undefined);
+
       return await disposeLead(currentLead._id, {
         phone: currentLead.phone,
         connected: isConnected,
         callAttempt: isCallAttempt,
         notConnectedReason,
-        stage: selectedState,
-        tag: selectedTag.toUpperCase() as any,
+        stage: activeStage,
+        tag: activeTag.toUpperCase() as any,
         followUpAt: finalFollowUp,
-        remark:
-          remarks.trim() ||
-          (!isConnected
-            ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason] || selectedNotConnectedReason}`
-            : undefined),
+        remark: activeRemark,
         durationSeconds: isConnected ? callDurationSeconds : 0,
         reassignToUserId: actionReassign && selectedReassignUserId ? selectedReassignUserId : undefined,
         copyToCampaignId: actionCopyCampaign && selectedCopyCampaignId ? selectedCopyCampaignId : undefined,
       });
     },
-    onSuccess: (data) => {
+    onSuccess: (data, override) => {
+      const activeStage = override?.stage || selectedState;
       const isConnected =
-        selectedState !== 'NOT CONNECTED' &&
-        selectedState !== 'SWITCHED OFF' &&
-        selectedState !== 'BUSY';
+        activeStage !== 'NOT CONNECTED' &&
+        activeStage !== 'SWITCHED OFF' &&
+        activeStage !== 'BUSY';
       const notConnectedReason: NotConnectedReason | undefined = !isConnected
-        ? selectedNotConnectedReason
+        ? override?.notConnectedReason || selectedNotConnectedReason
         : undefined;
+      const activeTag = override?.tag || selectedTag;
+      const activeRemark =
+        override?.remark ||
+        remarks.trim() ||
+        (!isConnected
+          ? `Call Not Connected: ${NOT_CONNECTED_LABELS[notConnectedReason || 'DID_NOT_PICK'] || notConnectedReason || 'Did Not Pick'}`
+          : undefined);
 
-      const isLost = isLeadLostOrSuppressed({ stage: selectedState });
+      const isLost = isLeadLostOrSuppressed({ stage: activeStage });
       const isClosing = data.lead.status === 'CLOSED' || isLost;
 
       const finalFollowUp =
@@ -514,8 +555,8 @@ export const LeadDetailScreen: React.FC = () => {
         const remaining = old.leads.filter((l: Lead) => l._id !== currentLead._id);
         const updatedCurrent: Lead = {
           ...currentLead,
-          stage: selectedState,
-          tag: selectedTag.toUpperCase(),
+          stage: activeStage,
+          tag: activeTag.toUpperCase(),
           attemptCount: (currentLead.attemptCount || 0) + 1,
           lastContactedAt: new Date().toISOString(),
           nextFollowUpAt: finalFollowUp,
@@ -531,8 +572,8 @@ export const LeadDetailScreen: React.FC = () => {
         const remaining = old.leads.filter((l: Lead) => l._id !== currentLead._id);
         const updatedCurrent: Lead = {
           ...currentLead,
-          stage: selectedState,
-          tag: selectedTag.toUpperCase(),
+          stage: activeStage,
+          tag: activeTag.toUpperCase(),
           attemptCount: (currentLead.attemptCount || 0) + 1,
           lastContactedAt: new Date().toISOString(),
           nextFollowUpAt: finalFollowUp,
@@ -558,13 +599,14 @@ export const LeadDetailScreen: React.FC = () => {
         branch: user?.branch,
         connected: isCallAttempt && isConnected,
         type: isCallAttempt ? 'CALL' : 'UPDATE',
+        direction: 'OUTGOING',
         notConnectedReason: isCallAttempt ? notConnectedReason : undefined,
-        stage: selectedState,
-        tag: selectedTag,
+        stage: activeStage,
+        tag: activeTag,
         remark:
-          remarks.trim() ||
+          activeRemark ||
           (isCallAttempt && !isConnected
-            ? `Call Not Connected: ${NOT_CONNECTED_LABELS[selectedNotConnectedReason] || selectedNotConnectedReason}`
+            ? `Call Not Connected: ${NOT_CONNECTED_LABELS[notConnectedReason || 'DID_NOT_PICK'] || notConnectedReason || 'Did Not Pick'}`
             : undefined),
         followUpAt: finalFollowUp,
         durationSeconds: isCallAttempt && isConnected ? callDurationSeconds : 0,
@@ -585,9 +627,9 @@ export const LeadDetailScreen: React.FC = () => {
           'Lead Suppressed',
         );
       } else if (isClosing) {
-        toast.success(`Lead marked as ${selectedState}!`, 'Lead Closed');
+        toast.success(`Lead marked as ${activeStage}!`, 'Lead Closed');
       } else {
-        toast.success(`Lead marked as ${selectedState}!`, 'Disposition Saved');
+        toast.success(`Lead marked as ${activeStage}!`, 'Disposition Saved');
       }
 
       if (queue && queueIndex !== undefined && queueIndex + 1 < queue.length) {
@@ -1527,6 +1569,63 @@ export const LeadDetailScreen: React.FC = () => {
           queryClient.invalidateQueries({ queryKey: ['leadHistory', currentLead._id] });
         }}
       />
+
+      {/* NeoDove-Grade 1-Tap Quick Not Connected Sheet */}
+      <Modal
+        visible={showNotConnectedModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowNotConnectedModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={[styles.modalHeader, { paddingBottom: 12 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.ncIconCircle}>
+                  <PhoneOff size={22} color="#DC2626" />
+                </View>
+                <View>
+                  <Text style={styles.ncModalTitle}>Call Not Connected</Text>
+                  <Text style={styles.ncModalSub}>Select reason to auto-save & proceed</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.ncCloseBtn}
+                onPress={() => setShowNotConnectedModal(false)}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.ncPromptText}>
+              Select what happened with <Text style={{ fontWeight: '700', color: '#0F172A' }}>{currentLead.name || currentLead.phone}</Text>. Tap to record in 1-tap:
+            </Text>
+
+            <View style={styles.ncGrid}>
+              {QUICK_NOT_CONNECTED_PRESETS.slice(0, 6).map((item) => (
+                <TouchableOpacity
+                  key={item.reason}
+                  style={styles.ncGridBtn}
+                  activeOpacity={0.7}
+                  disabled={disposeMutation.isPending}
+                  onPress={() => handleQuickNotConnectedSubmit(item.reason)}
+                >
+                  <Text style={styles.ncBtnEmoji}>{item.emoji}</Text>
+                  <Text style={styles.ncBtnLabel} numberOfLines={1}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.ncFullFormBtn}
+              onPress={() => setShowNotConnectedModal(false)}
+            >
+              <Edit2 size={16} color="#475569" />
+              <Text style={styles.ncFullFormBtnText}>Add custom notes / reschedule instead</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -2142,5 +2241,79 @@ const styles = StyleSheet.create({
   pickerItemTextSelected: {
     color: '#0F9D58',
     fontWeight: '500',
+  },
+  ncIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ncModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  ncModalSub: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  ncCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ncPromptText: {
+    fontSize: 13,
+    color: '#475569',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  ncGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
+  },
+  ncGridBtn: {
+    width: '48%',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  ncBtnEmoji: {
+    fontSize: 20,
+  },
+  ncBtnLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+    flex: 1,
+  },
+  ncFullFormBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+  },
+  ncFullFormBtnText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#475569',
   },
 });

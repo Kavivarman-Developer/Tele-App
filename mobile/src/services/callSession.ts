@@ -1,5 +1,6 @@
 import { AppState, AppStateStatus } from 'react-native';
 import { callService } from './call.service';
+import { incomingCallSyncService } from './incomingCallSync.service';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
 import { Lead, DetectedCallResult } from '../types';
@@ -170,11 +171,14 @@ class CallSessionManager {
               isCallConnected: result.connected,
               callAttempt: true,
               detectionMethod: 'AUTOMATIC',
+              autoOpenNotConnectedSheet: !result.connected,
               ...(session.queue && session.queueIndex !== undefined
                 ? { queue: session.queue, queueIndex: session.queueIndex }
                 : {}),
             });
           }
+          // Also sync any incoming / missed calls in the background
+          incomingCallSyncService.syncIncomingCalls().catch(() => {});
         } catch (navErr) {
           console.warn('[CallSession] Navigation to Dispose screen failed:', navErr);
         } finally {

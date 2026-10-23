@@ -13,6 +13,7 @@ import {
   AppStateStatus,
   Platform,
   KeyboardAvoidingView,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
@@ -33,6 +34,8 @@ import {
   RotateCw,
   TrendingUp,
   PhoneOutgoing,
+  PhoneIncoming,
+  PhoneMissed,
   BookmarkCheck,
   Filter,
 } from 'lucide-react-native';
@@ -40,6 +43,7 @@ import {
 import { CrmShell } from '../components/CrmShell';
 import { useLeadHistoryStore, deduplicateActivities } from '../store/leadHistoryStore';
 import { callSession } from '../services/callSession';
+import { incomingCallSyncService } from '../services/incomingCallSync.service';
 import { useAuthStore } from '../store/authStore';
 import { fetchUserActivities, fetchCampaigns } from '../api/leadApi';
 import { Activity, CustomerTemperature, Lead, RootStackParamList } from '../types';
@@ -108,7 +112,12 @@ const CallHistoryCard = React.memo<CallCardProps>(
       act.customerName ||
       (act.phone ? `Customer (${formatDisplayPhone(act.phone)})` : 'Lead Contact');
     const isConnected = Boolean(act.connected);
-    const isIncoming = (act as any).direction === 'INCOMING' || (act as any).callType === 'INCOMING';
+    const isIncoming =
+      (act as any).direction === 'INCOMING' ||
+      (act as any).callType === 'INCOMING' ||
+      act._id.startsWith('inc-') ||
+      act.stage === 'Missed Call';
+    const isMissed = act.stage === 'Missed Call' || (!isConnected && isIncoming);
 
     return (
       <TouchableOpacity
@@ -178,16 +187,50 @@ const CallHistoryCard = React.memo<CallCardProps>(
           <View
             style={[
               styles.stageBadge,
-              isConnected ? styles.stageBadgeConnected : styles.stageBadgeNeutral,
+              { flexDirection: 'row', alignItems: 'center' },
+              isMissed
+                ? styles.stageBadgeMissed
+                : isIncoming && isConnected
+                ? styles.stageBadgeIncoming
+                : isConnected
+                ? styles.stageBadgeConnected
+                : styles.stageBadgeNeutral,
             ]}
           >
+            {isMissed ? (
+              <PhoneMissed size={11} color="#DC2626" style={{ marginRight: 4 }} />
+            ) : isIncoming ? (
+              <PhoneIncoming
+                size={11}
+                color={isConnected ? '#1D4ED8' : '#DC2626'}
+                style={{ marginRight: 4 }}
+              />
+            ) : (
+              <PhoneOutgoing
+                size={11}
+                color={isConnected ? '#15803D' : '#64748B'}
+                style={{ marginRight: 4 }}
+              />
+            )}
             <Text
               style={[
                 styles.stageBadgeText,
-                isConnected ? styles.stageTextConnected : styles.stageTextNeutral,
+                isMissed
+                  ? styles.stageTextMissed
+                  : isIncoming && isConnected
+                  ? styles.stageTextIncoming
+                  : isConnected
+                  ? styles.stageTextConnected
+                  : styles.stageTextNeutral,
               ]}
             >
-              {act.stage || (isConnected ? 'Connected' : 'Not Connected')}
+              {isMissed
+                ? 'Missed Call'
+                : isIncoming
+                ? isConnected
+                  ? 'Incoming'
+                  : 'Incoming (Unanswered)'
+                : act.stage || (isConnected ? 'Connected' : 'Not Connected')}
             </Text>
           </View>
 
@@ -197,7 +240,11 @@ const CallHistoryCard = React.memo<CallCardProps>(
               isConnected ? styles.durationConnected : styles.durationMissed,
             ]}
           >
-            {isConnected ? (
+            {isMissed ? (
+              <PhoneMissed size={10} color="#DC2626" />
+            ) : isIncoming && isConnected ? (
+              <PhoneIncoming size={10} color="#0F9D58" />
+            ) : isConnected ? (
               <Phone size={10} color="#0F9D58" />
             ) : (
               <PhoneOff size={10} color="#DC2626" />
@@ -208,7 +255,7 @@ const CallHistoryCard = React.memo<CallCardProps>(
                 isConnected ? { color: '#0F9D58' } : { color: '#DC2626' },
               ]}
             >
-              {formatDuration(act.durationSeconds, isConnected)}
+              {isMissed ? 'Missed' : formatDuration(act.durationSeconds, isConnected)}
             </Text>
           </View>
 
@@ -291,10 +338,23 @@ export const CallHistoryScreen: React.FC = () => {
   });
 
   const [quickLead, setQuickLead] = useState<Lead | null>(null);
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
 
   useEffect(() => {
+    incomingCallSyncService.syncIncomingCalls().catch(() => {});
     loadHistory();
   }, [loadHistory]);
+
+  const handlePullRefresh = async () => {
+    setIsPullRefreshing(true);
+    try {
+      await incomingCallSyncService.syncIncomingCalls().catch(() => {});
+      loadHistory();
+      await refetchServer();
+    } finally {
+      setIsPullRefreshing(false);
+    }
+  };
 
   // Update selected campaign if route params change
   useEffect(() => {
@@ -433,7 +493,11 @@ export const CallHistoryScreen: React.FC = () => {
     let outCount = 0;
     let inCount = 0;
     for (const a of dateAndCampaignFiltered) {
-      const isInc = (a as any).direction === 'INCOMING' || (a as any).callType === 'INCOMING';
+      const isInc =
+        (a as any).direction === 'INCOMING' ||
+        (a as any).callType === 'INCOMING' ||
+        a._id.startsWith('inc-') ||
+        a.stage === 'Missed Call';
       if (isInc) inCount++;
       else outCount++;
     }
@@ -448,7 +512,11 @@ export const CallHistoryScreen: React.FC = () => {
   const filteredActivities = useMemo(() => {
     return dateAndCampaignFiltered.filter((act) => {
       // Direction filter
-      const isInc = (act as any).direction === 'INCOMING' || (act as any).callType === 'INCOMING';
+      const isInc =
+        (act as any).direction === 'INCOMING' ||
+        (act as any).callType === 'INCOMING' ||
+        act._id.startsWith('inc-') ||
+        act.stage === 'Missed Call';
       if (directionTab === 'OUTGOING' && isInc) return false;
       if (directionTab === 'INCOMING' && !isInc) return false;
 
@@ -702,7 +770,8 @@ export const CallHistoryScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.iconRefreshBtn}
-          onPress={() => {
+          onPress={async () => {
+            await incomingCallSyncService.syncIncomingCalls().catch(() => {});
             loadHistory();
             refetchServer();
             toast.info('Refreshed call logs');
@@ -932,6 +1001,13 @@ export const CallHistoryScreen: React.FC = () => {
         <FlatList
           data={filteredActivities}
           keyExtractor={(item) => item._id}
+          refreshControl={
+            <RefreshControl
+              refreshing={isPullRefreshing}
+              onRefresh={handlePullRefresh}
+              colors={['#0F9D58']}
+            />
+          }
           renderItem={({ item }) => (
             <CallHistoryCard
               act={item}
@@ -1344,6 +1420,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#DCFCE7',
   },
+  stageBadgeIncoming: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  stageBadgeMissed: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
   stageBadgeNeutral: {
     backgroundColor: '#F1F5F9',
   },
@@ -1353,6 +1439,12 @@ const styles = StyleSheet.create({
   },
   stageTextConnected: {
     color: '#15803D',
+  },
+  stageTextIncoming: {
+    color: '#1D4ED8',
+  },
+  stageTextMissed: {
+    color: '#DC2626',
   },
   stageTextNeutral: {
     color: '#475569',
