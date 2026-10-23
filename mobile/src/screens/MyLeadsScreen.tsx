@@ -273,11 +273,6 @@ const MyLeadsScreenContent: React.FC = () => {
     phone: '',
   });
 
-  // Walk-in modal state
-  const [showWalkInModal, setShowWalkInModal] = useState(false);
-  const [walkInName, setWalkInName] = useState('');
-  const [walkInPhone, setWalkInPhone] = useState('');
-
   // Fetch real campaigns & leads from backend
   const { data: campaignData, refetch: refetchCampaigns } = useQuery({
     queryKey: ['campaigns'],
@@ -323,30 +318,6 @@ const MyLeadsScreenContent: React.FC = () => {
   }, [leadsData]);
 
   const effectiveLeadsData = leadsData || cachedLeadsData;
-
-  // Mutation to add walk-in lead
-  const walkInMutation = useMutation({
-    mutationFn: (newLead: { name: string; phone: string; campaignId?: string }) => {
-      const campId = newLead.campaignId || selectedCampaignId || campaignData?.campaigns?.[0]?._id || 'default';
-      return createWalkInLead(campId, {
-        name: newLead.name,
-        phone: normalizePhoneDigits(newLead.phone),
-      });
-    },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
-      queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
-      queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
-      refetch();
-      setShowWalkInModal(false);
-      setWalkInName('');
-      setWalkInPhone('');
-      toast.success(`Walk-in lead "${variables.name}" added to queue!`, 'Lead Added');
-    },
-    onError: (err: any) => {
-      Alert.alert('Error', err?.response?.data?.message || err?.message || 'Failed to add walk-in lead.');
-    },
-  });
 
   // Real backend leads (backend /api/leads/my is already strictly scoped to logged-in user)
   const combinedLeads: ScreenshotLead[] = useMemo(() => {
@@ -837,7 +808,11 @@ const MyLeadsScreenContent: React.FC = () => {
 
           <TouchableOpacity
             style={[styles.walkInBtn, !isWide && styles.walkInBtnMobile]}
-            onPress={() => setShowWalkInModal(true)}
+            onPress={() => {
+              const matched = (campaignData?.campaigns || []).find((c) => c.name === selectedCampaign);
+              const campId = matched ? matched._id : selectedCampaignId && selectedCampaignId !== 'All campaigns' ? selectedCampaignId : undefined;
+              navigation.navigate('AddWalkInLead', { campaignId: campId });
+            }}
             activeOpacity={0.7}
           >
             <Plus size={14} color={T.color.text} strokeWidth={2.5} />
@@ -1280,67 +1255,7 @@ const MyLeadsScreenContent: React.FC = () => {
         </ScrollView>
       )}
 
-      {/* Walk-in Add Lead Modal */}
-      <Modal
-        visible={showWalkInModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowWalkInModal(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add walk-in lead</Text>
-              <TouchableOpacity onPress={() => setShowWalkInModal(false)}>
-                <X size={18} color={T.color.textMuted} />
-              </TouchableOpacity>
-            </View>
 
-            <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Full name</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Rahul Sharma"
-                placeholderTextColor={T.color.textFaint}
-                value={walkInName}
-                onChangeText={setWalkInName}
-              />
-
-              <Text style={[styles.inputLabel, { marginTop: T.space.md }]}>Phone number</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. 9876543210"
-                placeholderTextColor={T.color.textFaint}
-                keyboardType="phone-pad"
-                value={walkInPhone}
-                onChangeText={setWalkInPhone}
-              />
-
-              <TouchableOpacity
-                style={styles.modalSubmitBtn}
-                onPress={() => {
-                  if (!walkInName.trim() || !walkInPhone.trim()) {
-                    Alert.alert('Required Fields', 'Please enter both name and phone number.');
-                    return;
-                  }
-                  walkInMutation.mutate({
-                    name: walkInName.trim(),
-                    phone: walkInPhone.trim(),
-                  });
-                }}
-                disabled={walkInMutation.isPending}
-                activeOpacity={0.8}
-              >
-                {walkInMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.modalSubmitBtnText}>Add to queue</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Interactive Lovable Lead Modal */}
       {Boolean(quickModalLead) && (

@@ -14,7 +14,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSafeTopPadding } from '../utils/safeArea';
@@ -33,6 +33,8 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export const AddWalkInLeadScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RouteProp<RootStackParamList, 'AddWalkInLead'>>();
+  const initialCampaignId = route.params?.campaignId;
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const { width } = useWindowDimensions();
@@ -42,7 +44,7 @@ export const AddWalkInLeadScreen: React.FC = () => {
   const [name, setName] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [email, setEmail] = useState<string>('');
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(initialCampaignId || null);
   const [isDialAfterSave, setIsDialAfterSave] = useState<boolean>(false);
 
   // Fetch campaigns assigned to current user
@@ -57,23 +59,32 @@ export const AddWalkInLeadScreen: React.FC = () => {
 
   // Set default campaign when loaded
   React.useEffect(() => {
-    if (!selectedCampaignId && campaigns.length > 0) {
-      setSelectedCampaignId(campaigns[0]._id);
+    if (campaigns.length > 0) {
+      if (initialCampaignId && campaigns.some((c) => c._id === initialCampaignId)) {
+        setSelectedCampaignId(initialCampaignId);
+      } else if (!selectedCampaignId) {
+        setSelectedCampaignId(campaigns[0]._id);
+      }
     }
-  }, [campaigns, selectedCampaignId]);
+  }, [campaigns, initialCampaignId]);
 
   // Mutation for creating walk-in lead
   const createLeadMutation = useMutation({
     mutationFn: async () => {
       if (!selectedCampaignId) throw new Error('Please select a campaign');
-      return createWalkInLead(selectedCampaignId, {
+      const payload: { name: string; phone: string; email?: string } = {
         name: name.trim(),
         phone: phone.trim(),
-        email: email.trim() || undefined,
-      });
+      };
+      if (email.trim()) {
+        payload.email = email.trim();
+      }
+      return createWalkInLead(selectedCampaignId, payload);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['myLeads'] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['campaignLeads'] });
       queryClient.invalidateQueries({ queryKey: ['followUps'] });
       queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
       queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
@@ -148,7 +159,7 @@ export const AddWalkInLeadScreen: React.FC = () => {
         {/* Customer Information Card (Compact 3 Fields) */}
         <View style={styles.formCard}>
           <View style={styles.cardHeadingRow}>
-            <UserPlus size={18} color="#4F46E5" />
+            <UserPlus size={18} color="#0F9D58" />
             <Text style={styles.cardHeadingTitle}>Customer Details</Text>
           </View>
 
@@ -180,7 +191,7 @@ export const AddWalkInLeadScreen: React.FC = () => {
         {/* Campaign Selection Card */}
         <View style={styles.formCard}>
           <View style={styles.cardHeadingRow}>
-            <Layers size={18} color="#4F46E5" />
+            <Layers size={18} color="#0F9D58" />
             <Text style={styles.cardHeadingTitle}>Target Campaign *</Text>
           </View>
           <Text style={styles.cardHeadingSub}>
@@ -188,7 +199,7 @@ export const AddWalkInLeadScreen: React.FC = () => {
           </Text>
 
           {campaignsLoading ? (
-            <ActivityIndicator size="small" color="#4F46E5" />
+            <ActivityIndicator size="small" color="#0F9D58" />
           ) : campaigns.length === 0 ? (
             <Text style={{ fontSize: 12, color: '#64748B', paddingVertical: 8 }}>
               No active campaigns available for your account.
@@ -211,7 +222,7 @@ export const AddWalkInLeadScreen: React.FC = () => {
                       <Text
                         style={[
                           styles.campaignNameText,
-                          isSelected && { color: '#312E81' },
+                          isSelected && { color: '#065F46' },
                         ]}
                       >
                         {camp.name}
@@ -263,7 +274,7 @@ export const AddWalkInLeadScreen: React.FC = () => {
             )}
           </TouchableOpacity>
 
-          {/* 2. Save to Queue (Clean Outline/Indigo, min 48px) */}
+          {/* 2. Save to Queue (Clean Outline/Emerald, min 48px) */}
           <TouchableOpacity
             style={[styles.primaryActionBtn, styles.saveQueueBtn, createLeadMutation.isPending && { opacity: 0.7 }]}
             onPress={() => handleValidateAndSubmit(false)}
@@ -271,10 +282,10 @@ export const AddWalkInLeadScreen: React.FC = () => {
             activeOpacity={0.85}
           >
             {createLeadMutation.isPending && !isDialAfterSave ? (
-              <ActivityIndicator size="small" color="#4F46E5" />
+              <ActivityIndicator size="small" color="#0F9D58" />
             ) : (
               <>
-                <BookmarkCheck size={18} color="#4F46E5" strokeWidth={2.5} />
+                <BookmarkCheck size={18} color="#0F9D58" strokeWidth={2.5} />
                 <Text style={styles.saveQueueBtnText}>Save to My Queue</Text>
               </>
             )}
@@ -359,8 +370,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   campaignOptionCardActive: {
-    backgroundColor: '#EEF2FF',
-    borderColor: '#4F46E5',
+    backgroundColor: '#F0FDF4',
+    borderColor: '#0F9D58',
   },
   campaignNameText: {
     fontSize: 13.5,
@@ -371,7 +382,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#0F9D58',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -388,10 +399,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   callNowBtn: {
-    backgroundColor: '#10B981',
-    shadowColor: '#10B981',
+    backgroundColor: '#0F9D58',
+    shadowColor: '#0F9D58',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 5,
     elevation: 3,
   },
@@ -404,10 +415,10 @@ const styles = StyleSheet.create({
   saveQueueBtn: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#C7D2FE',
+    borderColor: '#0F9D58',
   },
   saveQueueBtnText: {
-    color: '#4F46E5',
+    color: '#0F9D58',
     fontSize: 14,
     fontWeight: '800',
   },
