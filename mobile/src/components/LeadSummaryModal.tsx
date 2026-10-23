@@ -59,11 +59,13 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
   const [activeTab, setActiveTab] = useState<ModalTab>('SUMMARY');
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
-  // Customer Name Editing State
+  // Customer Contact Editing State
   const [currentName, setCurrentName] = useState(lead?.name || '');
-  const [isEditingName, setIsEditingName] = useState(false);
+  const [currentPhone, setCurrentPhone] = useState(lead?.phone || '');
+  const [isEditingContact, setIsEditingContact] = useState(false);
   const [nameInput, setNameInput] = useState(lead?.name || '');
-  const [isSavingName, setIsSavingName] = useState(false);
+  const [phoneInput, setPhoneInput] = useState(lead?.phone || '');
+  const [isSavingContact, setIsSavingContact] = useState(false);
 
   useEffect(() => {
     loadHistory();
@@ -73,10 +75,12 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
     if (lead) {
       setActiveTab('SUMMARY');
       setCurrentName(lead.name);
+      setCurrentPhone(lead.phone);
       setNameInput(lead.name);
-      setIsEditingName(false);
+      setPhoneInput(lead.phone);
+      setIsEditingContact(false);
     }
-  }, [lead?._id, lead?.name]);
+  }, [lead?._id, lead?.name, lead?.phone]);
 
   const { data: backendHistoryData, isLoading: isHistoryLoading } = useQuery({
     queryKey: ['leadHistory', lead?._id],
@@ -135,37 +139,44 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
     );
   };
 
-  const handleSaveName = async () => {
-    const trimmed = nameInput.trim();
-    if (!trimmed) {
+  const handleSaveContact = async () => {
+    const trimmedName = nameInput.trim();
+    const trimmedPhone = phoneInput.trim();
+    if (!trimmedName) {
       Alert.alert('Required', 'Customer name cannot be empty.');
       return;
     }
-    if (trimmed === currentName) {
-      setIsEditingName(false);
+    if (!trimmedPhone) {
+      Alert.alert('Required', 'Customer phone cannot be empty.');
+      return;
+    }
+    if (trimmedName === currentName && trimmedPhone === currentPhone) {
+      setIsEditingContact(false);
       return;
     }
 
-    setIsSavingName(true);
-    setCurrentName(trimmed);
+    setIsSavingContact(true);
+    setCurrentName(trimmedName);
+    setCurrentPhone(trimmedPhone);
     if (lead) {
-      lead.name = trimmed;
+      lead.name = trimmedName;
+      lead.phone = trimmedPhone;
     }
-    setIsEditingName(false);
+    setIsEditingContact(false);
 
     try {
       if (lead?._id) {
-        await updateLeadDetails(lead._id, { name: trimmed });
-        useLeadHistoryStore.getState().updateLeadName(lead._id, trimmed);
+        await updateLeadDetails(lead._id, { name: trimmedName, phone: trimmedPhone });
+        useLeadHistoryStore.getState().updateLeadName(lead._id, trimmedName);
         queryClient.invalidateQueries({ queryKey: ['myLeadsList'] });
         queryClient.invalidateQueries({ queryKey: ['leadHistory', lead._id] });
       }
-      toast.success('Customer name updated successfully!', 'Saved');
+      toast.success('Contact info updated successfully!', 'Saved');
     } catch {
-      useLeadHistoryStore.getState().updateLeadName(lead?._id || '', trimmed);
-      toast.info('Customer name updated locally', 'Saved');
+      useLeadHistoryStore.getState().updateLeadName(lead?._id || '', trimmedName);
+      toast.info('Contact info updated locally', 'Saved');
     } finally {
-      setIsSavingName(false);
+      setIsSavingContact(false);
     }
   };
 
@@ -187,8 +198,8 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
           <View style={styles.sheet}>
             <View style={styles.handle} />
 
-            {/* Header: Normal Mode vs Dedicated Name Edit Bar */}
-            {isEditingName ? (
+            {/* Header: Normal Mode vs Dedicated Name & Phone Edit Bar */}
+            {isEditingContact ? (
               <View style={styles.editNameHeaderBox}>
                 <View style={styles.editNameInputWrap}>
                   <Text style={styles.editNameHeaderLabel}>EDIT CUSTOMER NAME</Text>
@@ -196,18 +207,29 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
                     style={styles.editNameInputFull}
                     value={nameInput}
                     onChangeText={setNameInput}
-                    autoFocus
                     placeholder="Enter customer name..."
                     placeholderTextColor="#94A3B8"
+                    returnKeyType="next"
+                  />
+                </View>
+                <View style={styles.editNameInputWrap}>
+                  <Text style={styles.editNameHeaderLabel}>EDIT CONTACT NUMBER</Text>
+                  <TextInput
+                    style={styles.editNameInputFull}
+                    value={phoneInput}
+                    onChangeText={setPhoneInput}
+                    placeholder="Enter customer phone..."
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="phone-pad"
                     returnKeyType="done"
-                    onSubmitEditing={handleSaveName}
+                    onSubmitEditing={handleSaveContact}
                   />
                 </View>
                 <View style={styles.editNameActionsRow}>
                   <TouchableOpacity
                     style={styles.saveNameActionBtn}
-                    onPress={handleSaveName}
-                    disabled={isSavingName}
+                    onPress={handleSaveContact}
+                    disabled={isSavingContact}
                     activeOpacity={0.8}
                   >
                     <Check size={15} color="#FFFFFF" strokeWidth={2.5} />
@@ -217,7 +239,8 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
                     style={styles.cancelNameActionBtn}
                     onPress={() => {
                       setNameInput(currentName);
-                      setIsEditingName(false);
+                      setPhoneInput(currentPhone);
+                      setIsEditingContact(false);
                     }}
                     activeOpacity={0.7}
                   >
@@ -235,15 +258,27 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
                       style={styles.editNameBtn}
                       onPress={() => {
                         setNameInput(currentName);
-                        setIsEditingName(true);
+                        setPhoneInput(currentPhone || lead.phone);
+                        setIsEditingContact(true);
                       }}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel="Edit customer name"
+                      accessibilityLabel="Edit customer details"
                     >
                       <Edit2 size={13} color="#059669" />
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.phone}>{formatDisplayPhone(lead.phone)} · {campaignName}</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setNameInput(currentName);
+                      setPhoneInput(currentPhone || lead.phone);
+                      setIsEditingContact(true);
+                    }}
+                    activeOpacity={0.7}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  >
+                    <Text style={styles.phone}>{formatDisplayPhone(currentPhone || lead.phone)} · {campaignName}</Text>
+                    <Edit2 size={11} color="#64748B" />
+                  </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity
@@ -341,7 +376,19 @@ export const LeadSummaryModal: React.FC<LeadSummaryModalProps> = ({
                     </View>
                     <View style={styles.infoItem}>
                       <Text style={styles.infoLabel}>Contact Number</Text>
-                      <Text style={styles.infoValue}>{formatDisplayPhone(lead.phone)}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.infoValue}>{formatDisplayPhone(currentPhone || lead.phone)}</Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setNameInput(currentName);
+                            setPhoneInput(currentPhone || lead.phone);
+                            setIsEditingContact(true);
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Edit2 size={12} color="#059669" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                     <View style={styles.infoItem}>
                       <Text style={styles.infoLabel}>Call Attempts</Text>

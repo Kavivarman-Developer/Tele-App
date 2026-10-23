@@ -33,6 +33,7 @@ import {
   RotateCw,
   TrendingUp,
   PhoneOutgoing,
+  BookmarkCheck,
 } from 'lucide-react-native';
 
 import { CrmShell } from '../components/CrmShell';
@@ -44,11 +45,12 @@ import { formatDisplayPhone } from '../utils/phoneUtils';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { CrmDateTimePickerModal } from '../components/CrmDateTimePickerModal';
+import { TagManagerModal } from '../components/TagManagerModal';
 import { callService } from '../services/call.service';
 import { toast } from '../store/toastStore';
 import { colors } from '../theme';
 
-type DateFilter = 'TODAY' | 'CUSTOM' | 'ALL';
+type DateFilter = 'TODAY' | 'YESTERDAY' | 'CUSTOM' | 'ALL';
 type StageFilter = 'ALL' | 'CONNECTED' | 'INTERESTED' | 'FOLLOW_UP' | 'NOT_CONNECTED';
 
 // Safe initials helper (guaranteed zero crash)
@@ -93,10 +95,11 @@ interface CallCardProps {
   onCallAgain: (act: Activity) => void;
   onOpenWhatsApp: (act: Activity) => void;
   onOpenLead: (act: Activity) => void;
+  onTagLead: (act: Activity) => void;
 }
 
 const CallHistoryCard = React.memo<CallCardProps>(
-  ({ act, onCallAgain, onOpenWhatsApp, onOpenLead }) => {
+  ({ act, onCallAgain, onOpenWhatsApp, onOpenLead, onTagLead }) => {
     const isHot = act.temperature === 'HOT' || act.tag === 'HOT';
     const isCold = act.temperature === 'COLD' || act.tag === 'COLD';
     const displayName =
@@ -231,7 +234,7 @@ const CallHistoryCard = React.memo<CallCardProps>(
           </View>
         ) : null}
 
-        {/* Action Buttons Row: [ 📞 Call Again ] [ 💬 WhatsApp ] [ 📋 Lead Details ] */}
+        {/* Action Buttons Row: [ 📞 Call Again ] [ 💬 WhatsApp ] [ 🏷️ Tag ] [ 📋 Lead Details ] */}
         <View style={styles.cardActionsRow}>
           {/* Call Again (Triggers full AppState & Duration tracking) */}
           <TouchableOpacity
@@ -239,7 +242,7 @@ const CallHistoryCard = React.memo<CallCardProps>(
             onPress={() => onCallAgain(act)}
             activeOpacity={0.8}
           >
-            <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+            <Phone size={12} color="#FFFFFF" strokeWidth={2.5} />
             <Text style={styles.callAgainBtnText}>Call Again</Text>
           </TouchableOpacity>
 
@@ -249,8 +252,18 @@ const CallHistoryCard = React.memo<CallCardProps>(
             onPress={() => onOpenWhatsApp(act)}
             activeOpacity={0.8}
           >
-            <MessageCircle size={13} color="#0F9D58" strokeWidth={2.5} />
+            <MessageCircle size={12} color="#0F9D58" strokeWidth={2.5} />
             <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
+          </TouchableOpacity>
+
+          {/* Tag Manager Button */}
+          <TouchableOpacity
+            style={styles.tagLeadBtn}
+            onPress={() => onTagLead(act)}
+            activeOpacity={0.8}
+          >
+            <BookmarkCheck size={12} color="#D97706" strokeWidth={2.5} />
+            <Text style={styles.tagLeadBtnText}>Tag</Text>
           </TouchableOpacity>
 
           {/* Open Lead */}
@@ -259,8 +272,8 @@ const CallHistoryCard = React.memo<CallCardProps>(
             onPress={() => onOpenLead(act)}
             activeOpacity={0.8}
           >
-            <Text style={styles.openLeadBtnText}>Lead Details</Text>
-            <ArrowUpRight size={13} color="#0284C7" />
+            <Text style={styles.openLeadBtnText}>Details</Text>
+            <ArrowUpRight size={12} color="#0284C7" />
           </TouchableOpacity>
         </View>
       </View>
@@ -303,6 +316,18 @@ export const CallHistoryScreen: React.FC = () => {
     visible: false,
     name: '',
     phone: '',
+  });
+
+  const [tagModalData, setTagModalData] = useState<{
+    visible: boolean;
+    customerName: string;
+    customerPhone: string;
+    leadId?: string;
+  }>({
+    visible: false,
+    customerName: '',
+    customerPhone: '',
+    leadId: undefined,
   });
 
   const [quickLead, setQuickLead] = useState<Lead | null>(null);
@@ -436,9 +461,16 @@ export const CallHistoryScreen: React.FC = () => {
     );
   }, [serverActivities, getAllActivities, user, isAgent]);
 
-  const startOfToday = useMemo(() => {
+  const { startOfToday, startOfYesterday, endOfYesterday } = useMemo(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterday = today - 24 * 60 * 60 * 1000;
+    const endYesterday = today - 1;
+    return {
+      startOfToday: today,
+      startOfYesterday: yesterday,
+      endOfYesterday: endYesterday,
+    };
   }, []);
 
   const customDateDisplay = useMemo(() => {
@@ -456,6 +488,8 @@ export const CallHistoryScreen: React.FC = () => {
       // Date Filter
       if (dateFilter === 'TODAY') {
         if (actTime < startOfToday) return false;
+      } else if (dateFilter === 'YESTERDAY') {
+        if (actTime < startOfYesterday || actTime > endOfYesterday) return false;
       } else if (dateFilter === 'CUSTOM' && selectedCustomDate) {
         const cd = new Date(selectedCustomDate);
         const startOfCustom = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate()).getTime();
@@ -481,13 +515,20 @@ export const CallHistoryScreen: React.FC = () => {
 
       return true;
     });
-  }, [userActivities, dateFilter, selectedCustomDate, stageFilter, searchQuery, startOfToday]);
+  }, [userActivities, dateFilter, selectedCustomDate, stageFilter, searchQuery, startOfToday, startOfYesterday, endOfYesterday]);
 
   const todayCount = useMemo(() => {
     return userActivities.filter(
       (a) => new Date(a.createdAt).getTime() >= startOfToday,
     ).length;
   }, [userActivities, startOfToday]);
+
+  const yesterdayCount = useMemo(() => {
+    return userActivities.filter((a) => {
+      const t = new Date(a.createdAt).getTime();
+      return t >= startOfYesterday && t <= endOfYesterday;
+    }).length;
+  }, [userActivities, startOfYesterday, endOfYesterday]);
 
   // Computed metrics for currently filtered call activities
   const callStats = useMemo(() => {
@@ -580,6 +621,15 @@ export const CallHistoryScreen: React.FC = () => {
     setQuickLead(syntheticLead);
   };
 
+  const handleTagLead = (act: Activity) => {
+    setTagModalData({
+      visible: true,
+      customerName: act.customerName || 'Customer',
+      customerPhone: act.phone || '',
+      leadId: act.leadId,
+    });
+  };
+
   // Header Component for Virtualized FlatList
   const renderListHeader = () => (
     <View style={styles.headerContainer}>
@@ -668,6 +718,24 @@ export const CallHistoryScreen: React.FC = () => {
           <View style={[styles.tabBadge, dateFilter === 'TODAY' && styles.tabBadgeActive]}>
             <Text style={[styles.tabBadgeText, dateFilter === 'TODAY' && styles.tabBadgeTextActive]}>
               {todayCount}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.dateTab, dateFilter === 'YESTERDAY' && styles.dateTabActive]}
+          onPress={() => {
+            setDateFilter('YESTERDAY');
+            setSelectedCustomDate(null);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.dateTabText, dateFilter === 'YESTERDAY' && styles.dateTabTextActive]}>
+            Yesterday
+          </Text>
+          <View style={[styles.tabBadge, dateFilter === 'YESTERDAY' && styles.tabBadgeActive]}>
+            <Text style={[styles.tabBadgeText, dateFilter === 'YESTERDAY' && styles.tabBadgeTextActive]}>
+              {yesterdayCount}
             </Text>
           </View>
         </TouchableOpacity>
@@ -792,6 +860,7 @@ export const CallHistoryScreen: React.FC = () => {
               onCallAgain={handleCallAgain}
               onOpenWhatsApp={handleOpenWhatsApp}
               onOpenLead={handleOpenLead}
+              onTagLead={handleTagLead}
             />
           )}
           ListHeaderComponent={renderListHeader}
@@ -820,6 +889,19 @@ export const CallHistoryScreen: React.FC = () => {
         visible={Boolean(quickLead)}
         onClose={() => setQuickLead(null)}
         lead={quickLead}
+      />
+
+      {/* Tag Lead to Manager / Admin Modal */}
+      <TagManagerModal
+        visible={tagModalData.visible}
+        onClose={() => setTagModalData((prev) => ({ ...prev, visible: false }))}
+        customerName={tagModalData.customerName}
+        customerPhone={tagModalData.customerPhone}
+        leadId={tagModalData.leadId}
+        onSuccess={() => {
+          loadHistory();
+          refetchServer();
+        }}
       />
 
       {/* Custom Date Picker Modal */}
@@ -1217,21 +1299,21 @@ const styles = StyleSheet.create({
   cardActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
   callAgainBtn: {
-    flex: 1.2,
+    flex: 1.15,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#0F9D58',
     paddingVertical: 7.5,
     borderRadius: 8,
-    gap: 5,
+    gap: 4,
     shadowColor: '#0F9D58',
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -1239,7 +1321,7 @@ const styles = StyleSheet.create({
   },
   callAgainBtnText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
   },
   whatsAppBtn: {
@@ -1252,15 +1334,32 @@ const styles = StyleSheet.create({
     borderColor: '#BBF7D0',
     paddingVertical: 7,
     borderRadius: 8,
-    gap: 4,
+    gap: 3,
   },
   whatsAppBtnText: {
     color: '#15803D',
-    fontSize: 12,
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  tagLeadBtn: {
+    flex: 0.85,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 3,
+  },
+  tagLeadBtnText: {
+    color: '#D97706',
+    fontSize: 11.5,
     fontWeight: '700',
   },
   openLeadBtn: {
-    flex: 1,
+    flex: 0.95,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1269,11 +1368,11 @@ const styles = StyleSheet.create({
     borderColor: '#BAE6FD',
     paddingVertical: 7,
     borderRadius: 8,
-    gap: 3,
+    gap: 2,
   },
   openLeadBtnText: {
     color: '#0284C7',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
   },
 
