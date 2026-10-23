@@ -34,6 +34,7 @@ import { AddWalkInLeadScreen } from '../screens/AddWalkInLeadScreen';
 import { CallHistoryScreen } from '../screens/CallHistoryScreen';
 import { AgentReportScreen } from '../screens/AgentReportScreen';
 import { CampaignDetailScreen } from '../screens/CampaignDetailScreen';
+import { LaunchpadScreen } from '../screens/LaunchpadScreen';
 import { RootStackParamList } from '../types';
 import { notificationService } from '../services/notification.service';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -83,20 +84,20 @@ const MainTabs: React.FC = () => {
       }}
     >
       <Tab.Screen
+        name="Home"
+        component={LaunchpadScreen}
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <LayoutGrid size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+          ),
+        }}
+      />
+      <Tab.Screen
         name="CampaignsHub"
         component={CampaignSelectScreen}
         options={{
           tabBarIcon: ({ color, focused }) => (
             <Megaphone size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          tabBarIcon: ({ color, focused }) => (
-            <LayoutGrid size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />
@@ -166,8 +167,10 @@ export const RootNavigator: React.FC = () => {
           ) : (
             <>
               <Stack.Screen name="Main" component={MainTabs} />
+              <Stack.Screen name="Launchpad" component={LaunchpadScreen} />
+              <Stack.Screen name="CallingDesk" component={HomeScreen} />
               <Stack.Screen name="CampaignSelect" component={CampaignSelectScreen} />
-              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="Home" component={LaunchpadScreen} />
               <Stack.Screen name="MyLeads" component={MyLeadsScreen} />
               <Stack.Screen name="FollowUps" component={FollowUpsScreen} />
               <Stack.Screen name="CallHistory" component={CallHistoryScreen} />
