@@ -249,7 +249,7 @@ const FollowUpCard = React.memo<FollowUpCardProps>(({ item, onCall, onSnooze, on
           onPress={() => onCall(item)}
           activeOpacity={0.85}
         >
-          <Phone size={15} color="#FFFFFF" strokeWidth={2.5} />
+          <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
           <Text style={styles.callNowBtnText}>Call now</Text>
         </TouchableOpacity>
 
@@ -259,7 +259,7 @@ const FollowUpCard = React.memo<FollowUpCardProps>(({ item, onCall, onSnooze, on
           onPress={() => onSnooze(item)}
           activeOpacity={0.8}
         >
-          <Clock3 size={14} color={T.color.warn} strokeWidth={2.5} />
+          <Clock3 size={13} color={T.color.warn} strokeWidth={2.5} />
           <Text style={styles.snoozeBtnText}>Snooze</Text>
         </TouchableOpacity>
 
@@ -269,7 +269,7 @@ const FollowUpCard = React.memo<FollowUpCardProps>(({ item, onCall, onSnooze, on
           onPress={() => onWhatsApp(item)}
           activeOpacity={0.8}
         >
-          <MessageCircle size={15} color={T.color.primaryDark} strokeWidth={2.5} />
+          <MessageCircle size={14} color={T.color.primaryDark} strokeWidth={2.5} />
         </TouchableOpacity>
 
         {/* Details / Modal Button */}
@@ -278,7 +278,7 @@ const FollowUpCard = React.memo<FollowUpCardProps>(({ item, onCall, onSnooze, on
           onPress={() => onOpen(item)}
           activeOpacity={0.8}
         >
-          <FileEdit size={15} color={T.color.info} strokeWidth={2} />
+          <FileEdit size={14} color={T.color.info} strokeWidth={2} />
         </TouchableOpacity>
       </View>
     </View>
@@ -905,68 +905,68 @@ const styles = StyleSheet.create({
     backgroundColor: T.color.bg,
   },
   contentContainer: {
-    padding: T.space.lg,
+    padding: 12,
     paddingBottom: 110,
   },
   headerBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: T.space.md,
+    marginBottom: 8,
   },
   bannerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '800',
     color: T.color.text,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   bannerSubtitle: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: T.color.textMuted,
     marginTop: 2,
   },
   refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: T.color.surface,
     borderWidth: 1,
     borderColor: T.color.border,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: T.radius.sm - 2,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   refreshBtnText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: T.color.text,
   },
   overdueAlertBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: T.space.sm + 2,
+    gap: 8,
     backgroundColor: T.color.dangerTint,
     borderWidth: 1,
     borderColor: '#FECACA',
-    borderRadius: T.radius.md,
-    padding: T.space.md - 1,
-    marginBottom: T.space.md,
+    borderRadius: 10,
+    padding: 8,
+    marginBottom: 8,
   },
   overdueIconBubble: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   overdueAlertTitle: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '800',
     color: '#991B1B',
   },
   overdueAlertSub: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: '#B91C1C',
     marginTop: 1,
   },
@@ -976,22 +976,22 @@ const styles = StyleSheet.create({
     backgroundColor: T.color.surface,
     borderWidth: 1,
     borderColor: T.color.border,
-    borderRadius: T.radius.sm,
-    paddingHorizontal: T.space.md,
-    height: 44,
-    gap: T.space.sm,
-    marginBottom: T.space.md,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 36,
+    gap: 6,
+    marginBottom: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12.5,
     color: T.color.text,
     paddingVertical: 0,
   },
   segmentedTabsRow: {
     flexDirection: 'row',
-    gap: T.space.sm,
-    marginBottom: T.space.lg - 2,
+    gap: 6,
+    marginBottom: 10,
   },
   tabBtn: {
     flex: 1,
@@ -1001,9 +1001,9 @@ const styles = StyleSheet.create({
     backgroundColor: T.color.surface,
     borderWidth: 1,
     borderColor: T.color.border,
-    paddingVertical: T.space.sm + 1,
-    borderRadius: T.radius.sm,
-    gap: T.space.sm - 2,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 5,
   },
   tabBtnActiveOverdue: {
     backgroundColor: T.color.dangerTint,
@@ -1021,38 +1021,38 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
     color: T.color.textMuted,
   },
   tabBadge: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 8,
   },
   tabBadgeText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
   },
   followupCard: {
     backgroundColor: T.color.surface,
-    borderRadius: T.radius.md + 2,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: T.color.border,
-    padding: T.space.md + 2,
-    marginBottom: T.space.md,
+    padding: 10,
+    marginBottom: 8,
     ...T.shadowCard,
   },
   cardHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: T.space.sm + 2,
-    marginBottom: T.space.sm + 2,
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
   },
   avatarCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: T.color.primaryTint,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1061,7 +1061,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.color.dangerTint,
   },
   avatarText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: T.color.primaryDark,
   },
@@ -1072,23 +1072,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   customerName: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: T.color.text,
   },
   customerPhone: {
-    fontSize: 13.5,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
     color: '#334155',
-    marginTop: 2,
+    marginTop: 1,
   },
   priorityPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 5,
     borderWidth: 1,
   },
   priorityHot: {
@@ -1104,16 +1104,16 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
   },
   priorityPillText: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '800',
   },
   countdownBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
     borderWidth: 1,
   },
   countdownBadgeOverdue: {
@@ -1129,23 +1129,23 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
   },
   countdownText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '800',
   },
   remarkPreviewBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: T.space.sm - 2,
+    gap: 6,
     backgroundColor: T.color.surfaceSunken,
-    borderRadius: T.radius.sm - 2,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: T.color.border,
-    paddingVertical: T.space.sm - 2,
-    paddingHorizontal: T.space.sm,
-    marginBottom: T.space.md,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 8,
   },
   remarkPreviewText: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: T.color.textMuted,
     fontWeight: '500',
     flex: 1,
@@ -1153,50 +1153,52 @@ const styles = StyleSheet.create({
   actionButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: T.space.sm,
+    gap: 6,
   },
   callNowBtn: {
     flex: 1.5,
-    minHeight: 46,
+    height: 32,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: T.space.sm - 2,
+    gap: 5,
     backgroundColor: T.color.primary,
-    borderRadius: T.radius.sm,
+    borderRadius: 8,
     shadowColor: T.color.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 2,
+    elevation: 1,
   },
   callNowBtnText: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#FFFFFF',
   },
   snoozeBtn: {
     flex: 1.1,
-    minHeight: 46,
+    height: 32,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: T.color.warnTint,
     borderWidth: 1,
     borderColor: '#FDE68A',
-    borderRadius: T.radius.sm,
+    borderRadius: 8,
   },
   snoozeBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: T.color.warn,
   },
   iconBtn: {
-    width: 46,
-    height: 46,
-    minHeight: 46,
-    borderRadius: T.radius.sm,
+    width: 32,
+    height: 32,
+    minHeight: 32,
+    borderRadius: 8,
     backgroundColor: T.color.surfaceSunken,
     borderWidth: 1,
     borderColor: T.color.border,
