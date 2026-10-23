@@ -129,7 +129,9 @@ export const AgentReportScreen: React.FC = () => {
   } = useQuery({
     queryKey: ['agentCallReports', fromDate, toDate],
     queryFn: () => fetchUserCallsReport({ from: fromDate, to: toDate }),
-    refetchInterval: 15000,
+    staleTime: 30000,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   // 2. Fetch Users to ensure all registered agents are listed (Admins & Managers only)
@@ -628,13 +630,13 @@ export const AgentReportScreen: React.FC = () => {
             </View>
           ) : (
             filteredAgents.map((agent) => {
-              const initials = agent.name
-                .split(' ')
-                .filter(Boolean)
-                .map((w) => w[0])
-                .join('')
-                .toUpperCase()
-                .slice(0, 2) || 'AG';
+              const nameParts = typeof agent.name === 'string' ? agent.name.trim().split(/\s+/).filter(Boolean) : [];
+              const initials =
+                nameParts.length >= 2
+                  ? (nameParts[0][0] + nameParts[1][0]).toUpperCase()
+                  : nameParts.length === 1
+                  ? nameParts[0].substring(0, 2).toUpperCase()
+                  : 'AG';
 
               const connectRate =
                 agent.calls > 0

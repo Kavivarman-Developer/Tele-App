@@ -163,12 +163,13 @@ export const LeadTimeline: React.FC<LeadTimelineProps> = ({
             agentName.toLowerCase().includes('you') ||
             agentName.toLowerCase().includes('john agent');
 
-          const initials = agentName
-            .split(' ')
-            .map((w) => w[0])
-            .join('')
-            .toUpperCase()
-            .slice(0, 2);
+          const nameParts = typeof agentName === 'string' ? agentName.trim().split(/\s+/).filter(Boolean) : [];
+          const initials =
+            nameParts.length >= 2
+              ? (nameParts[0][0] + nameParts[1][0]).toUpperCase()
+              : nameParts.length === 1
+              ? nameParts[0].substring(0, 2).toUpperCase()
+              : 'AG';
 
           // Temperature badge logic
           const temp = (act.temperature || act.tag || '').toUpperCase();
