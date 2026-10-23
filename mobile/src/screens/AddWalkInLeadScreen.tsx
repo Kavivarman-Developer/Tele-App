@@ -41,8 +41,8 @@ export const AddWalkInLeadScreen: React.FC = () => {
   const isWide = width >= 860;
   const safeTopPadding = useSafeTopPadding(isWide);
 
-  const [name, setName] = useState<string>('');
-  const [phone, setPhone] = useState<string>('');
+  const [name, setName] = useState<string>(route.params?.name || '');
+  const [phone, setPhone] = useState<string>(route.params?.phone || '');
   const [email, setEmail] = useState<string>('');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(initialCampaignId || null);
   const [isDialAfterSave, setIsDialAfterSave] = useState<boolean>(false);

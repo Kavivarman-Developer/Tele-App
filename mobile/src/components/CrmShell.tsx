@@ -30,6 +30,7 @@ import { useDialerStore } from '../store/dialerStore';
 import { CrmSidebarContent, CrmSidebarModalDrawer } from './CrmSidebar';
 import { PeriodControl, ReportingPeriod } from './PeriodControl';
 import { FollowUpNotificationsModal } from './FollowUpNotificationsModal';
+import { FloatingDialpadFab } from './FloatingDialpadFab';
 import { colors, borderRadius, shadows } from '../theme';
 
 interface CrmShellProps {
@@ -171,15 +172,7 @@ export const CrmShell: React.FC<CrmShellProps> = ({
                 </View>
               ) : null}
 
-                            {/* Direct Phone Dialpad Button */}
-              <TouchableOpacity
-                style={styles.keypadBtn}
-                onPress={() => useDialerStore.getState().openDialer()}
-                activeOpacity={0.7}
-                accessibilityLabel="Phone Keypad"
-              >
-                <PhoneCall size={17} color="#0F9D58" strokeWidth={2.4} />
-              </TouchableOpacity>
+
 
               {/* Follow-up Notifications Bell Button */}
               <TouchableOpacity
@@ -225,6 +218,9 @@ export const CrmShell: React.FC<CrmShellProps> = ({
         visible={showNotifications}
         onClose={() => setShowNotifications(false)}
       />
+
+      {/* NeoDove Floating Action Button (+) */}
+      <FloatingDialpadFab />
     </View>
   );
 };

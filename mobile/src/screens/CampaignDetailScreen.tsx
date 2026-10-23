@@ -33,6 +33,7 @@ import {
 import { fetchMyLeads, fetchCampaignById, fetchCampaigns } from '../api/leadApi';
 import { useCampaignStore } from '../store/campaignStore';
 import { CrmSidebarContent, CrmSidebarModalDrawer } from '../components/CrmSidebar';
+import { FloatingDialpadFab } from '../components/FloatingDialpadFab';
 import { useSafeTopPadding } from '../utils/safeArea';
 import { RootStackParamList, Campaign, Lead } from '../types';
 
@@ -664,6 +665,7 @@ export const CampaignDetailScreen: React.FC = () => {
         </View>
       </View>
       <CrmSidebarModalDrawer />
+      <FloatingDialpadFab bottomOffset={24} />
     </SafeAreaView>
   );
 };
