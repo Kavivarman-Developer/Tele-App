@@ -742,6 +742,22 @@ const HomeScreenContent: React.FC = () => {
         } catch {
           result = { connected: false, durationSeconds: 0 };
         }
+
+        // ⚡ NeoDove-Grade Auto-Log: Immediately record this call outreach
+        useLeadHistoryStore.getState().addActivity(dialedLead._id, {
+          phone: dialedLead.phone,
+          customerName: dialedLead.name,
+          agentName: user?.name,
+          agentId: user?._id,
+          branch: user?.branch,
+          connected: result.connected,
+          type: 'CALL',
+          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
+          stage: result.connected ? (dialedLead.stage === 'New' ? 'Connected' : dialedLead.stage) : 'Not Connected',
+          durationSeconds: result.connected ? result.durationSeconds : 0,
+          remark: result.connected ? 'Call completed' : 'Call not answered',
+        });
+
         const queueIndex = queueLeads.findIndex((lead) => lead._id === dialedLead._id);
         navigation.navigate('Dispose', {
           lead: dialedLead,

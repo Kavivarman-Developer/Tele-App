@@ -15,6 +15,7 @@ import {
   Linking,
   StatusBar as RNStatusBar,
   useWindowDimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
@@ -175,6 +176,7 @@ export const LeadDetailScreen: React.FC = () => {
     route.name === 'Dispose' && routeParams.callAttempt === true,
   );
   const [showPermissionModal, setShowPermissionModal] = useState<boolean>(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Calling & AppState refs
   const callStartTimeRef = useRef<number | null>(null);
@@ -673,17 +675,25 @@ export const LeadDetailScreen: React.FC = () => {
       </View>
 
       {/* 3. TAB BODIES */}
-      <ScrollView
-        style={[
-          styles.scrollContainer,
-          activeTab === 'DISPOSE LEAD' && { backgroundColor: '#FFFFFF' },
-        ]}
-        contentContainerStyle={[
-          styles.scrollContent,
-          activeTab === 'DISPOSE LEAD' && styles.disposeScrollContent,
-        ]}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
+        <ScrollView
+          ref={scrollViewRef}
+          style={[
+            styles.scrollContainer,
+            activeTab === 'DISPOSE LEAD' && { backgroundColor: '#FFFFFF' },
+          ]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            activeTab === 'DISPOSE LEAD' && styles.disposeScrollContent,
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
+        >
         {/* =========================================================================
             TAB 1: LEAD INFO (Exact match of Image 1)
            ========================================================================= */}
@@ -1062,6 +1072,11 @@ export const LeadDetailScreen: React.FC = () => {
                 numberOfLines={3}
                 textAlignVertical="top"
                 style={styles.remarksBox}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 250);
+                }}
               />
             </View>
 
@@ -1080,7 +1095,8 @@ export const LeadDetailScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* 4. STICKY BOTTOM ACTIONS FOR LEAD INFO TAB (Call Now + Floating +) */}
       {activeTab === 'LEAD INFO' && (
@@ -1541,7 +1557,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 280,
   },
   disposeContainer: {
     backgroundColor: '#FFFFFF',

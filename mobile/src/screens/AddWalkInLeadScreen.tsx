@@ -11,6 +11,7 @@ import {
   StyleSheet,
   StatusBar as RNStatusBar,
   useWindowDimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -134,7 +135,16 @@ export const AddWalkInLeadScreen: React.FC = () => {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 220 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
+        >
         {/* Customer Information Card (Compact 3 Fields) */}
         <View style={styles.formCard}>
           <View style={styles.cardHeadingRow}>
@@ -271,7 +281,8 @@ export const AddWalkInLeadScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
+  </SafeAreaView>
   );
 };
 
