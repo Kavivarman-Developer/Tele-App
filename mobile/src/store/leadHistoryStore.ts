@@ -334,7 +334,51 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
     };
 
     const existingForLead = currentMap[leadId] || [];
-    const updatedLeadActivities = [newActivity, ...existingForLead];
+
+    // Check if there is an existing auto-logged call for this lead created within 3 minutes
+    const recentAutoIndex = existingForLead.findIndex((a) => {
+      if (a.type !== 'CALL') return false;
+      const ageMs = Date.now() - new Date(a.createdAt).getTime();
+      return (
+        ageMs < 180000 &&
+        (a.remark === 'Call completed' ||
+          a.remark === 'Call not answered' ||
+          a.remark === 'Agent opened phone dialer' ||
+          a.stage === 'Dialing')
+      );
+    });
+
+    let updatedLeadActivities: Activity[];
+    let resultingActivity: Activity;
+
+    const isDispositionUpdate =
+      recentAutoIndex >= 0 &&
+      data.remark &&
+      data.remark !== 'Call completed' &&
+      data.remark !== 'Call not answered' &&
+      data.remark !== 'Agent opened phone dialer';
+
+    if (isDispositionUpdate) {
+      const existing = existingForLead[recentAutoIndex];
+      resultingActivity = {
+        ...existing,
+        stage: data.stage || existing.stage,
+        tag: data.tag || data.temperature || existing.tag,
+        temperature: (data.temperature || data.tag || existing.temperature) as any,
+        remark: data.remark || existing.remark,
+        followUpAt: data.followUpAt !== undefined ? data.followUpAt : existing.followUpAt,
+        durationSeconds:
+          data.durationSeconds && data.durationSeconds > 0
+            ? data.durationSeconds
+            : existing.durationSeconds,
+        updatedAt: new Date().toISOString(),
+      };
+      updatedLeadActivities = [...existingForLead];
+      updatedLeadActivities[recentAutoIndex] = resultingActivity;
+    } else {
+      resultingActivity = newActivity;
+      updatedLeadActivities = [newActivity, ...existingForLead];
+    }
 
     const updatedMap: Record<string, Activity[]> = {
       ...currentMap,
@@ -343,10 +387,9 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
 
     if (normPhone) {
       const existingForPhone = currentMap[normPhone] || [];
-      const updatedPhoneActivities = [
-        newActivity,
-        ...existingForPhone.filter((a) => a._id !== newActivity._id),
-      ];
+      const updatedPhoneActivities = isDispositionUpdate
+        ? existingForPhone.map((a) => (a._id === resultingActivity._id ? resultingActivity : a))
+        : [resultingActivity, ...existingForPhone.filter((a) => a._id !== resultingActivity._id)];
       updatedMap[normPhone] = updatedPhoneActivities;
       updatedMap[`phone_${normPhone}`] = updatedPhoneActivities;
     }
@@ -355,7 +398,7 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
 
     storage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedMap)).catch(() => {});
 
-    return newActivity;
+    return resultingActivity;
   },
 
   updateLeadName: (leadId: string, newName: string) => {

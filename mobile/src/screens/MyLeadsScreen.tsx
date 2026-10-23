@@ -44,6 +44,7 @@ import { storage } from '../utils/storage';
 import { Lead, RootStackParamList } from '../types';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useCampaignStore } from '../store/campaignStore';
 import { CrmShell } from '../components/CrmShell';
 import { LeadSummaryModal } from '../components/LeadSummaryModal';
@@ -628,6 +629,21 @@ const MyLeadsScreenContent: React.FC = () => {
         } catch {
           result = { connected: false, durationSeconds: 0 };
         }
+
+        // ⚡ NeoDove-Grade Auto-Log: Immediately record this call outreach
+        useLeadHistoryStore.getState().addActivity(dialedLead._id, {
+          phone: dialedLead.phone,
+          customerName: dialedLead.name,
+          agentName: user?.name,
+          agentId: user?._id,
+          branch: user?.branch,
+          connected: result.connected,
+          type: 'CALL',
+          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
+          stage: result.connected ? (dialedLead.stage === 'New' ? 'Connected' : dialedLead.stage) : 'Not Connected',
+          durationSeconds: result.connected ? result.durationSeconds : 0,
+          remark: result.connected ? 'Call completed' : 'Call not answered',
+        });
 
         navigation.navigate('Dispose', {
           lead: dialedLead,

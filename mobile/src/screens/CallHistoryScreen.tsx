@@ -1,14 +1,17 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   TextInput,
-  Linking,
   Alert,
   useWindowDimensions,
+  AppState,
+  AppStateStatus,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
@@ -24,16 +27,12 @@ import {
   Flame,
   Sun,
   Snowflake,
-  User,
   ArrowUpRight,
-  Filter,
   CheckCircle2,
   PhoneOff,
-  History,
   RotateCw,
-  Bell,
-  Sparkles,
   TrendingUp,
+  PhoneOutgoing,
 } from 'lucide-react-native';
 
 import { CrmShell } from '../components/CrmShell';
@@ -41,16 +40,237 @@ import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
 import { fetchUserActivities } from '../api/leadApi';
 import { Activity, CustomerTemperature, Lead } from '../types';
-import { formatDisplayPhone, getDialerTelUrl } from '../utils/phoneUtils';
+import { formatDisplayPhone } from '../utils/phoneUtils';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { CrmDateTimePickerModal } from '../components/CrmDateTimePickerModal';
+import { callService } from '../services/call.service';
 import { toast } from '../store/toastStore';
-import { colors, borderRadius, shadows } from '../theme';
+import { colors } from '../theme';
 
 type DateFilter = 'TODAY' | 'CUSTOM' | 'ALL';
 type StageFilter = 'ALL' | 'CONNECTED' | 'INTERESTED' | 'FOLLOW_UP' | 'NOT_CONNECTED';
 
+// Safe initials helper (guaranteed zero crash)
+const getInitials = (name?: string, fallback = 'CL') => {
+  if (!name || typeof name !== 'string') return fallback;
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return fallback;
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+};
+
+const formatActivityTime = (isoString: string) => {
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (isToday) {
+      return `Today, ${timeStr}`;
+    }
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`;
+  } catch {
+    return isoString;
+  }
+};
+
+const formatDuration = (seconds?: number, connected?: boolean) => {
+  if (!connected) return 'Not connected';
+  if (!seconds || seconds <= 0) return 'Connected (0s)';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s}s`;
+};
+
+// ======================================================================
+// MEMOIZED NEODOVE-GRADE CALL CARD
+// ======================================================================
+interface CallCardProps {
+  act: Activity;
+  onCallAgain: (act: Activity) => void;
+  onOpenWhatsApp: (act: Activity) => void;
+  onOpenLead: (act: Activity) => void;
+}
+
+const CallHistoryCard = React.memo<CallCardProps>(
+  ({ act, onCallAgain, onOpenWhatsApp, onOpenLead }) => {
+    const isHot = act.temperature === 'HOT' || act.tag === 'HOT';
+    const isCold = act.temperature === 'COLD' || act.tag === 'COLD';
+    const displayName =
+      act.customerName ||
+      (act.phone ? `Customer (${formatDisplayPhone(act.phone)})` : 'Lead Contact');
+    const initials = getInitials(act.customerName);
+    const isConnected = Boolean(act.connected);
+
+    return (
+      <View style={styles.callCard}>
+        {/* Card Header: Avatar + Customer Info + Time & Duration */}
+        <View style={styles.callCardHeader}>
+          {/* Avatar with direction indicator */}
+          <View style={styles.avatarWrap}>
+            <View style={[styles.avatarCircle, isConnected ? styles.avatarConnected : styles.avatarMissed]}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
+            <View style={[styles.directionDot, isConnected ? styles.directionConnected : styles.directionMissed]}>
+              {isConnected ? (
+                <PhoneOutgoing size={9} color="#FFFFFF" strokeWidth={2.5} />
+              ) : (
+                <PhoneOff size={9} color="#FFFFFF" strokeWidth={2.5} />
+              )}
+            </View>
+          </View>
+
+          {/* Customer Info */}
+          <View style={styles.customerInfoCol}>
+            <View style={styles.nameRow}>
+              <Text style={styles.customerNameText} numberOfLines={1}>
+                {displayName}
+              </Text>
+
+              {/* Temperature Pill */}
+              <View
+                style={[
+                  styles.tempPill,
+                  isHot ? styles.tempHot : isCold ? styles.tempCold : styles.tempWarm,
+                ]}
+              >
+                {isHot ? (
+                  <Flame size={10} color="#DC2626" fill="#DC2626" />
+                ) : isCold ? (
+                  <Snowflake size={10} color="#2563EB" />
+                ) : (
+                  <Sun size={10} color="#D97706" />
+                )}
+                <Text
+                  style={[
+                    styles.tempPillText,
+                    { color: isHot ? '#DC2626' : isCold ? '#2563EB' : '#D97706' },
+                  ]}
+                >
+                  {isHot ? 'Hot' : isCold ? 'Cold' : 'Warm'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Phone Number */}
+            <TouchableOpacity
+              style={styles.phoneClickableRow}
+              onPress={() => onCallAgain(act)}
+              activeOpacity={0.7}
+            >
+              <Phone size={12} color="#0F9D58" />
+              <Text style={styles.customerPhoneText}>
+                {act.phone ? formatDisplayPhone(act.phone) : 'No phone'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Time & Duration Column */}
+          <View style={styles.timeDurationCol}>
+            <View style={styles.callTimePill}>
+              <Clock size={11} color="#64748B" />
+              <Text style={styles.callTimeText}>{formatActivityTime(act.createdAt)}</Text>
+            </View>
+
+            <View
+              style={[
+                styles.durationBadge,
+                isConnected ? styles.durationConnected : styles.durationMissed,
+              ]}
+            >
+              {isConnected ? (
+                <Phone size={10} color="#0F9D58" />
+              ) : (
+                <PhoneOff size={10} color="#DC2626" />
+              )}
+              <Text
+                style={[
+                  styles.durationText,
+                  isConnected ? { color: '#0F9D58' } : { color: '#DC2626' },
+                ]}
+              >
+                {formatDuration(act.durationSeconds, isConnected)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Metadata Row: Stage Pill, Follow-up tag */}
+        <View style={styles.cardMetaRow}>
+          <View style={[styles.stageBadge, isConnected ? styles.stageBadgeConnected : styles.stageBadgeNeutral]}>
+            <Text style={[styles.stageBadgeText, isConnected ? styles.stageTextConnected : styles.stageTextNeutral]}>
+              {act.stage || (isConnected ? 'Connected' : 'Not Connected')}
+            </Text>
+          </View>
+
+          {act.notConnectedReason && !isConnected ? (
+            <View style={styles.reasonBadge}>
+              <Text style={styles.reasonBadgeText}>
+                {act.notConnectedReason.replace(/_/g, ' ')}
+              </Text>
+            </View>
+          ) : null}
+
+          {act.followUpAt ? (
+            <View style={styles.followUpScheduledTag}>
+              <Calendar size={11} color="#0D9488" />
+              <Text style={styles.followUpScheduledText}>Callback scheduled</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Remark / Notes (if present) */}
+        {act.remark && act.remark !== 'Call completed' && act.remark !== 'Call not answered' ? (
+          <View style={styles.remarkBox}>
+            <Text style={styles.remarkText} numberOfLines={2}>
+              "{act.remark}"
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Action Buttons Row: [ 📞 Call Again ] [ 💬 WhatsApp ] [ 📋 Lead Details ] */}
+        <View style={styles.cardActionsRow}>
+          {/* Call Again (Triggers full AppState & Duration tracking) */}
+          <TouchableOpacity
+            style={styles.callAgainBtn}
+            onPress={() => onCallAgain(act)}
+            activeOpacity={0.8}
+          >
+            <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.callAgainBtnText}>Call Again</Text>
+          </TouchableOpacity>
+
+          {/* WhatsApp */}
+          <TouchableOpacity
+            style={styles.whatsAppBtn}
+            onPress={() => onOpenWhatsApp(act)}
+            activeOpacity={0.8}
+          >
+            <MessageCircle size={13} color="#0F9D58" strokeWidth={2.5} />
+            <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
+          </TouchableOpacity>
+
+          {/* Open Lead */}
+          <TouchableOpacity
+            style={styles.openLeadBtn}
+            onPress={() => onOpenLead(act)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.openLeadBtnText}>Lead Details</Text>
+            <ArrowUpRight size={13} color="#0284C7" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+);
+
+// ======================================================================
+// MAIN CALL HISTORY SCREEN
+// ======================================================================
 export const CallHistoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { width } = useWindowDimensions();
@@ -61,14 +281,20 @@ export const CallHistoryScreen: React.FC = () => {
 
   const { getAllActivities, loadHistory } = useLeadHistoryStore();
 
-  // Default to TODAY so the agent only sees today's calls by default
+  // Redial Tracking Refs (NeoDove-Grade Tracking)
+  const isCallingRef = useRef(false);
+  const callStartTimeRef = useRef<number | null>(null);
+  const callingActRef = useRef<Activity | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  // Filters
   const [dateFilter, setDateFilter] = useState<DateFilter>('TODAY');
   const [selectedCustomDate, setSelectedCustomDate] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [stageFilter, setStageFilter] = useState<StageFilter>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // WhatsApp & Quick Modal States
+  // Modals
   const [whatsAppData, setWhatsAppData] = useState<{
     visible: boolean;
     name: string;
@@ -95,7 +321,82 @@ export const CallHistoryScreen: React.FC = () => {
     staleTime: 1000 * 15,
   });
 
-  // Fetch activities combining server DB records and local history
+  // ⚡ CRITICAL NEODOVE-GRADE TRACKING:
+  // AppState Listener to detect when user returns from phone dialer after "Call Again"
+  useEffect(() => {
+    const handleAppStateChange = async (nextState: AppStateStatus) => {
+      const prevState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (
+        (prevState === 'background' || prevState === 'inactive') &&
+        nextState === 'active' &&
+        isCallingRef.current &&
+        callStartTimeRef.current !== null &&
+        callingActRef.current !== null
+      ) {
+        const startTime = callStartTimeRef.current;
+        const dialedAct = callingActRef.current;
+        isCallingRef.current = false;
+        callStartTimeRef.current = null;
+        callingActRef.current = null;
+
+        let result: { connected: boolean; durationSeconds: number };
+        try {
+          result = await callService.getCallResult(dialedAct.phone || '', startTime);
+        } catch {
+          result = { connected: false, durationSeconds: 0 };
+        }
+
+        const syntheticLead: Lead = {
+          _id: dialedAct.leadId || `lead-${dialedAct._id}`,
+          name: dialedAct.customerName || 'Customer',
+          phone: dialedAct.phone || '',
+          campaignId: dialedAct.campaignId || 'default-camp',
+          stage: dialedAct.stage || 'New',
+          source: 'DIRECT_CALL',
+          customProperties: {},
+          status: 'OPEN',
+          attemptCount: 1,
+          createdAt: '',
+          updatedAt: '',
+        };
+
+        // ⚡ Auto-log this redial outreach immediately into store (so count increases!)
+        useLeadHistoryStore.getState().addActivity(syntheticLead._id, {
+          phone: syntheticLead.phone,
+          customerName: syntheticLead.name,
+          agentName: user?.name,
+          agentId: user?._id,
+          branch: user?.branch,
+          connected: result.connected,
+          type: 'CALL',
+          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
+          stage: result.connected ? (dialedAct.stage === 'New' ? 'Connected' : dialedAct.stage) : 'Not Connected',
+          durationSeconds: result.connected ? result.durationSeconds : 0,
+          remark: result.connected ? 'Call completed' : 'Call not answered',
+        });
+
+        // Refetch query to update list
+        refetchServer();
+
+        // Navigate to Dispose so agent can update notes or schedule callback
+        navigation.navigate('Dispose', {
+          lead: syntheticLead,
+          initialTab: 'DISPOSE LEAD',
+          callDurationSeconds: result.connected ? result.durationSeconds : 0,
+          isCallConnected: result.connected,
+          callAttempt: true,
+          detectionMethod: 'AUTOMATIC',
+        });
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, [navigation, user, refetchServer]);
+
+  // Combined activities (Server DB + Local Store)
   const userActivities = useMemo(() => {
     const cleanId = (user?._id || '').toLowerCase();
     const cleanName = (user?.name || '').toLowerCase();
@@ -113,17 +414,17 @@ export const CallHistoryScreen: React.FC = () => {
     };
 
     const targetAgentId = isAgent ? (user?._id || user?.name) : undefined;
-    const local = getAllActivities(targetAgentId).filter((activity) => activity.type === 'CALL' && matchesMe(activity));
+    const local = getAllActivities(targetAgentId).filter(
+      (activity) => activity.type === 'CALL' && matchesMe(activity),
+    );
     const map = new Map<string, Activity>();
 
-    // 1. Add server activities (synced from MongoDB)
     for (const a of serverActivities) {
       if (a && a._id && a.type === 'CALL' && matchesMe(a)) {
         map.set(a._id, a);
       }
     }
 
-    // 2. Add local activities (e.g. offline logged calls before server sync)
     for (const a of local) {
       if (a && a._id && !map.has(a._id)) {
         map.set(a._id, a);
@@ -135,7 +436,6 @@ export const CallHistoryScreen: React.FC = () => {
     );
   }, [serverActivities, getAllActivities, user, isAgent]);
 
-  // Start of Day timestamps
   const startOfToday = useMemo(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -183,46 +483,21 @@ export const CallHistoryScreen: React.FC = () => {
     });
   }, [userActivities, dateFilter, selectedCustomDate, stageFilter, searchQuery, startOfToday]);
 
-  // Today count strictly for today's tab counter
   const todayCount = useMemo(() => {
     return userActivities.filter(
       (a) => new Date(a.createdAt).getTime() >= startOfToday,
     ).length;
   }, [userActivities, startOfToday]);
 
-  // Stage counts matching current date filter for stage pills
-  const stageCounts = useMemo(() => {
-    const base = userActivities.filter((act) => {
-      const actTime = new Date(act.createdAt).getTime();
-      if (dateFilter === 'TODAY') {
-        if (actTime < startOfToday) return false;
-      } else if (dateFilter === 'CUSTOM' && selectedCustomDate) {
-        const cd = new Date(selectedCustomDate);
-        const startOfCustom = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate()).getTime();
-        const endOfCustom = startOfCustom + 24 * 60 * 60 * 1000 - 1;
-        if (actTime < startOfCustom || actTime > endOfCustom) return false;
-      }
-      return true;
-    });
-
-    return {
-      all: base.length,
-      connected: base.filter((a) => a.connected).length,
-      interested: base.filter((a) => a.stage.toLowerCase().includes('interested')).length,
-      followUp: base.filter((a) => a.stage.toLowerCase().includes('follow')).length,
-      notConnected: base.filter((a) => !a.connected).length,
-    };
-  }, [userActivities, dateFilter, selectedCustomDate, startOfToday]);
-
   // Computed metrics for currently filtered call activities
   const callStats = useMemo(() => {
     const total = filteredActivities.length;
     const connected = filteredActivities.filter((a) => a.connected).length;
+    const missed = total - connected;
     const rate = total > 0 ? Math.round((connected / total) * 100) : 0;
     const totalDurationSec = filteredActivities
       .filter((a) => a.connected)
       .reduce((sum, a) => sum + (a.durationSeconds || 0), 0);
-    const avgDurationSec = connected > 0 ? Math.round(totalDurationSec / connected) : 0;
 
     const formatSec = (sec: number) => {
       if (!sec || sec <= 0) return '0s';
@@ -235,34 +510,47 @@ export const CallHistoryScreen: React.FC = () => {
     return {
       total,
       connected,
+      missed,
       rate,
       totalDuration: formatSec(totalDurationSec),
-      avgDuration: formatSec(avgDurationSec),
     };
   }, [filteredActivities]);
 
-  const getInitials = (name?: string) => {
-    if (!name || !name.trim()) return 'CL';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  };
-
-  // Handle Redial
+  // Redial handler with NeoDove tracking
   const handleCallAgain = (act: Activity) => {
     if (!act.phone) {
       Alert.alert('No Number', 'Customer phone number is unavailable.');
       return;
     }
 
+    isCallingRef.current = true;
+    callStartTimeRef.current = Date.now();
+    callingActRef.current = act;
+
     toast.info(`Dialing ${act.customerName || act.phone}...`, 'Calling');
 
-    Linking.openURL(getDialerTelUrl(act.phone)).catch(() => {
+    const syntheticLead: Lead = {
+      _id: act.leadId || `lead-${act._id}`,
+      name: act.customerName || 'Customer',
+      phone: act.phone,
+      campaignId: act.campaignId || 'default-camp',
+      stage: act.stage || 'New',
+      source: 'DIRECT_CALL',
+      customProperties: {},
+      status: 'OPEN',
+      attemptCount: 1,
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    callService.startCall(syntheticLead).catch(() => {
+      isCallingRef.current = false;
+      callStartTimeRef.current = null;
+      callingActRef.current = null;
       Alert.alert('Call Error', 'Unable to launch dialer on this device.');
     });
   };
 
-  // Handle WhatsApp
   const handleOpenWhatsApp = (act: Activity) => {
     if (!act.phone) return;
     setWhatsAppData({
@@ -272,7 +560,6 @@ export const CallHistoryScreen: React.FC = () => {
     });
   };
 
-  // Open Lead Quick Modal
   const handleOpenLead = (act: Activity) => {
     const syntheticLead: Lead = {
       _id: act.leadId || `lead-${Date.now()}`,
@@ -293,30 +580,198 @@ export const CallHistoryScreen: React.FC = () => {
     setQuickLead(syntheticLead);
   };
 
-  const formatActivityTime = (isoString: string) => {
-    try {
-      const d = new Date(isoString);
-      if (isNaN(d.getTime())) return isoString;
-      const now = new Date();
-      const isToday = d.toDateString() === now.toDateString();
-      const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      if (isToday) {
-        return `Today at ${timeStr}`;
-      }
-      return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${timeStr}`;
-    } catch {
-      return isoString;
-    }
-  };
+  // Header Component for Virtualized FlatList
+  const renderListHeader = () => (
+    <View style={styles.headerContainer}>
+      {/* Top Search Bar & Refresh */}
+      <View style={styles.topSearchRow}>
+        <View style={styles.searchInputWrap}>
+          <Search size={16} color="#64748B" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search customer or phone..."
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <X size={15} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-  const formatDuration = (seconds?: number, connected?: boolean) => {
-    if (!connected) return 'Not connected';
-    if (!seconds || seconds <= 0) return 'Connected';
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    if (m === 0) return `${s}s`;
-    return `${m}m ${s}s`;
-  };
+        <TouchableOpacity
+          style={styles.iconRefreshBtn}
+          onPress={() => {
+            loadHistory();
+            refetchServer();
+            toast.info('Refreshed call history');
+          }}
+          activeOpacity={0.7}
+        >
+          <RotateCw size={15} color="#475569" />
+        </TouchableOpacity>
+      </View>
+
+      {/* 4-Card NeoDove KPI Strip */}
+      <View style={styles.kpiRow}>
+        <View style={[styles.kpiCard, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+          <View style={[styles.kpiIconWrap, { backgroundColor: '#EFF6FF' }]}>
+            <Phone size={13} color="#2563EB" />
+          </View>
+          <Text style={styles.kpiValue}>{callStats.total}</Text>
+          <Text style={styles.kpiLabel}>Total Dials</Text>
+        </View>
+
+        <View style={[styles.kpiCard, { backgroundColor: '#F0FDF4', borderColor: '#DCFCE7' }]}>
+          <View style={[styles.kpiIconWrap, { backgroundColor: '#DCFCE7' }]}>
+            <CheckCircle2 size={13} color="#16A34A" />
+          </View>
+          <Text style={[styles.kpiValue, { color: '#16A34A' }]}>{callStats.connected}</Text>
+          <Text style={styles.kpiLabel}>Connected ({callStats.rate}%)</Text>
+        </View>
+
+        <View style={[styles.kpiCard, { backgroundColor: '#F5F3FF', borderColor: '#EDE9FE' }]}>
+          <View style={[styles.kpiIconWrap, { backgroundColor: '#EDE9FE' }]}>
+            <Clock3 size={13} color="#7C3AED" />
+          </View>
+          <Text style={[styles.kpiValue, { color: '#6D28D9' }]}>{callStats.totalDuration}</Text>
+          <Text style={styles.kpiLabel}>Talk Time</Text>
+        </View>
+
+        <View style={[styles.kpiCard, { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' }]}>
+          <View style={[styles.kpiIconWrap, { backgroundColor: '#FEE2E2' }]}>
+            <PhoneOff size={13} color="#DC2626" />
+          </View>
+          <Text style={[styles.kpiValue, { color: '#DC2626' }]}>{callStats.missed}</Text>
+          <Text style={styles.kpiLabel}>Not Connected</Text>
+        </View>
+      </View>
+
+      {/* Date Filter Tabs */}
+      <View style={styles.dateTabsRow}>
+        <TouchableOpacity
+          style={[styles.dateTab, dateFilter === 'TODAY' && styles.dateTabActive]}
+          onPress={() => {
+            setDateFilter('TODAY');
+            setSelectedCustomDate(null);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.dateTabText, dateFilter === 'TODAY' && styles.dateTabTextActive]}>
+            Today
+          </Text>
+          <View style={[styles.tabBadge, dateFilter === 'TODAY' && styles.tabBadgeActive]}>
+            <Text style={[styles.tabBadgeText, dateFilter === 'TODAY' && styles.tabBadgeTextActive]}>
+              {todayCount}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.dateTab, dateFilter === 'ALL' && styles.dateTabActive]}
+          onPress={() => {
+            setDateFilter('ALL');
+            setSelectedCustomDate(null);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.dateTabText, dateFilter === 'ALL' && styles.dateTabTextActive]}>
+            All Time
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.dateTab,
+            dateFilter === 'CUSTOM' && styles.dateTabActive,
+            styles.datePickerTab,
+          ]}
+          onPress={() => setShowDatePicker(true)}
+          activeOpacity={0.7}
+        >
+          <Calendar size={13} color={dateFilter === 'CUSTOM' ? '#FFFFFF' : '#475569'} />
+          <Text
+            style={[styles.dateTabText, dateFilter === 'CUSTOM' && styles.dateTabTextActive]}
+            numberOfLines={1}
+          >
+            {dateFilter === 'CUSTOM' && customDateDisplay ? customDateDisplay : 'Choose Date'}
+          </Text>
+          {dateFilter === 'CUSTOM' ? (
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                setDateFilter('TODAY');
+                setSelectedCustomDate(null);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ marginLeft: 2 }}
+            >
+              <X size={12} color="#FFFFFF" strokeWidth={2.5} />
+            </TouchableOpacity>
+          ) : null}
+        </TouchableOpacity>
+      </View>
+
+      {/* Stage / Status Chips */}
+      <View style={styles.stageChipsRow}>
+        {(['ALL', 'CONNECTED', 'NOT_CONNECTED', 'INTERESTED', 'FOLLOW_UP'] as StageFilter[]).map(
+          (stg) => {
+            const isSelected = stageFilter === stg;
+            const labelMap: Record<StageFilter, string> = {
+              ALL: 'All Calls',
+              CONNECTED: 'Connected',
+              NOT_CONNECTED: 'Not Connected',
+              INTERESTED: 'Interested',
+              FOLLOW_UP: 'Follow-up',
+            };
+            return (
+              <TouchableOpacity
+                key={stg}
+                style={[styles.stageChip, isSelected && styles.stageChipActive]}
+                onPress={() => setStageFilter(stg)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.stageChipText, isSelected && styles.stageChipTextActive]}>
+                  {labelMap[stg]}
+                </Text>
+              </TouchableOpacity>
+            );
+          },
+        )}
+      </View>
+    </View>
+  );
+
+  // Empty State Component
+  const renderEmptyState = () => (
+    <View style={styles.emptyStateBox}>
+      <View style={styles.emptyIconCircle}>
+        <Clock3 size={32} color="#94A3B8" />
+      </View>
+      <Text style={styles.emptyTitle}>No Calls Recorded</Text>
+      <Text style={styles.emptySub}>
+        {dateFilter === 'TODAY'
+          ? "You haven't placed any calls today yet. Calls you make will automatically appear here with duration and connection status."
+          : 'No calls match the selected date and filter criteria.'}
+      </Text>
+      <TouchableOpacity
+        style={styles.emptyResetBtn}
+        onPress={() => {
+          setDateFilter('TODAY');
+          setStageFilter('ALL');
+          setSearchQuery('');
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.emptyResetBtnText}>Reset to Today's Calls</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <CrmShell
@@ -324,471 +779,59 @@ export const CallHistoryScreen: React.FC = () => {
       headerIcon={<PhoneCall size={15} color={colors.textSecondary} />}
       breadcrumb="Workspace"
     >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Sleek Top Search Bar & Quick Refresh */}
-        <View style={styles.topSearchRow}>
-          <View style={styles.searchInputWrap}>
-            <Search size={16} color="#64748B" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search customer name or phone..."
-              placeholderTextColor="#94A3B8"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+        <FlatList
+          data={filteredActivities}
+          keyExtractor={(item) => item._id}
+          renderItem={({ item }) => (
+            <CallHistoryCard
+              act={item}
+              onCallAgain={handleCallAgain}
+              onOpenWhatsApp={handleOpenWhatsApp}
+              onOpenLead={handleOpenLead}
             />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <X size={15} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={styles.iconRefreshBtn}
-            onPress={() => {
-              loadHistory();
-              refetchServer();
-              toast.info('Refreshed call history');
-            }}
-            activeOpacity={0.7}
-          >
-            <RotateCw size={15} color="#475569" />
-          </TouchableOpacity>
-        </View>
-
-        {/* 4-Card KPI Performance Strip */}
-        <View style={styles.kpiRow}>
-          <View style={[styles.kpiCard, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
-            <View style={[styles.kpiIconWrap, { backgroundColor: '#EFF6FF' }]}>
-              <Phone size={13} color="#2563EB" />
-            </View>
-            <Text style={styles.kpiValue}>{callStats.total}</Text>
-            <Text style={styles.kpiLabel}>Total Calls</Text>
-          </View>
-
-          <View style={[styles.kpiCard, { backgroundColor: '#F0FDF4', borderColor: '#DCFCE7' }]}>
-            <View style={[styles.kpiIconWrap, { backgroundColor: '#DCFCE7' }]}>
-              <CheckCircle2 size={13} color="#16A34A" />
-            </View>
-            <Text style={[styles.kpiValue, { color: '#16A34A' }]}>{callStats.connected}</Text>
-            <Text style={styles.kpiLabel}>Connected ({callStats.rate}%)</Text>
-          </View>
-
-          <View style={[styles.kpiCard, { backgroundColor: '#F5F3FF', borderColor: '#EDE9FE' }]}>
-            <View style={[styles.kpiIconWrap, { backgroundColor: '#EDE9FE' }]}>
-              <Clock3 size={13} color="#7C3AED" />
-            </View>
-            <Text style={[styles.kpiValue, { color: '#6D28D9' }]}>{callStats.totalDuration}</Text>
-            <Text style={styles.kpiLabel}>Talk Time</Text>
-          </View>
-
-          <View style={[styles.kpiCard, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}>
-            <View style={[styles.kpiIconWrap, { backgroundColor: '#FEF3C7' }]}>
-              <TrendingUp size={13} color="#D97706" />
-            </View>
-            <Text style={[styles.kpiValue, { color: '#B45309' }]}>{callStats.avgDuration}</Text>
-            <Text style={styles.kpiLabel}>Avg. Call</Text>
-          </View>
-        </View>
-
-        {/* Date Filter Tabs */}
-        <View style={styles.dateTabsRow}>
-          <TouchableOpacity
-            style={[styles.dateTab, dateFilter === 'TODAY' && styles.dateTabActive]}
-            onPress={() => {
-              setDateFilter('TODAY');
-              setSelectedCustomDate(null);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.dateTabText, dateFilter === 'TODAY' && styles.dateTabTextActive]}>
-              Today
-            </Text>
-            <View style={[styles.tabBadge, dateFilter === 'TODAY' && styles.tabBadgeActive]}>
-              <Text style={[styles.tabBadgeText, dateFilter === 'TODAY' && styles.tabBadgeTextActive]}>
-                {todayCount}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.dateTab,
-              dateFilter === 'CUSTOM' && styles.dateTabActive,
-              styles.datePickerTab,
-            ]}
-            onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.7}
-          >
-            <Calendar
-              size={13}
-              color={dateFilter === 'CUSTOM' ? '#FFFFFF' : '#475569'}
-            />
-            <Text style={[styles.dateTabText, dateFilter === 'CUSTOM' && styles.dateTabTextActive]} numberOfLines={1}>
-              {dateFilter === 'CUSTOM' && customDateDisplay ? customDateDisplay : 'Choose Date'}
-            </Text>
-            {dateFilter === 'CUSTOM' ? (
-              <TouchableOpacity
-                onPress={(e) => {
-                  e.stopPropagation();
-                  setDateFilter('TODAY');
-                  setSelectedCustomDate(null);
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={{ marginLeft: 2 }}
-              >
-                <X size={12} color="#FFFFFF" strokeWidth={2.5} />
-              </TouchableOpacity>
-            ) : null}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.dateTab, dateFilter === 'ALL' && styles.dateTabActive]}
-            onPress={() => {
-              setDateFilter('ALL');
-              setSelectedCustomDate(null);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.dateTabText, dateFilter === 'ALL' && styles.dateTabTextActive]}>
-              All Calls
-            </Text>
-            <View style={[styles.tabBadge, dateFilter === 'ALL' && styles.tabBadgeActive]}>
-              <Text style={[styles.tabBadgeText, dateFilter === 'ALL' && styles.tabBadgeTextActive]}>
-                {userActivities.length}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Stage Filter Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.stageFilterScroll}
-        >
-          <TouchableOpacity
-            style={[styles.stagePill, stageFilter === 'ALL' && styles.stagePillActive]}
-            onPress={() => setStageFilter('ALL')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.stagePillText, stageFilter === 'ALL' && styles.stagePillTextActive]}>
-              All
-            </Text>
-            <View style={[styles.stageCountPill, stageFilter === 'ALL' && styles.stageCountPillActive]}>
-              <Text style={[styles.stageCountText, stageFilter === 'ALL' && styles.stageCountTextActive]}>
-                {stageCounts.all}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.stagePill, stageFilter === 'CONNECTED' && styles.stagePillActiveConnected]}
-            onPress={() => setStageFilter('CONNECTED')}
-            activeOpacity={0.7}
-          >
-            <CheckCircle2 size={12} color={stageFilter === 'CONNECTED' ? '#FFFFFF' : '#16A34A'} />
-            <Text style={[styles.stagePillText, stageFilter === 'CONNECTED' && styles.stagePillTextActive]}>
-              Connected
-            </Text>
-            <View style={[styles.stageCountPill, stageFilter === 'CONNECTED' && styles.stageCountPillActive]}>
-              <Text style={[styles.stageCountText, stageFilter === 'CONNECTED' && styles.stageCountTextActive]}>
-                {stageCounts.connected}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.stagePill, stageFilter === 'INTERESTED' && styles.stagePillActiveInterested]}
-            onPress={() => setStageFilter('INTERESTED')}
-            activeOpacity={0.7}
-          >
-            <Flame size={12} color={stageFilter === 'INTERESTED' ? '#FFFFFF' : '#DC2626'} fill={stageFilter === 'INTERESTED' ? '#FFFFFF' : '#DC2626'} />
-            <Text style={[styles.stagePillText, stageFilter === 'INTERESTED' && styles.stagePillTextActive]}>
-              Interested
-            </Text>
-            <View style={[styles.stageCountPill, stageFilter === 'INTERESTED' && styles.stageCountPillActive]}>
-              <Text style={[styles.stageCountText, stageFilter === 'INTERESTED' && styles.stageCountTextActive]}>
-                {stageCounts.interested}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.stagePill, stageFilter === 'FOLLOW_UP' && styles.stagePillActiveFollowUp]}
-            onPress={() => setStageFilter('FOLLOW_UP')}
-            activeOpacity={0.7}
-          >
-            <Clock size={12} color={stageFilter === 'FOLLOW_UP' ? '#FFFFFF' : '#0D9488'} />
-            <Text style={[styles.stagePillText, stageFilter === 'FOLLOW_UP' && styles.stagePillTextActive]}>
-              Follow-ups
-            </Text>
-            <View style={[styles.stageCountPill, stageFilter === 'FOLLOW_UP' && styles.stageCountPillActive]}>
-              <Text style={[styles.stageCountText, stageFilter === 'FOLLOW_UP' && styles.stageCountTextActive]}>
-                {stageCounts.followUp}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.stagePill, stageFilter === 'NOT_CONNECTED' && styles.stagePillActiveNotConnected]}
-            onPress={() => setStageFilter('NOT_CONNECTED')}
-            activeOpacity={0.7}
-          >
-            <PhoneOff size={12} color={stageFilter === 'NOT_CONNECTED' ? '#FFFFFF' : '#94A3B8'} />
-            <Text style={[styles.stagePillText, stageFilter === 'NOT_CONNECTED' && styles.stagePillTextActive]}>
-              Not Connected
-            </Text>
-            <View style={[styles.stageCountPill, stageFilter === 'NOT_CONNECTED' && styles.stageCountPillActive]}>
-              <Text style={[styles.stageCountText, stageFilter === 'NOT_CONNECTED' && styles.stageCountTextActive]}>
-                {stageCounts.notConnected}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </ScrollView>
-
-        {/* Call History List */}
-        <View style={styles.historyList}>
-          {filteredActivities.length === 0 ? (
-            <View style={styles.emptyStateCard}>
-              <View style={styles.emptyIconCircle}>
-                <PhoneCall size={30} color="#0F9D58" />
-              </View>
-              <Text style={styles.emptyStateTitle}>
-                {dateFilter === 'TODAY'
-                  ? 'No calls made today yet'
-                  : 'No calls found for this period'}
-              </Text>
-              <Text style={styles.emptyStateSubtitle}>
-                {dateFilter === 'TODAY'
-                  ? 'When you dial leads or log dispositions today, each call will automatically appear here with duration, timestamps, and customer notes.'
-                  : 'No calls match your selected date or search filter. Try clearing filters or selecting another date.'}
-              </Text>
-
-              {dateFilter === 'TODAY' ? (
-                <TouchableOpacity
-                  style={styles.emptyActionBtn}
-                  onPress={() => navigation.navigate('MyLeads')}
-                  activeOpacity={0.8}
-                >
-                  <Phone size={14} color="#FFFFFF" strokeWidth={2.5} />
-                  <Text style={styles.emptyActionBtnText}>Go to Calling Queue</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.emptyResetBtn}
-                  onPress={() => {
-                    setDateFilter('TODAY');
-                    setStageFilter('ALL');
-                    setSearchQuery('');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.emptyResetBtnText}>View Today's Calls</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            filteredActivities.map((act) => {
-              const isHot = act.temperature === 'HOT' || act.tag === 'HOT';
-              const isCold = act.temperature === 'COLD' || act.tag === 'COLD';
-              const displayName = act.customerName || (act.phone ? `Customer (${formatDisplayPhone(act.phone)})` : 'Lead Contact');
-              const initials = getInitials(act.customerName);
-
-              return (
-                <View key={act._id} style={styles.callCard}>
-                  {/* Card Header: Avatar + Customer Info + Time & Duration */}
-                  <View style={styles.callCardHeader}>
-                    <View style={styles.avatarCircle}>
-                      <Text style={styles.avatarText}>{initials}</Text>
-                    </View>
-
-                    <View style={styles.customerInfoCol}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <Text style={styles.customerNameText} numberOfLines={1}>
-                          {displayName}
-                        </Text>
-
-                        {/* Temperature Pill */}
-                        <View
-                          style={[
-                            styles.tempPill,
-                            isHot ? styles.tempHot : isCold ? styles.tempCold : styles.tempWarm,
-                          ]}
-                        >
-                          {isHot ? (
-                            <Flame size={10} color="#DC2626" fill="#DC2626" />
-                          ) : isCold ? (
-                            <Snowflake size={10} color="#2563EB" />
-                          ) : (
-                            <Sun size={10} color="#D97706" />
-                          )}
-                          <Text
-                            style={[
-                              styles.tempPillText,
-                              { color: isHot ? '#DC2626' : isCold ? '#2563EB' : '#D97706' },
-                            ]}
-                          >
-                            {isHot ? 'Hot' : isCold ? 'Cold' : 'Warm'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Phone Number */}
-                      <TouchableOpacity
-                        style={styles.phoneClickableRow}
-                        onPress={() => handleCallAgain(act)}
-                        activeOpacity={0.7}
-                      >
-                        <Phone size={12} color="#0F9D58" />
-                        <Text style={styles.customerPhoneText}>
-                          {act.phone ? formatDisplayPhone(act.phone) : 'No phone'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Time Pill & Duration */}
-                    <View style={styles.timeDurationCol}>
-                      <View style={styles.callTimePill}>
-                        <Clock size={11} color="#64748B" />
-                        <Text style={styles.callTimeText}>{formatActivityTime(act.createdAt)}</Text>
-                      </View>
-
-                      <View
-                        style={[
-                          styles.durationBadge,
-                          act.connected ? styles.durationConnected : styles.durationMissed,
-                        ]}
-                      >
-                        {act.connected ? (
-                          <Phone size={10} color="#0F9D58" />
-                        ) : (
-                          <PhoneOff size={10} color="#DC2626" />
-                        )}
-                        <Text
-                          style={[
-                            styles.durationText,
-                            act.connected ? { color: '#0F9D58' } : { color: '#DC2626' },
-                          ]}
-                        >
-                          {formatDuration(act.durationSeconds, act.connected)}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Metadata Row: Stage Pill, Follow-up tag */}
-                  <View style={styles.cardMetaRow}>
-                    <View style={styles.stageBadge}>
-                      <Text style={styles.stageBadgeText}>{act.stage}</Text>
-                    </View>
-
-                    {act.followUpAt ? (
-                      <>
-                        <Text style={styles.metaDot}>•</Text>
-                        <View style={styles.followUpScheduledTag}>
-                          <Calendar size={11} color="#0D9488" />
-                          <Text style={styles.followUpScheduledText}>
-                            Callback scheduled
-                          </Text>
-                        </View>
-                      </>
-                    ) : null}
-                  </View>
-
-                  {/* Remark / Notes (if present) */}
-                  {act.remark ? (
-                    <View style={styles.remarkBox}>
-                      <Text style={styles.remarkText} numberOfLines={2}>
-                        "{act.remark}"
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {/* Action Buttons Row: [ 📞 Call Again ] [ 💬 WhatsApp ] [ 📋 Lead Details ] */}
-                  <View style={styles.cardActionsRow}>
-                    {/* Call Again */}
-                    <TouchableOpacity
-                      style={styles.callAgainBtn}
-                      onPress={() => handleCallAgain(act)}
-                      activeOpacity={0.8}
-                    >
-                      <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
-                      <Text style={styles.callAgainBtnText}>Call Again</Text>
-                    </TouchableOpacity>
-
-                    {/* WhatsApp */}
-                    <TouchableOpacity
-                      style={styles.whatsAppBtn}
-                      onPress={() => handleOpenWhatsApp(act)}
-                      activeOpacity={0.8}
-                    >
-                      <MessageCircle size={13} color="#0F9D58" strokeWidth={2.5} />
-                      <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
-                    </TouchableOpacity>
-
-                    {/* Open Lead */}
-                    <TouchableOpacity
-                      style={styles.openLeadBtn}
-                      onPress={() => handleOpenLead(act)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.openLeadBtnText}>Lead Details</Text>
-                      <ArrowUpRight size={13} color="#0284C7" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
           )}
-        </View>
-      </ScrollView>
+          ListHeaderComponent={renderListHeader}
+          ListEmptyComponent={renderEmptyState}
+          contentContainerStyle={styles.listContainer}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
+          showsVerticalScrollIndicator={false}
+        />
+      </KeyboardAvoidingView>
 
       {/* WhatsApp Template Modal */}
-      {whatsAppData.visible && (
-        <WhatsAppTemplateModal
-          visible={whatsAppData.visible}
-          onClose={() => setWhatsAppData({ visible: false, name: '', phone: '' })}
-          recipientName={whatsAppData.name}
-          recipientPhone={whatsAppData.phone}
-        />
-      )}
+      <WhatsAppTemplateModal
+        visible={whatsAppData.visible}
+        onClose={() => setWhatsAppData((prev) => ({ ...prev, visible: false }))}
+        customerName={whatsAppData.name}
+        customerPhone={whatsAppData.phone}
+      />
 
-      {/* Embedded Lead Quick Modal */}
-      {quickLead && (
-        <LeadQuickModal
-          lead={quickLead}
-          visible={Boolean(quickLead)}
-          onClose={() => setQuickLead(null)}
-          onOpenFullDispose={(leadToDispose) => {
-            setQuickLead(null);
-            navigation.navigate('Dispose', { lead: leadToDispose });
-          }}
-        />
-      )}
+      {/* Lead Quick Modal */}
+      <LeadQuickModal
+        visible={Boolean(quickLead)}
+        onClose={() => setQuickLead(null)}
+        lead={quickLead}
+      />
 
-      {/* Date Picker Modal for Call History Date Filtering (Allows selecting past dates like yesterday) */}
+      {/* Custom Date Picker Modal */}
       <CrmDateTimePickerModal
         visible={showDatePicker}
-        title="Select Call History Date"
-        initialDate={selectedCustomDate || new Date().toISOString()}
-        onClose={() => setShowDatePicker(false)}
-        allowPastDates={true}
         mode="date"
-        onConfirm={(dateIso) => {
-          setSelectedCustomDate(dateIso);
+        initialDate={selectedCustomDate ? new Date(selectedCustomDate) : new Date()}
+        onClose={() => setShowDatePicker(false)}
+        onConfirm={(isoDate: string) => {
+          setSelectedCustomDate(isoDate);
           setDateFilter('CUSTOM');
           setShowDatePicker(false);
-          const d = new Date(dateIso);
-          const label = d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
-          toast.info(`Filtered for ${label}`);
         }}
       />
     </CrmShell>
@@ -796,117 +839,107 @@ export const CallHistoryScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
+  listContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 100,
   },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 110,
+  headerContainer: {
+    paddingTop: 12,
+    marginBottom: 8,
   },
+
+  // Top Search
   topSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   searchInputWrap: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 9,
-    ...shadows.soft,
+    height: 42,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#0F172A',
     padding: 0,
   },
   iconRefreshBtn: {
     width: 42,
     height: 42,
-    borderRadius: borderRadius.md,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.soft,
   },
+
+  // 4 KPI Cards
   kpiRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   kpiCard: {
     flex: 1,
-    minWidth: '47%',
-    padding: 10,
-    borderRadius: borderRadius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    ...shadows.soft,
+    alignItems: 'center',
   },
   kpiIconWrap: {
     width: 26,
     height: 26,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   kpiValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.3,
   },
   kpiLabel: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '600',
     color: '#64748B',
     marginTop: 2,
+    textAlign: 'center',
   },
+
+  // Date Tabs
   dateTabsRow: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: borderRadius.md,
-    padding: 3,
-    marginBottom: 12,
-    gap: 4,
+    gap: 8,
+    marginBottom: 10,
   },
   dateTab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    gap: 6,
   },
   dateTabActive: {
-    backgroundColor: '#0F172A',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  datePickerTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    backgroundColor: '#0F9D58',
   },
   dateTabText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '600',
     color: '#475569',
   },
@@ -914,9 +947,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
   },
+  datePickerTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   tabBadge: {
     backgroundColor: '#E2E8F0',
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 10,
   },
@@ -924,211 +961,128 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   tabBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#475569',
   },
   tabBadgeTextActive: {
     color: '#FFFFFF',
   },
-  stageFilterScroll: {
+
+  // Stage Chips
+  stageChipsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingBottom: 12,
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
   },
-  stagePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+  stageChip: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
+    paddingVertical: 4.5,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  stagePillActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+  stageChipActive: {
+    backgroundColor: '#E6F4EA',
+    borderColor: '#0F9D58',
   },
-  stagePillActiveConnected: {
-    backgroundColor: '#16A34A',
-    borderColor: '#16A34A',
-  },
-  stagePillActiveInterested: {
-    backgroundColor: '#DC2626',
-    borderColor: '#DC2626',
-  },
-  stagePillActiveFollowUp: {
-    backgroundColor: '#0D9488',
-    borderColor: '#0D9488',
-  },
-  stagePillActiveNotConnected: {
-    backgroundColor: '#475569',
-    borderColor: '#475569',
-  },
-  stagePillText: {
+  stageChipText: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: '#475569',
-  },
-  stagePillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  stageCountPill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 8,
-  },
-  stageCountPillActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  stageCountText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  stageCountTextActive: {
-    color: '#FFFFFF',
-  },
-  historyList: {
-    gap: 12,
-  },
-  emptyStateCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.lg,
-    padding: 32,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...shadows.soft,
-  },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  emptyStateTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  emptyStateSubtitle: {
-    fontSize: 12.5,
     color: '#64748B',
-    textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 18,
-    maxWidth: 320,
   },
-  emptyActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#0F9D58',
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-    borderRadius: 10,
-    marginTop: 18,
-    shadowColor: '#0F9D58',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  emptyActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  emptyResetBtn: {
-    marginTop: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-  },
-  emptyResetBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
+  stageChipTextActive: {
     color: '#0F9D58',
+    fontWeight: '700',
   },
+
+  // Call Card
   callCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.md,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     padding: 14,
-    ...shadows.soft,
+    marginBottom: 10,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   callCardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatarWrap: {
+    position: 'relative',
   },
   avatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  avatarConnected: {
+    backgroundColor: '#E6F4EA',
+  },
+  avatarMissed: {
+    backgroundColor: '#FEE2E2',
   },
   avatarText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#1E293B',
+  },
+  directionDot: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  directionConnected: {
+    backgroundColor: '#0F9D58',
+  },
+  directionMissed: {
+    backgroundColor: '#DC2626',
   },
   customerInfoCol: {
     flex: 1,
   },
-  customerNameText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  tempPill: {
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
+    gap: 6,
   },
-  tempHot: {
-    backgroundColor: '#FEE2E2',
-  },
-  tempWarm: {
-    backgroundColor: '#FEF3C7',
-  },
-  tempCold: {
-    backgroundColor: '#DBEAFE',
-  },
-  tempPillText: {
-    fontSize: 9.5,
-    fontWeight: '800',
+  customerNameText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    flexShrink: 1,
   },
   phoneClickableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 4,
+    gap: 4,
+    marginTop: 2,
   },
   customerPhoneText: {
-    fontSize: 13.5,
-    color: '#0F172A',
-    fontWeight: '800',
+    fontSize: 12.5,
+    color: '#0F9D58',
+    fontWeight: '600',
   },
+
+  // Time & Duration Col
   timeDurationCol: {
     alignItems: 'flex-end',
     gap: 4,
@@ -1137,57 +1091,96 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
   callTimeText: {
-    fontSize: 10.5,
-    fontWeight: '600',
+    fontSize: 11,
     color: '#64748B',
+    fontWeight: '500',
   },
   durationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 6,
+    gap: 4,
   },
   durationConnected: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#E6F4EA',
   },
   durationMissed: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FEE2E2',
   },
   durationText: {
     fontSize: 10.5,
     fontWeight: '700',
   },
+
+  // Temp Pills
+  tempPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    gap: 3,
+  },
+  tempHot: {
+    backgroundColor: '#FEF2F2',
+  },
+  tempWarm: {
+    backgroundColor: '#FEF3C7',
+  },
+  tempCold: {
+    backgroundColor: '#EFF6FF',
+  },
+  tempPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  // Meta Row
   cardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 10,
-    marginBottom: 8,
+    flexWrap: 'wrap',
   },
   stageBadge: {
-    backgroundColor: '#F1F5F9',
     paddingHorizontal: 8,
     paddingVertical: 2.5,
     borderRadius: 6,
   },
-  stageBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#334155',
+  stageBadgeConnected: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
   },
-  metaDot: {
-    color: '#CBD5E1',
-    fontSize: 12,
+  stageBadgeNeutral: {
+    backgroundColor: '#F1F5F9',
+  },
+  stageBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  stageTextConnected: {
+    color: '#15803D',
+  },
+  stageTextNeutral: {
+    color: '#475569',
+  },
+  reasonBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  reasonBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#DC2626',
+    textTransform: 'capitalize',
   },
   followUpScheduledTag: {
     flexDirection: 'row',
@@ -1203,79 +1196,125 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0D9488',
   },
+
+  // Remark Box
   remarkBox: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 6,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#0F9D58',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 4,
+    marginTop: 8,
   },
   remarkText: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#475569',
     fontStyle: 'italic',
   },
+
+  // Card Actions
   cardActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
   callAgainBtn: {
     flex: 1.2,
-    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
     backgroundColor: '#0F9D58',
-    borderRadius: 10,
+    paddingVertical: 7.5,
+    borderRadius: 8,
+    gap: 5,
     shadowColor: '#0F9D58',
-    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 1,
   },
   callAgainBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   whatsAppBtn: {
     flex: 1,
-    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
     backgroundColor: '#F0FDF4',
     borderWidth: 1,
     borderColor: '#BBF7D0',
-    borderRadius: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 4,
   },
   whatsAppBtnText: {
-    color: '#0F9D58',
+    color: '#15803D',
     fontSize: 12,
     fontWeight: '700',
   },
   openLeadBtn: {
     flex: 1,
-    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
     backgroundColor: '#F0F9FF',
     borderWidth: 1,
     borderColor: '#BAE6FD',
-    borderRadius: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 3,
   },
   openLeadBtnText: {
     color: '#0284C7',
     fontSize: 12,
     fontWeight: '700',
+  },
+
+  // Empty State
+  emptyStateBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 6,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  emptyResetBtn: {
+    backgroundColor: '#0F9D58',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  emptyResetBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
