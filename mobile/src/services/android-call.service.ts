@@ -181,8 +181,8 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
         }
 
         // Look for outbound call to this phone number made near or after callStartTime
-        // Allow a 30s window before callStartTime to account for minor clock discrepancies
-        const minTimestamp = callStartTime - 30000;
+        // Allow a 60s window before callStartTime to account for minor clock discrepancies
+        const minTimestamp = callStartTime - 60000;
 
         for (const log of logs) {
           const logDigits = this.extractCoreDigits(log.phoneNumber || '');
@@ -215,12 +215,18 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
       }
     };
 
-    // First attempt to match call log
+    // First attempt to match call log immediately
     let matchedLog = await findMatchingLog();
 
-    // If not found immediately, wait 600ms and retry once (Android OS often delays writing call log)
+    // If not found immediately, wait 700ms and retry once (Android OS often delays writing call log)
     if (!matchedLog) {
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      matchedLog = await findMatchingLog();
+    }
+
+    // Third retry at 800ms to guarantee detection
+    if (!matchedLog) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
       matchedLog = await findMatchingLog();
     }
 
@@ -233,10 +239,11 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
       const isConnected = durationSeconds > 0;
 
       console.log(
-        `[AndroidCallService] Matched call log for ${phone}: duration=${durationSeconds}s, connected=${isConnected}`,
+        `[AndroidCallService] Verified outbound call log for ${phone}: duration=${durationSeconds}s, connected=${isConnected}`,
       );
 
       return {
+        callPlaced: true,
         durationSeconds: Math.max(0, durationSeconds),
         connected: isConnected,
         rawType: matchedLog.type || String(matchedLog.rawType),
@@ -244,9 +251,18 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
       };
     }
 
-    // Fallback if log was not found or call didn't register in call log provider
-    console.log('[AndroidCallService] No matching call log found. Falling back to elapsed wall-clock time.');
-    return super.getCallResult(phone, callStartTime);
+    // NeoDove-Grade Verification:
+    // If permissions are granted and no outgoing call was registered in Android call log,
+    // the agent opened dialer and came back WITHOUT calling. It MUST NOT be counted!
+    console.log(
+      `[AndroidCallService] No outbound call log entry found for ${phone}. User cancelled or did not dial.`,
+    );
+    return {
+      callPlaced: false,
+      durationSeconds: 0,
+      connected: false,
+      matchedLog: false,
+    };
   }
 }
 

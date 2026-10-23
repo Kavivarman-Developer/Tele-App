@@ -94,9 +94,11 @@ export class DeviceCallService implements ICallService {
    */
   public async getCallResult(_phone: string, callStartTime: number): Promise<DetectedCallResult> {
     const elapsedSeconds = Math.max(0, Math.round((Date.now() - callStartTime) / 1000));
+    const wasPlaced = elapsedSeconds >= 5;
     return {
-      durationSeconds: elapsedSeconds,
-      connected: elapsedSeconds > 0,
+      callPlaced: wasPlaced,
+      durationSeconds: wasPlaced ? elapsedSeconds : 0,
+      connected: wasPlaced,
       matchedLog: false,
     };
   }
