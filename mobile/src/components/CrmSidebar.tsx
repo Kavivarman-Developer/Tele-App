@@ -34,12 +34,14 @@ import {
   Info,
   MessageSquare,
   UserCheck,
+  ChartPie,
 } from 'lucide-react-native';
 
 import { useSafeTopPadding } from '../utils/safeArea';
 import { useSidebarStore } from '../store/sidebarStore';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useDialerStore } from '../store/dialerStore';
 import { CrmAvatar } from './CrmAvatar';
 import { colors, borderRadius, shadows } from '../theme';
 
@@ -106,9 +108,22 @@ export const CrmSidebarContent: React.FC<{
 
   const WORKSPACE_ITEMS: NavItemConfig[] = [
     { name: 'Dashboard', route: 'Home', label: 'Dashboard', icon: LayoutGrid },
+    {
+      name: 'DirectDialer',
+      route: 'DirectDialer',
+      label: 'Phone Keypad',
+      icon: PhoneCall,
+      action: () => useDialerStore.getState().openDialer(),
+    },
     { name: 'MyLeads', route: 'MyLeads', label: 'My Leads', icon: Users },
     { name: 'CallHistory', route: 'CallHistory', label: 'Call History', icon: History },
     { name: 'MyTasks', route: 'FollowUps', label: 'My Tasks', icon: CalendarCheck2, badge: unreadCount > 0 ? unreadCount : undefined },
+    {
+      name: 'CampaignAnalytics',
+      route: 'CampaignDetail',
+      label: 'Campaign Analytics',
+      icon: ChartPie,
+    },
     {
       name: 'MyReport',
       route: 'AgentReports',
