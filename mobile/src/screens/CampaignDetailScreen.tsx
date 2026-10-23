@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -30,7 +30,9 @@ import {
   RefreshCw,
 } from 'lucide-react-native';
 
-import { fetchMyLeads, fetchCampaignById } from '../api/leadApi';
+import { fetchMyLeads, fetchCampaignById, fetchCampaigns } from '../api/leadApi';
+import { useCampaignStore } from '../store/campaignStore';
+import { CrmSidebarContent, CrmSidebarModalDrawer } from '../components/CrmSidebar';
 import { useSafeTopPadding } from '../utils/safeArea';
 import { RootStackParamList, Campaign, Lead } from '../types';
 
@@ -112,26 +114,54 @@ export const CampaignDetailScreen: React.FC = () => {
   const safeTopPadding = useSafeTopPadding(isWide);
 
   const initialCampaign = route.params?.campaign;
-  const campaignId = route.params?.campaignId || initialCampaign?._id || '';
+  const paramCampaignId = route.params?.campaignId || initialCampaign?._id || '';
+
+  // 0. Fetch all active campaigns for sidebar switching & fallback
+  const { data: allCampaignsData } = useQuery({
+    queryKey: ['campaigns'],
+    queryFn: fetchCampaigns,
+  });
+
+  const campaignsList: Campaign[] = useMemo(() => {
+    return (allCampaignsData?.campaigns || []).filter((c) => c.isActive !== false);
+  }, [allCampaignsData]);
+
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(paramCampaignId);
+  const [showPicker, setShowPicker] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (paramCampaignId) {
+      setSelectedCampaignId(paramCampaignId);
+    } else if (!selectedCampaignId && campaignsList.length > 0) {
+      const storedId = useCampaignStore.getState().selectedCampaignId;
+      if (storedId && storedId !== 'All campaigns') {
+        setSelectedCampaignId(storedId);
+      } else {
+        setSelectedCampaignId(campaignsList[0]._id);
+      }
+    }
+  }, [paramCampaignId, selectedCampaignId, campaignsList]);
+
+  const activeCampaignId = selectedCampaignId;
 
   // 1. Fetch Campaign Info
   const { data: campaignData, isLoading: isCampaignLoading, refetch: refetchCampaign } = useQuery<{ campaign: Campaign | null }>({
-    queryKey: ['campaignDetailInfo', campaignId],
+    queryKey: ['campaignDetailInfo', activeCampaignId],
     queryFn: async () => {
-      if (!campaignId) return { campaign: null };
-      return fetchCampaignById(campaignId);
+      if (!activeCampaignId) return { campaign: null };
+      return fetchCampaignById(activeCampaignId);
     },
-    enabled: Boolean(campaignId),
+    enabled: Boolean(activeCampaignId),
   });
 
   // 2. Fetch Leads assigned to this campaign
   const { data: leadsData, isLoading: isLeadsLoading, isRefetching, refetch: refetchLeads } = useQuery({
-    queryKey: ['campaignDetailLeads', campaignId],
-    queryFn: () => fetchMyLeads({ campaignId, limit: 5000 }),
-    enabled: Boolean(campaignId),
+    queryKey: ['campaignDetailLeads', activeCampaignId],
+    queryFn: () => fetchMyLeads({ campaignId: activeCampaignId, limit: 5000 }),
+    enabled: Boolean(activeCampaignId),
   });
 
-  const campaign = campaignData?.campaign || initialCampaign;
+  const campaign = campaignData?.campaign || campaignsList.find((c) => c._id === activeCampaignId) || initialCampaign;
   const campaignName = campaign?.name || route.params?.campaignName || 'Campaign Details';
   const leads: Lead[] = leadsData?.leads || [];
 
@@ -268,6 +298,49 @@ export const CampaignDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: safeTopPadding }]} edges={['left', 'right']}>
+      <View style={styles.screenRowLayout}>
+        {isWide && <CrmSidebarContent />}
+        <View style={styles.screenMainLayout}>
+          {/* Campaign Switcher Dropdown */}
+          {showPicker && campaignsList.length > 0 && (
+            <View style={styles.dropdownModalWrap}>
+              <TouchableOpacity
+                style={styles.dropdownBackdrop}
+                activeOpacity={1}
+                onPress={() => setShowPicker(false)}
+              />
+              <View style={styles.dropdownCard}>
+                <Text style={styles.dropdownTitle}>Switch Campaign</Text>
+                <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+                  {campaignsList.map((c) => {
+                    const isSelected = c._id === activeCampaignId;
+                    return (
+                      <TouchableOpacity
+                        key={c._id}
+                        style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                        onPress={() => {
+                          setSelectedCampaignId(c._id);
+                          setShowPicker(false);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownItemText,
+                            isSelected && styles.dropdownItemTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {c.name}
+                        </Text>
+                        {isSelected && <CheckCircle2 size={15} color="#0F9D58" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          )}
+
       {/* =========================================================================
           TOP BAR (Image 3 Standard)
          ========================================================================= */}
@@ -275,19 +348,32 @@ export const CampaignDetailScreen: React.FC = () => {
         <View style={styles.topBarLeft}>
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                (navigation as any).navigate('Main', { screen: 'Home' });
+              }
+            }}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <ArrowLeft size={18} color="#475569" />
           </TouchableOpacity>
 
-          {/* Campaign Title with Red Highlighted Frame */}
-          <View style={styles.campaignTitleBox}>
+          {/* Campaign Title with Red Highlighted Frame & Switcher */}
+          <TouchableOpacity
+            style={styles.campaignTitleBox}
+            onPress={() => setShowPicker(!showPicker)}
+            activeOpacity={0.7}
+          >
             <Text style={styles.campaignTitleText} numberOfLines={1}>
               {campaignName}
             </Text>
-          </View>
+            {campaignsList.length > 1 && (
+              <ChevronDown size={14} color="#DC2626" style={{ marginLeft: 4 }} />
+            )}
+          </TouchableOpacity>
 
           <View style={styles.priorityWrap}>
             <Text style={styles.priorityLabel}>Priority: </Text>
@@ -302,7 +388,7 @@ export const CampaignDetailScreen: React.FC = () => {
             style={styles.viewLeadsPillBtn}
             onPress={() =>
               navigation.navigate('MyLeads', {
-                campaignId: campaign?._id || campaignId,
+                campaignId: campaign?._id || activeCampaignId,
                 campaignName,
               })
             }
@@ -315,7 +401,7 @@ export const CampaignDetailScreen: React.FC = () => {
             style={styles.viewCallLogsBtn}
             onPress={() =>
               navigation.navigate('CallHistory', {
-                campaignId: campaign?._id || campaignId,
+                campaignId: campaign?._id || activeCampaignId,
                 campaignName,
               })
             }
@@ -575,6 +661,9 @@ export const CampaignDetailScreen: React.FC = () => {
           </>
         )}
       </ScrollView>
+        </View>
+      </View>
+      <CrmSidebarModalDrawer />
     </SafeAreaView>
   );
 };
@@ -610,7 +699,74 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  screenRowLayout: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  screenMainLayout: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'relative',
+  },
+  dropdownModalWrap: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    zIndex: 999,
+    width: 260,
+  },
+  dropdownBackdrop: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  dropdownCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  dropdownTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  dropdownItemActive: {
+    backgroundColor: '#ECFDF5',
+  },
+  dropdownItemText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
+    flex: 1,
+  },
+  dropdownItemTextActive: {
+    color: '#0F9D58',
+    fontWeight: '700',
+  },
   campaignTitleBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#DC2626',
     borderRadius: 6,

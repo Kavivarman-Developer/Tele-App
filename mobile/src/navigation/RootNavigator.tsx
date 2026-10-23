@@ -38,6 +38,7 @@ import { LaunchpadScreen } from '../screens/LaunchpadScreen';
 import { RootStackParamList } from '../types';
 import { notificationService } from '../services/notification.service';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { DirectDialpadModal } from '../components/DirectDialpadModal';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -189,6 +190,7 @@ export const RootNavigator: React.FC = () => {
             </>
           )}
         </Stack.Navigator>
+        {token ? <DirectDialpadModal /> : null}
       </NavigationContainer>
     </ErrorBoundary>
   );

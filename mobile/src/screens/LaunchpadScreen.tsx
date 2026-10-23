@@ -29,6 +29,7 @@ import {
 } from 'lucide-react-native';
 
 import { useAuthStore } from '../store/authStore';
+import { useDialerStore } from '../store/dialerStore';
 import { useSafeTopPadding } from '../utils/safeArea';
 import { RootStackParamList } from '../types';
 import { fetchMyLeads } from '../api/leadApi';
@@ -99,6 +100,16 @@ export const LaunchpadScreen: React.FC = () => {
               {user?.role || 'AGENT'}
             </Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.keypadTopBtn}
+            onPress={() => useDialerStore.getState().openDialer()}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Phone Keypad"
+          >
+            <PhoneCall size={16} color="#0F9D58" strokeWidth={2.4} />
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.refreshIconBtn}
@@ -285,6 +296,16 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  keypadTopBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   refreshIconBtn: {
     width: 32,
