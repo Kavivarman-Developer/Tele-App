@@ -1,21 +1,21 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   TextInput,
   StyleSheet,
-  ActivityIndicator,
   Alert,
-  Linking,
+  AppState,
+  AppStateStatus,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
 import {
-  CalendarDays,
   Search,
   X,
   ArrowUpRight,
@@ -29,21 +29,21 @@ import {
   Clock,
   RotateCw,
   Clock3,
-  Calendar,
   CalendarClock,
   FileEdit,
 } from 'lucide-react-native';
 
 import { fetchMyLeads, disposeLead } from '../api/leadApi';
 import { notificationService } from '../services/notification.service';
+import { callService } from '../services/call.service';
 import { Lead, RootStackParamList } from '../types';
-import { colors, borderRadius, shadows } from '../theme';
+import { colors } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { CrmShell } from '../components/CrmShell';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
-import { getDialerTelUrl, formatDisplayPhone } from '../utils/phoneUtils';
+import { formatDisplayPhone } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -65,10 +65,7 @@ interface FollowUpItem {
   lastRemark?: string;
 }
 
-// ======================================================================
-// DESIGN TOKENS — same palette/rhythm as HomeScreen & LoginScreen so the
-// whole app reads as one consistent system.
-// ======================================================================
+// Design Tokens (Hi Talk brand palette)
 const T = {
   radius: { sm: 10, md: 14, lg: 16 },
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 20 },
@@ -100,12 +97,201 @@ const T = {
   },
 };
 
+// Safe Initials Helper (Zero Crash)
+const getInitials = (name?: string, fallback = 'LD') => {
+  if (!name || typeof name !== 'string') return fallback;
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return fallback;
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+};
+
+const getCountdownLabel = (rawDate: Date, category: TabCategory) => {
+  const now = new Date().getTime();
+  const target = rawDate.getTime();
+  const diffMs = target - now;
+
+  if (category === 'Overdue' || diffMs < 0) {
+    const overdueMins = Math.floor(Math.abs(diffMs) / (1000 * 60));
+    if (overdueMins < 60) {
+      return `${Math.max(1, overdueMins)}m overdue`;
+    }
+    const overdueHours = Math.floor(overdueMins / 60);
+    if (overdueHours < 24) {
+      return `${overdueHours}h overdue`;
+    }
+    const days = Math.floor(overdueHours / 24);
+    return `${days}d overdue`;
+  }
+
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  if (diffMins < 60) {
+    return `Due in ${Math.max(1, diffMins)}m`;
+  }
+  const hours = Math.floor(diffMins / 60);
+  if (hours < 24) {
+    return `Due in ${hours}h ${diffMins % 60}m`;
+  }
+  const days = Math.floor(hours / 24);
+  return `In ${days} day${days > 1 ? 's' : ''}`;
+};
+
+// ======================================================================
+// MEMOIZED NEODOVE-GRADE FOLLOW-UP CARD
+// ======================================================================
+interface FollowUpCardProps {
+  item: FollowUpItem;
+  onCall: (item: FollowUpItem) => void;
+  onSnooze: (item: FollowUpItem) => void;
+  onWhatsApp: (item: FollowUpItem) => void;
+  onOpen: (item: FollowUpItem) => void;
+}
+
+const FollowUpCard = React.memo<FollowUpCardProps>(({ item, onCall, onSnooze, onWhatsApp, onOpen }) => {
+  const initials = getInitials(item.name);
+  const isHot = item.temperature === 'HOT';
+  const isCold = item.temperature === 'COLD';
+  const isOverdue = item.category === 'Overdue';
+  const countdownText = getCountdownLabel(item.rawDate, item.category);
+
+  return (
+    <View style={styles.followupCard}>
+      {/* Top Row: Avatar + Name & Phone + Countdown Badge */}
+      <View style={styles.cardHeaderRow}>
+        <View style={[styles.avatarCircle, isOverdue && styles.avatarCircleOverdue]}>
+          <Text style={[styles.avatarText, isOverdue && styles.avatarTextOverdue]}>{initials}</Text>
+        </View>
+
+        <View style={styles.leadInfoCol}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.customerName} numberOfLines={1}>
+              {item.name || 'Lead Contact'}
+            </Text>
+            {/* Priority Pill */}
+            <View
+              style={[
+                styles.priorityPill,
+                isHot
+                  ? styles.priorityHot
+                  : isCold
+                  ? styles.priorityCold
+                  : styles.priorityWarm,
+              ]}
+            >
+              {isHot ? (
+                <Flame size={10} color={T.color.danger} fill={T.color.danger} />
+              ) : isCold ? (
+                <Snowflake size={10} color={T.color.info} />
+              ) : (
+                <Sun size={10} color={T.color.warn} />
+              )}
+              <Text
+                style={[
+                  styles.priorityPillText,
+                  { color: isHot ? T.color.danger : isCold ? T.color.info : T.color.warn },
+                ]}
+              >
+                {item.temperature || 'Warm'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Phone Number */}
+          <Text style={styles.customerPhone}>
+            {formatDisplayPhone(item.phone)}
+          </Text>
+        </View>
+
+        {/* Countdown Badge Pill */}
+        <View
+          style={[
+            styles.countdownBadge,
+            isOverdue
+              ? styles.countdownBadgeOverdue
+              : item.category === 'Today'
+              ? styles.countdownBadgeToday
+              : styles.countdownBadgeUpcoming,
+          ]}
+        >
+          <Clock3
+            size={11}
+            color={
+              isOverdue ? T.color.danger : item.category === 'Today' ? T.color.warn : T.color.info
+            }
+          />
+          <Text
+            style={[
+              styles.countdownText,
+              {
+                color:
+                  isOverdue ? T.color.danger : item.category === 'Today' ? T.color.warn : T.color.info,
+              },
+            ]}
+          >
+            {countdownText}
+          </Text>
+        </View>
+      </View>
+
+      {/* Last Remark Preview Line */}
+      <View style={styles.remarkPreviewBox}>
+        <Clock size={12} color={T.color.textMuted} />
+        <Text style={styles.remarkPreviewText} numberOfLines={1}>
+          {item.lastRemark || 'Customer requested callback to discuss details'}
+        </Text>
+      </View>
+
+      {/* Bottom Action Row (1-Tap Fast Actions) */}
+      <View style={styles.actionButtonsRow}>
+        {/* Call Now Button */}
+        <TouchableOpacity
+          style={styles.callNowBtn}
+          onPress={() => onCall(item)}
+          activeOpacity={0.85}
+        >
+          <Phone size={15} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={styles.callNowBtnText}>Call now</Text>
+        </TouchableOpacity>
+
+        {/* Snooze Button */}
+        <TouchableOpacity
+          style={styles.snoozeBtn}
+          onPress={() => onSnooze(item)}
+          activeOpacity={0.8}
+        >
+          <Clock3 size={14} color={T.color.warn} strokeWidth={2.5} />
+          <Text style={styles.snoozeBtnText}>Snooze</Text>
+        </TouchableOpacity>
+
+        {/* WhatsApp Button */}
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => onWhatsApp(item)}
+          activeOpacity={0.8}
+        >
+          <MessageCircle size={15} color={T.color.primaryDark} strokeWidth={2.5} />
+        </TouchableOpacity>
+
+        {/* Details / Modal Button */}
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => onOpen(item)}
+          activeOpacity={0.8}
+        >
+          <FileEdit size={15} color={T.color.info} strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+// ======================================================================
+// MAIN SCREEN
+// ======================================================================
 export const FollowUpsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuthStore();
-  const isAgent = user?.role === 'AGENT';
   const { width } = useWindowDimensions();
-  const isWide = width >= 860;
 
   const [activeTab, setActiveTab] = useState<TabCategory>('Today');
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,27 +299,131 @@ export const FollowUpsScreen: React.FC = () => {
   const [whatsAppModalVisible, setWhatsAppModalVisible] = useState(false);
   const [whatsAppTarget, setWhatsAppTarget] = useState<{ name: string; phone: string } | null>(null);
 
+  // Calling & Telephony Tracking
+  const callStartTimeRef = useRef<number | null>(null);
+  const callingLeadRef = useRef<Lead | null>(null);
+  const isCallingRef = useRef<boolean>(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
   const { addActivity } = useLeadHistoryStore();
 
-  // Direct Call Handler
-  const handleDirectCall = (item: FollowUpItem) => {
-    toast.info(`Dialing ${item.name}...`, 'Calling');
-    Linking.openURL(getDialerTelUrl(item.phone)).catch(() => {
+  // Real backend query for follow-ups
+  const { data: realFollowupsData, refetch, isRefetching } = useQuery({
+    queryKey: ['followUps'],
+    queryFn: () => fetchMyLeads({ type: 'FOLLOW_UP', limit: 5000 }),
+  });
+
+  // Native Calling Handler (NeoDove Standard)
+  const handleDirectCall = useCallback(async (item: FollowUpItem) => {
+    const fullLead: Lead = {
+      _id: item._id,
+      campaignId: 'default-camp',
+      name: item.name || 'Lead Contact',
+      phone: item.phone,
+      source: 'FOLLOW_UP',
+      stage: item.status || 'Follow Up',
+      tag: item.temperature,
+      temperature: item.temperature,
+      status: 'OPEN',
+      attemptCount: item.attempts,
+      nextFollowUpAt: item.rawDate?.toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      customProperties: { campaign: item.campaignName, lastRemark: item.lastRemark || '' },
+    };
+
+    if (Platform.OS === 'android') {
+      const hasPerm = await callService.checkPermissions();
+      if (!hasPerm) {
+        Alert.alert('Permission Required', 'Phone call permissions are required to dial leads.');
+        return;
+      }
+    }
+
+    isCallingRef.current = true;
+    callStartTimeRef.current = Date.now();
+    callingLeadRef.current = fullLead;
+
+    try {
+      await callService.startCall(fullLead);
+    } catch {
+      isCallingRef.current = false;
+      callStartTimeRef.current = null;
+      callingLeadRef.current = null;
       Alert.alert('Unable to dial', `Could not open phone dialer for ${item.phone}`);
-    });
-  };
+    }
+  }, []);
+
+  // AppState Listener: Detect call completion, capture duration, auto-log & open Disposition
+  useEffect(() => {
+    const handleAppStateChange = async (nextState: AppStateStatus) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (
+        (prev === 'background' || prev === 'inactive') &&
+        nextState === 'active' &&
+        isCallingRef.current &&
+        callStartTimeRef.current !== null &&
+        callingLeadRef.current !== null
+      ) {
+        const startTime = callStartTimeRef.current;
+        const dialedLead = callingLeadRef.current;
+        isCallingRef.current = false;
+        callStartTimeRef.current = null;
+        callingLeadRef.current = null;
+
+        let result: { connected: boolean; durationSeconds: number };
+        try {
+          result = await callService.getCallResult(dialedLead.phone, startTime);
+        } catch {
+          result = { connected: false, durationSeconds: 0 };
+        }
+
+        // ⚡ NeoDove-Grade Auto-Log: Immediately record this call outreach
+        useLeadHistoryStore.getState().addActivity(dialedLead._id, {
+          phone: dialedLead.phone,
+          customerName: dialedLead.name,
+          agentName: user?.name,
+          agentId: user?._id,
+          branch: user?.branch,
+          connected: result.connected,
+          type: 'CALL',
+          notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
+          stage: result.connected ? 'Follow Up' : 'Not Connected',
+          durationSeconds: result.connected ? result.durationSeconds : 0,
+          remark: result.connected ? 'Follow-up call completed' : 'Follow-up call not answered',
+        });
+
+        refetch();
+
+        // Direct to Disposition
+        navigation.navigate('Dispose', {
+          lead: dialedLead,
+          initialTab: 'DISPOSE LEAD',
+          callDurationSeconds: result.connected ? result.durationSeconds : 0,
+          isCallConnected: result.connected,
+          callAttempt: true,
+          detectionMethod: 'AUTOMATIC',
+        });
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, [navigation, refetch, user]);
 
   // Direct WhatsApp Handler
-  const handleOpenWhatsApp = (item: FollowUpItem) => {
+  const handleOpenWhatsApp = useCallback((item: FollowUpItem) => {
     setWhatsAppTarget({
       name: item.name,
       phone: item.phone,
     });
     setWhatsAppModalVisible(true);
-  };
+  }, []);
 
   // Quick Snooze Handler (Snooze +2 Hours or Tomorrow 10 AM)
-  const handleQuickSnooze = (item: FollowUpItem, hoursAhead: number = 2) => {
+  const handleQuickSnooze = useCallback((item: FollowUpItem) => {
     Alert.alert(
       'Snooze Follow-up',
       `Reschedule callback for ${item.name}?`,
@@ -210,13 +500,27 @@ export const FollowUpsScreen: React.FC = () => {
         },
       ],
     );
-  };
+  }, [addActivity, refetch, user]);
 
-  // Real backend query for follow-ups
-  const { data: realFollowupsData, refetch, isRefetching } = useQuery({
-    queryKey: ['followUps'],
-    queryFn: () => fetchMyLeads({ type: 'FOLLOW_UP', limit: 5000 }),
-  });
+  const handleOpenLead = useCallback((item: FollowUpItem) => {
+    const syntheticLead: Lead = {
+      _id: item._id,
+      campaignId: 'default-camp',
+      name: item.name || 'Lead Contact',
+      phone: item.phone,
+      source: 'OUTREACH',
+      stage: item.status,
+      tag: item.temperature,
+      temperature: item.temperature,
+      status: 'OPEN',
+      attemptCount: item.attempts,
+      nextFollowUpAt: item.rawDate.toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      customProperties: { campaign: item.campaignName, lastRemark: item.lastRemark || '' },
+    };
+    setQuickModalLead(syntheticLead);
+  }, []);
 
   // Extract real follow-ups from backend leads and local follow-ups
   const combinedItems: FollowUpItem[] = useMemo(() => {
@@ -251,7 +555,7 @@ export const FollowUpsScreen: React.FC = () => {
 
       list.push({
         _id: l._id,
-        name: l.name,
+        name: l.name || 'Lead Contact',
         phone: l.phone,
         campaignName: camp,
         attempts: l.attemptCount || 1,
@@ -303,7 +607,7 @@ export const FollowUpsScreen: React.FC = () => {
     }
 
     return list.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
-  }, [realFollowupsData, user]);
+  }, [realFollowupsData, user?._id, user?.name]);
 
   // Tab counts
   const overdueCount = useMemo(() => combinedItems.filter((i) => i.category === 'Overdue').length, [combinedItems]);
@@ -312,72 +616,34 @@ export const FollowUpsScreen: React.FC = () => {
 
   // Filtered Items
   const displayedItems = useMemo(() => {
-    return combinedItems.filter((item) => {
-      if (item.category !== activeTab) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        return (
-          item.name.toLowerCase().includes(q) ||
-          item.phone.toLowerCase().includes(q) ||
-          item.campaignName.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
+    let items = combinedItems.filter((i) => i.category === activeTab);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      items = items.filter(
+        (i) => (i.name && i.name.toLowerCase().includes(q)) || (i.phone && i.phone.includes(q)),
+      );
+    }
+    return items;
   }, [combinedItems, activeTab, searchQuery]);
 
-  // Countdown Helper
-  const getCountdownLabel = (rawDate: Date, cat: TabCategory) => {
-    const diffMs = rawDate.getTime() - Date.now();
-    const diffMins = Math.round(diffMs / (60 * 1000));
+  // Render Item for Virtualized FlatList
+  const renderItem = useCallback(
+    ({ item }: { item: FollowUpItem }) => (
+      <FollowUpCard
+        item={item}
+        onCall={handleDirectCall}
+        onSnooze={handleQuickSnooze}
+        onWhatsApp={handleOpenWhatsApp}
+        onOpen={handleOpenLead}
+      />
+    ),
+    [handleDirectCall, handleQuickSnooze, handleOpenWhatsApp, handleOpenLead],
+  );
 
-    if (diffMs < 0) {
-      const pastMins = Math.abs(diffMins);
-      if (pastMins < 60) return `Overdue by ${pastMins}m`;
-      const pastHours = Math.floor(pastMins / 60);
-      return `Overdue by ${pastHours}h ${pastMins % 60}m`;
-    }
-    if (diffMins < 60) {
-      return `Due in ${Math.max(1, diffMins)} mins`;
-    }
-    const hours = Math.floor(diffMins / 60);
-    if (hours < 24) {
-      return `Due in ${hours}h ${diffMins % 60}m`;
-    }
-    const days = Math.floor(hours / 24);
-    return `In ${days} day${days > 1 ? 's' : ''}`;
-  };
-
-  const handleOpenLead = (item: FollowUpItem) => {
-    const syntheticLead: Lead = {
-      _id: item._id,
-      campaignId: 'default-camp',
-      name: item.name,
-      phone: item.phone,
-      source: 'OUTREACH',
-      stage: item.status,
-      tag: item.temperature,
-      temperature: item.temperature,
-      status: 'OPEN',
-      attemptCount: item.attempts,
-      nextFollowUpAt: item.rawDate.toISOString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      customProperties: { campaign: item.campaignName, lastRemark: item.lastRemark || '' },
-    };
-    setQuickModalLead(syntheticLead);
-  };
-
-  return (
-    <CrmShell
-      title="Scheduled Follow-ups"
-      headerIcon={<CalendarClock size={15} color={colors.textSecondary} />}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
+  // FlatList Header Component
+  const renderHeader = useCallback(
+    () => (
+      <View>
         {/* Top Header Summary */}
         <View style={styles.headerBanner}>
           <View style={{ flex: 1 }}>
@@ -397,7 +663,7 @@ export const FollowUpsScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <RotateCw size={13} color={T.color.textMuted} />
-            <Text style={styles.refreshBtnText}>Refresh</Text>
+            <Text style={styles.refreshBtnText}>{isRefetching ? 'Syncing...' : 'Refresh'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -423,7 +689,7 @@ export const FollowUpsScreen: React.FC = () => {
           </TouchableOpacity>
         )}
 
-        {/* Sticky Search Bar */}
+        {/* Search Bar */}
         <View style={styles.searchBarWrap}>
           <Search size={16} color={T.color.textFaint} />
           <TextInput
@@ -550,180 +816,62 @@ export const FollowUpsScreen: React.FC = () => {
             </View>
           </TouchableOpacity>
         </View>
+      </View>
+    ),
+    [activeTab, isRefetching, overdueCount, refetch, searchQuery, todayCount, upcomingCount],
+  );
 
-        {/* Cards List */}
-        <View style={styles.cardsList}>
-          {displayedItems.length === 0 ? (
-            <View style={styles.emptyStateCard}>
-              <CheckCircle2 size={38} color={T.color.primary} />
-              <Text style={styles.emptyStateTitle}>
-                {activeTab === 'Today'
-                  ? 'No follow-up callbacks due today! 🎉'
-                  : activeTab === 'Overdue'
-                  ? 'Zero overdue callbacks! Great job. 👍'
-                  : 'No upcoming callbacks scheduled.'}
-              </Text>
-              <Text style={styles.emptyStateSubtitle}>
-                {activeTab === 'Today'
-                  ? 'You are all caught up with your scheduled calls.'
-                  : 'Future follow-ups will appear here automatically.'}
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyQueueBtn}
-                onPress={() => navigation.navigate('MyLeads')}
-                activeOpacity={0.8}
-              >
-                <Phone size={14} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={styles.emptyQueueBtnText}>Go to calling queue</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            displayedItems.map((item) => {
-              const initials = item.name
-                .split(' ')
-                .filter(Boolean)
-                .map((w) => w[0])
-                .join('')
-                .toUpperCase()
-                .slice(0, 2) || 'LD';
-              const isHot = item.temperature === 'HOT';
-              const isCold = item.temperature === 'COLD';
-              const isOverdue = item.category === 'Overdue';
-              const countdownText = getCountdownLabel(item.rawDate, item.category);
+  // FlatList Empty Component
+  const renderEmpty = useCallback(
+    () => (
+      <View style={styles.emptyStateCard}>
+        <CheckCircle2 size={38} color={T.color.primary} />
+        <Text style={styles.emptyStateTitle}>
+          {activeTab === 'Today'
+            ? 'No follow-up callbacks due today! 🎉'
+            : activeTab === 'Overdue'
+            ? 'Zero overdue callbacks! Great job. 👍'
+            : 'No upcoming callbacks scheduled.'}
+        </Text>
+        <Text style={styles.emptyStateSubtitle}>
+          {activeTab === 'Today'
+            ? 'You are all caught up with your scheduled calls.'
+            : 'Future follow-ups will appear here automatically.'}
+        </Text>
+        <TouchableOpacity
+          style={styles.emptyQueueBtn}
+          onPress={() => navigation.navigate('MyLeads')}
+          activeOpacity={0.8}
+        >
+          <Phone size={14} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={styles.emptyQueueBtnText}>Go to calling queue</Text>
+        </TouchableOpacity>
+      </View>
+    ),
+    [activeTab, navigation],
+  );
 
-              return (
-                <View key={item._id} style={styles.followupCard}>
-                  {/* Top Row: Avatar + Name & Phone + Countdown Badge */}
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.avatarCircle}>
-                      <Text style={styles.avatarText}>{initials}</Text>
-                    </View>
-
-                    <View style={styles.leadInfoCol}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.customerName} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        {/* Priority Pill */}
-                        <View
-                          style={[
-                            styles.priorityPill,
-                            isHot
-                              ? styles.priorityHot
-                              : isCold
-                              ? styles.priorityCold
-                              : styles.priorityWarm,
-                          ]}
-                        >
-                          {isHot ? (
-                            <Flame size={10} color={T.color.danger} fill={T.color.danger} />
-                          ) : isCold ? (
-                            <Snowflake size={10} color={T.color.info} />
-                          ) : (
-                            <Sun size={10} color={T.color.warn} />
-                          )}
-                          <Text
-                            style={[
-                              styles.priorityPillText,
-                              { color: isHot ? T.color.danger : isCold ? T.color.info : T.color.warn },
-                            ]}
-                          >
-                            {item.temperature || 'Warm'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Phone Number */}
-                      <Text style={styles.customerPhone}>
-                        {formatDisplayPhone(item.phone)}
-                      </Text>
-                    </View>
-
-                    {/* Countdown Badge Pill */}
-                    <View
-                      style={[
-                        styles.countdownBadge,
-                        isOverdue
-                          ? styles.countdownBadgeOverdue
-                          : item.category === 'Today'
-                          ? styles.countdownBadgeToday
-                          : styles.countdownBadgeUpcoming,
-                      ]}
-                    >
-                      <Clock3
-                        size={11}
-                        color={
-                          isOverdue ? T.color.danger : item.category === 'Today' ? T.color.warn : T.color.info
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.countdownText,
-                          {
-                            color:
-                              isOverdue ? T.color.danger : item.category === 'Today' ? T.color.warn : T.color.info,
-                          },
-                        ]}
-                      >
-                        {countdownText}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Last Remark Preview Line */}
-                  <View style={styles.remarkPreviewBox}>
-                    <Clock size={12} color={T.color.textMuted} />
-                    <Text style={styles.remarkPreviewText} numberOfLines={1}>
-                      {item.lastRemark || 'Customer requested callback to discuss details'}
-                    </Text>
-                  </View>
-
-                  {/* Bottom Action Row (Tactile buttons, min 48px height) */}
-                  <View style={styles.actionButtonsRow}>
-                    {/* Call Now Button */}
-                    <TouchableOpacity
-                      style={styles.callNowBtn}
-                      onPress={() => handleDirectCall(item)}
-                      activeOpacity={0.85}
-                    >
-                      <Phone size={15} color="#FFFFFF" strokeWidth={2.5} />
-                      <Text style={styles.callNowBtnText}>Call now</Text>
-                    </TouchableOpacity>
-
-                    {/* Snooze Button */}
-                    <TouchableOpacity
-                      style={styles.snoozeBtn}
-                      onPress={() => handleQuickSnooze(item)}
-                      activeOpacity={0.8}
-                    >
-                      <Clock3 size={14} color={T.color.warn} strokeWidth={2.5} />
-                      <Text style={styles.snoozeBtnText}>Snooze</Text>
-                    </TouchableOpacity>
-
-                    {/* WhatsApp Button */}
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      onPress={() => handleOpenWhatsApp(item)}
-                      activeOpacity={0.8}
-                    >
-                      <MessageCircle size={15} color={T.color.primaryDark} strokeWidth={2.5} />
-                    </TouchableOpacity>
-
-                    {/* Details / Modal Button */}
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      onPress={() => handleOpenLead(item)}
-                      activeOpacity={0.8}
-                    >
-                      <FileEdit size={15} color={T.color.info} strokeWidth={2} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </View>
-      </ScrollView>
+  return (
+    <CrmShell
+      title="Scheduled Follow-ups"
+      headerIcon={<CalendarClock size={15} color={colors.textSecondary} />}
+    >
+      <View style={styles.container}>
+        <FlatList
+          data={displayedItems}
+          keyExtractor={(item) => item._id}
+          renderItem={renderItem}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={renderEmpty}
+        />
+      </View>
 
       {/* Embedded Lead Quick Modal */}
       {quickModalLead && (
@@ -738,13 +886,13 @@ export const FollowUpsScreen: React.FC = () => {
         />
       )}
 
-      {/* WhatsApp Template Selector Modal */}
-      {whatsAppModalVisible && (
+      {/* Direct WhatsApp Template Modal */}
+      {whatsAppModalVisible && whatsAppTarget && (
         <WhatsAppTemplateModal
           visible={whatsAppModalVisible}
           onClose={() => setWhatsAppModalVisible(false)}
-          recipientName={whatsAppTarget?.name || ''}
-          recipientPhone={whatsAppTarget?.phone || ''}
+          customerName={whatsAppTarget.name}
+          customerPhone={whatsAppTarget.phone}
         />
       )}
     </CrmShell>
@@ -886,15 +1034,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
-  cardsList: {
-    gap: T.space.md,
-  },
   followupCard: {
     backgroundColor: T.color.surface,
     borderRadius: T.radius.md + 2,
     borderWidth: 1,
     borderColor: T.color.border,
     padding: T.space.md + 2,
+    marginBottom: T.space.md,
     ...T.shadowCard,
   },
   cardHeaderRow: {
@@ -907,27 +1053,33 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: T.color.infoTint,
+    backgroundColor: T.color.primaryTint,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarCircleOverdue: {
+    backgroundColor: T.color.dangerTint,
   },
   avatarText: {
     fontSize: 13,
     fontWeight: '700',
-    color: T.color.info,
+    color: T.color.primaryDark,
+  },
+  avatarTextOverdue: {
+    color: T.color.danger,
   },
   leadInfoCol: {
     flex: 1,
   },
   customerName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: T.color.text,
   },
   customerPhone: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: T.color.text,
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#334155',
     marginTop: 2,
   },
   priorityPill: {
@@ -1005,7 +1157,7 @@ const styles = StyleSheet.create({
   },
   callNowBtn: {
     flex: 1.5,
-    minHeight: 48,
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1025,7 +1177,7 @@ const styles = StyleSheet.create({
   },
   snoozeBtn: {
     flex: 1.1,
-    minHeight: 48,
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1041,9 +1193,9 @@ const styles = StyleSheet.create({
     color: T.color.warn,
   },
   iconBtn: {
-    width: 48,
-    height: 48,
-    minHeight: 48,
+    width: 46,
+    height: 46,
+    minHeight: 46,
     borderRadius: T.radius.sm,
     backgroundColor: T.color.surfaceSunken,
     borderWidth: 1,
@@ -1059,6 +1211,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: T.color.border,
+    marginTop: 20,
     ...T.shadowCard,
   },
   emptyStateTitle: {

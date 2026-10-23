@@ -55,7 +55,9 @@ export const CampaignSelectScreen: React.FC = () => {
   } = useQuery({
     queryKey: ['campaigns'],
     queryFn: fetchCampaigns,
-    refetchInterval: 15000,
+    staleTime: 30000,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   // 2. Fetch agent leads to calculate per-campaign assigned lead counts
@@ -67,7 +69,9 @@ export const CampaignSelectScreen: React.FC = () => {
   } = useQuery({
     queryKey: ['myLeadsList'],
     queryFn: () => fetchMyLeads({ limit: 5000 }),
-    refetchInterval: 15000,
+    staleTime: 30000,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const allLeads: Lead[] = leadsData?.leads || [];

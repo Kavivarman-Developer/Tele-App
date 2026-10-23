@@ -433,12 +433,13 @@ export const TeamScreen: React.FC = () => {
             </View>
           ) : (
             filteredMembers.map((item) => {
-            const initials = item.name
-              .split(' ')
-              .map((w) => w[0])
-              .join('')
-              .toUpperCase()
-              .slice(0, 2);
+            const nameParts = typeof item.name === 'string' ? item.name.trim().split(/\s+/).filter(Boolean) : [];
+            const initials =
+              nameParts.length >= 2
+                ? (nameParts[0][0] + nameParts[1][0]).toUpperCase()
+                : nameParts.length === 1
+                ? nameParts[0].substring(0, 2).toUpperCase()
+                : 'MB';
 
             return (
               <View
