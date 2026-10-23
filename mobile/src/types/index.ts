@@ -228,7 +228,7 @@ export type RootStackParamList = {
   UploadLeads: undefined;
   Settings: undefined;
   RetryRules: undefined;
-  AddWalkInLead: { campaignId?: string } | undefined;
+  AddWalkInLead: { campaignId?: string; phone?: string; name?: string } | undefined;
   LeadDetail: {
     lead: Lead;
     queue?: Lead[];

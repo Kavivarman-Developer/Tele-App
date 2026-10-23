@@ -30,6 +30,7 @@ import {
 
 import { useAuthStore } from '../store/authStore';
 import { useDialerStore } from '../store/dialerStore';
+import { FloatingDialpadFab } from '../components/FloatingDialpadFab';
 import { useSafeTopPadding } from '../utils/safeArea';
 import { RootStackParamList } from '../types';
 import { fetchMyLeads } from '../api/leadApi';
@@ -101,15 +102,7 @@ export const LaunchpadScreen: React.FC = () => {
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.keypadTopBtn}
-            onPress={() => useDialerStore.getState().openDialer()}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel="Phone Keypad"
-          >
-            <PhoneCall size={16} color="#0F9D58" strokeWidth={2.4} />
-          </TouchableOpacity>
+
 
           <TouchableOpacity
             style={styles.refreshIconBtn}
@@ -225,6 +218,9 @@ export const LaunchpadScreen: React.FC = () => {
           </View>
         </View>
       </ScrollView>
+
+      {/* NeoDove Floating Action Button (+) */}
+      <FloatingDialpadFab bottomOffset={78} />
     </SafeAreaView>
   );
 };

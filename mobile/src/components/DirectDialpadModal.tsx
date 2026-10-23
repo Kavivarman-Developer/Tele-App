@@ -11,6 +11,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import {
   Phone,
   Delete,
@@ -20,7 +21,7 @@ import {
   ChevronDown,
   Layers,
   PhoneCall,
-  Sparkles,
+  UserPlus,
 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useDialerStore } from '../store/dialerStore';
@@ -46,6 +47,7 @@ const KEYPAD_BUTTONS = [
 ];
 
 export const DirectDialpadModal: React.FC = () => {
+  const navigation = useNavigation<any>();
   const {
     isOpen,
     phoneNumber,
@@ -135,15 +137,32 @@ export const DirectDialpadModal: React.FC = () => {
     }
   };
 
+  const handleSaveAsLead = () => {
+    closeDialer();
+    navigation.navigate('AddWalkInLead', {
+      phone: phoneNumber.trim(),
+      name: customerName.trim(),
+      campaignId: selectedCampaignId || undefined,
+    });
+  };
+
   return (
     <Modal
       visible={isOpen}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={closeDialer}
     >
       <View style={styles.backdrop}>
+        <TouchableOpacity
+          style={styles.backdropPressArea}
+          activeOpacity={1}
+          onPress={closeDialer}
+        />
         <View style={styles.card}>
+          {/* Top Drag Handle (NeoDove Bottom Sheet Style) */}
+          <View style={styles.sheetHandle} />
+
           {/* Header */}
           <View style={styles.header}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -156,7 +175,11 @@ export const DirectDialpadModal: React.FC = () => {
               </View>
             </View>
 
-            <TouchableOpacity onPress={closeDialer} style={styles.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={closeDialer}
+              style={styles.closeBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <X size={18} color="#64748B" />
             </TouchableOpacity>
           </View>
@@ -174,7 +197,12 @@ export const DirectDialpadModal: React.FC = () => {
             />
 
             <View style={styles.displayActions}>
-              <TouchableOpacity onPress={handlePaste} style={styles.displayActionBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <TouchableOpacity
+                onPress={handlePaste}
+                style={styles.displayActionBtn}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                accessibilityLabel="Paste number"
+              >
                 <ClipboardPaste size={16} color="#0F9D58" />
               </TouchableOpacity>
 
@@ -184,6 +212,7 @@ export const DirectDialpadModal: React.FC = () => {
                   onLongPress={clear}
                   style={styles.displayActionBtn}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  accessibilityLabel="Delete digit"
                 >
                   <Delete size={18} color="#EF4444" />
                 </TouchableOpacity>
@@ -222,7 +251,7 @@ export const DirectDialpadModal: React.FC = () => {
           {/* Campaign Dropdown */}
           {showCampaignPicker && (
             <View style={styles.dropdownBox}>
-              <ScrollView style={{ maxHeight: 120 }}>
+              <ScrollView style={{ maxHeight: 110 }}>
                 {campaigns.map((camp) => (
                   <TouchableOpacity
                     key={camp._id}
@@ -264,15 +293,26 @@ export const DirectDialpadModal: React.FC = () => {
             ))}
           </View>
 
-          {/* Big Green Call Button */}
-          <TouchableOpacity
-            style={styles.callNowBtn}
-            onPress={handleCall}
-            activeOpacity={0.85}
-          >
-            <Phone size={18} color="#FFFFFF" strokeWidth={2.5} />
-            <Text style={styles.callNowText}>Call Number</Text>
-          </TouchableOpacity>
+          {/* Actions: Big Green Call Button + Save as Lead Option */}
+          <View style={styles.bottomActions}>
+            <TouchableOpacity
+              style={styles.callNowBtn}
+              onPress={handleCall}
+              activeOpacity={0.85}
+            >
+              <Phone size={18} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.callNowText}>Call Number</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.saveAsLeadBtn}
+              onPress={handleSaveAsLead}
+              activeOpacity={0.75}
+            >
+              <UserPlus size={13} color="#0F9D58" strokeWidth={2.2} />
+              <Text style={styles.saveAsLeadText}>Save as Walk-in Lead</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -282,21 +322,40 @@ export const DirectDialpadModal: React.FC = () => {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    padding: 16,
+    padding: 0,
+  },
+  backdropPressArea: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   card: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 440,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 12,
   },
   header: {
     flexDirection: 'row',
@@ -356,7 +415,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   nameInputWrap: {
     flex: 1,
@@ -421,15 +480,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   keypadBtn: {
     width: '30%',
-    aspectRatio: 1.6,
+    aspectRatio: 1.65,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -446,9 +505,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: -1,
   },
+  bottomActions: {
+    gap: 8,
+  },
   callNowBtn: {
     backgroundColor: '#0F9D58',
-    height: 44,
+    height: 46,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -465,5 +527,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  saveAsLeadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    gap: 6,
+  },
+  saveAsLeadText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F9D58',
   },
 });
