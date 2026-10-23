@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Modal,
   Switch,
+  useWindowDimensions,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -69,6 +70,8 @@ export const CampaignsScreen: React.FC = () => {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const isAgent = user?.role === 'AGENT';
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
 
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -512,15 +515,16 @@ export const CampaignsScreen: React.FC = () => {
                   </View>
                 </View>
 
-                {/* Footer: Pause/Resume Switch + Edit Button */}
+                {/* Footer: Pause/Resume Switch + Action Buttons */}
                 <View
                   style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingTop: 10,
+                    paddingTop: 12,
                     borderTopWidth: 1,
                     borderTopColor: '#F1F5F9',
+                    flexDirection: isWide ? 'row' : 'column',
+                    alignItems: isWide ? 'center' : 'stretch',
+                    justifyContent: 'space-between',
+                    gap: 10,
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -535,24 +539,33 @@ export const CampaignsScreen: React.FC = () => {
                     </Text>
                   </View>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      justifyContent: isWide ? 'flex-end' : 'flex-start',
+                    }}
+                  >
                     <TouchableOpacity
                       onPress={() => openEdit(camp)}
                       activeOpacity={0.7}
                       style={{
+                        flex: isWide ? undefined : 1,
                         flexDirection: 'row',
                         alignItems: 'center',
+                        justifyContent: 'center',
                         gap: 5,
                         paddingHorizontal: 12,
-                        paddingVertical: 7,
+                        height: 34,
                         borderRadius: 8,
                         backgroundColor: '#F8FAFC',
                         borderWidth: 1,
-                        borderColor: '#E2E8F0',
+                        borderColor: '#CBD5E1',
                       }}
                     >
-                      <Edit2 size={13} color="#475569" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569' }}>
+                      <Edit2 size={13} color="#334155" />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
                         Configure
                       </Text>
                     </TouchableOpacity>
@@ -563,11 +576,13 @@ export const CampaignsScreen: React.FC = () => {
                         disabled={deleteMutation.isPending}
                         activeOpacity={0.7}
                         style={{
+                          flex: isWide ? undefined : 1,
                           flexDirection: 'row',
                           alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: 10,
-                          paddingVertical: 7,
+                          justifyContent: 'center',
+                          gap: 5,
+                          paddingHorizontal: 12,
+                          height: 34,
                           borderRadius: 8,
                           backgroundColor: '#FEF2F2',
                           borderWidth: 1,
@@ -575,7 +590,7 @@ export const CampaignsScreen: React.FC = () => {
                         }}
                       >
                         <Trash2 size={13} color="#DC2626" />
-                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#DC2626' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626' }}>
                           Delete
                         </Text>
                       </TouchableOpacity>
