@@ -40,6 +40,7 @@ import { notificationService } from '../services/notification.service';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { DirectDialpadModal } from '../components/DirectDialpadModal';
 import { callSession } from '../services/callSession';
+import { incomingCallSyncService } from '../services/incomingCallSync.service';
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -157,6 +158,7 @@ export const RootNavigator: React.FC = () => {
     useCampaignStore.getState().restoreCampaignSelection();
     notificationService.requestPermissions();
     callSession.init();
+    incomingCallSyncService.syncIncomingCalls().catch(() => {});
   }, [restoreSession]);
 
   if (isLoading) {

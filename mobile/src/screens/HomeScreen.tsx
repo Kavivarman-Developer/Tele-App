@@ -55,6 +55,7 @@ import { useCampaignStore } from '../store/campaignStore';
 import { useLeadHistoryStore, deduplicateActivities } from '../store/leadHistoryStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { callSession } from '../services/callSession';
+import { incomingCallSyncService } from '../services/incomingCallSync.service';
 import {
   fetchDashboardReports,
   fetchUserCallsReport,
@@ -286,6 +287,7 @@ const HomeScreenContent: React.FC = () => {
   const [cachedLeadsData, setCachedLeadsData] = useState<MyLeadsResponse | null>(null);
 
   useEffect(() => {
+    incomingCallSyncService.syncIncomingCalls().catch(() => {});
     storage.getItem('tele_crm_my_leads_cache_v2').then((saved) => {
       if (saved) {
         try {
@@ -736,6 +738,7 @@ const HomeScreenContent: React.FC = () => {
   const isRefreshing = isDashboardRefetching || isUserCallsRefetching || isMyLeadsRefetching;
 
   const handleRefreshAll = () => {
+    incomingCallSyncService.syncIncomingCalls().catch(() => {});
     refetchDashboard();
     refetchMyLeads();
     if (isManagerOrAdmin) {

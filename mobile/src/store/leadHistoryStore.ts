@@ -29,10 +29,13 @@ export const deduplicateActivities = (activities: Activity[]): Activity[] => {
     const phone = normalizePhone(act.phone);
     const actTime = new Date(act.createdAt).getTime();
 
-    // Look for duplicate within 5 minutes (300,000 ms) for the same phone
+    // Look for duplicate within 5 minutes (300,000 ms) for the same phone & same direction
     const existingIndex = result.findIndex((r) => {
       const rPhone = normalizePhone(r.phone);
       if (!phone || !rPhone || phone !== rPhone) return false;
+      const actDir = (act as any).direction || 'OUTGOING';
+      const rDir = (r as any).direction || 'OUTGOING';
+      if (actDir !== rDir) return false;
       const rTime = new Date(r.createdAt).getTime();
       return Math.abs(actTime - rTime) <= 300000;
     });
@@ -49,6 +52,7 @@ export const deduplicateActivities = (activities: Activity[]): Activity[] => {
         ...existing,
         _id: preferredId,
         userId: preferredUserId,
+        direction: existing.direction || act.direction,
         durationSeconds: Math.max(existing.durationSeconds || 0, act.durationSeconds || 0),
         connected: Boolean(existing.connected || act.connected),
         stage: existing.stage !== 'New' && existing.stage !== 'Dialing' ? existing.stage : act.stage,
@@ -97,6 +101,7 @@ interface LeadHistoryStore {
       agentId?: string;
       connected: boolean;
       type?: 'CALL' | 'UPDATE';
+      direction?: 'OUTGOING' | 'INCOMING';
       stage: string;
       tag?: string | null;
       temperature?: 'HOT' | 'WARM' | 'COLD';
@@ -104,6 +109,7 @@ interface LeadHistoryStore {
       followUpAt?: string | null;
       durationSeconds?: number;
       notConnectedReason?: any;
+      createdAt?: string;
     },
   ) => Activity;
   updateLeadName: (leadId: string, newName: string) => void;
@@ -388,6 +394,7 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       campaignId: 'camp-1',
       userId: agentUser,
       type: data.type || 'UPDATE',
+      direction: data.direction || 'OUTGOING',
       connected: data.connected,
       notConnectedReason: data.connected ? null : data.notConnectedReason,
       stage: data.stage,
@@ -397,7 +404,7 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       followUpAt: data.followUpAt || null,
       durationSeconds: data.durationSeconds || 0,
       answers: [],
-      createdAt: new Date().toISOString(),
+      createdAt: data.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
@@ -411,6 +418,11 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       if (!a) return false;
       const ageMs = Date.now() - new Date(a.createdAt).getTime();
       if (ageMs > 300000) return false;
+
+      // Match direction so incoming and outgoing calls are kept separate
+      const aDir = a.direction || 'OUTGOING';
+      const targetDir = data.direction || 'OUTGOING';
+      if (aDir !== targetDir) return false;
 
       // Phone match takes absolute priority
       if (normPhone && a.phone && normalizePhone(a.phone) === normPhone) return true;
@@ -428,6 +440,7 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
         leadId: leadId || existing.leadId,
         phone: normPhone || existing.phone,
         customerName: data.customerName || existing.customerName,
+        direction: data.direction || existing.direction || 'OUTGOING',
         stage: data.stage && data.stage !== 'Dialing' ? data.stage : existing.stage,
         tag: data.tag || data.temperature || existing.tag,
         temperature: (data.temperature || data.tag || existing.temperature) as any,
