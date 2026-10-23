@@ -598,6 +598,7 @@ export const LeadDetailScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['homeDashboard'] });
       queryClient.invalidateQueries({ queryKey: ['homeMyLeadsQueue'] });
       queryClient.invalidateQueries({ queryKey: ['leadHistory', currentLead._id] });
+      queryClient.invalidateQueries({ queryKey: ['myCallActivities'] });
 
       useLeadHistoryStore.getState().addActivity(currentLead._id, {
         phone: currentLead.phone,
