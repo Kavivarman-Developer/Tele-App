@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
+  ScrollView,
   TextInput,
   Alert,
   useWindowDimensions,
@@ -41,7 +42,7 @@ import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
 import { fetchUserActivities, fetchCampaigns } from '../api/leadApi';
 import { Activity, CustomerTemperature, Lead, RootStackParamList } from '../types';
-import { formatDisplayPhone } from '../utils/phoneUtils';
+import { formatDisplayPhone, normalizePhoneDigits } from '../utils/phoneUtils';
 import { WhatsAppTemplateModal } from '../components/WhatsAppTemplateModal';
 import { LeadQuickModal } from '../components/LeadQuickModal';
 import { CrmDateTimePickerModal } from '../components/CrmDateTimePickerModal';
@@ -387,8 +388,12 @@ export const CallHistoryScreen: React.FC = () => {
           result = { connected: false, durationSeconds: 0 };
         }
 
+        const leadId =
+          dialedAct.leadId ||
+          (dialedAct.phone ? normalizePhoneDigits(dialedAct.phone) : `lead-${Date.now()}`);
+
         const syntheticLead: Lead = {
-          _id: dialedAct.leadId || `lead-${dialedAct._id}`,
+          _id: leadId,
           name: dialedAct.customerName || 'Customer',
           phone: dialedAct.phone || '',
           campaignId: dialedAct.campaignId || 'default-camp',
@@ -796,11 +801,11 @@ export const CallHistoryScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* 4-Card NeoDove KPI Strip */}
+      {/* 4-Card NeoDove KPI Strip (Compact & User-Friendly) */}
       <View style={styles.kpiRow}>
         <View style={[styles.kpiCard, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
           <View style={[styles.kpiIconWrap, { backgroundColor: '#EFF6FF' }]}>
-            <Phone size={13} color="#2563EB" />
+            <Phone size={12} color="#2563EB" />
           </View>
           <Text style={styles.kpiValue}>{callStats.total}</Text>
           <Text style={styles.kpiLabel}>Total Dials</Text>
@@ -808,7 +813,7 @@ export const CallHistoryScreen: React.FC = () => {
 
         <View style={[styles.kpiCard, { backgroundColor: '#F0FDF4', borderColor: '#DCFCE7' }]}>
           <View style={[styles.kpiIconWrap, { backgroundColor: '#DCFCE7' }]}>
-            <CheckCircle2 size={13} color="#16A34A" />
+            <CheckCircle2 size={12} color="#16A34A" />
           </View>
           <Text style={[styles.kpiValue, { color: '#16A34A' }]}>{callStats.connected}</Text>
           <Text style={styles.kpiLabel}>Connected ({callStats.rate}%)</Text>
@@ -816,7 +821,7 @@ export const CallHistoryScreen: React.FC = () => {
 
         <View style={[styles.kpiCard, { backgroundColor: '#F5F3FF', borderColor: '#EDE9FE' }]}>
           <View style={[styles.kpiIconWrap, { backgroundColor: '#EDE9FE' }]}>
-            <Clock3 size={13} color="#7C3AED" />
+            <Clock3 size={12} color="#7C3AED" />
           </View>
           <Text style={[styles.kpiValue, { color: '#6D28D9' }]}>{callStats.totalDuration}</Text>
           <Text style={styles.kpiLabel}>Talk Time</Text>
@@ -824,15 +829,20 @@ export const CallHistoryScreen: React.FC = () => {
 
         <View style={[styles.kpiCard, { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' }]}>
           <View style={[styles.kpiIconWrap, { backgroundColor: '#FEE2E2' }]}>
-            <PhoneOff size={13} color="#DC2626" />
+            <PhoneOff size={12} color="#DC2626" />
           </View>
           <Text style={[styles.kpiValue, { color: '#DC2626' }]}>{callStats.missed}</Text>
           <Text style={styles.kpiLabel}>Not Connected</Text>
         </View>
       </View>
 
-      {/* Date Filter Tabs with Historical Browsing */}
-      <View style={styles.dateTabsRow}>
+      {/* Date Filter Tabs with Historical Browsing (Single-row Horizontal Scroll) */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterHorizontalTrack}
+        style={styles.filterScrollView}
+      >
         <TouchableOpacity
           style={[styles.dateTab, dateFilter === 'TODAY' && styles.dateTabActive]}
           onPress={() => {
@@ -909,7 +919,7 @@ export const CallHistoryScreen: React.FC = () => {
           onPress={() => setShowDatePicker(true)}
           activeOpacity={0.7}
         >
-          <Calendar size={13} color={dateFilter === 'CUSTOM' ? '#FFFFFF' : '#475569'} />
+          <Calendar size={12} color={dateFilter === 'CUSTOM' ? '#FFFFFF' : '#475569'} />
           <Text
             style={[styles.dateTabText, dateFilter === 'CUSTOM' && styles.dateTabTextActive]}
             numberOfLines={1}
@@ -926,14 +936,19 @@ export const CallHistoryScreen: React.FC = () => {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={{ marginLeft: 2 }}
             >
-              <X size={12} color="#FFFFFF" strokeWidth={2.5} />
+              <X size={11} color="#FFFFFF" strokeWidth={2.5} />
             </TouchableOpacity>
           ) : null}
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
-      {/* Stage / Status Chips */}
-      <View style={styles.stageChipsRow}>
+      {/* Stage / Status Chips (Single-row Horizontal Scroll) */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterHorizontalTrack}
+        style={[styles.filterScrollView, { marginBottom: 10 }]}
+      >
         {(['ALL', 'CONNECTED', 'NOT_CONNECTED', 'INTERESTED', 'FOLLOW_UP'] as StageFilter[]).map(
           (stg) => {
             const isSelected = stageFilter === stg;
@@ -958,7 +973,7 @@ export const CallHistoryScreen: React.FC = () => {
             );
           },
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 
@@ -1207,63 +1222,68 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // 4 KPI Cards
+  // 4 KPI Cards (Compact & User-Friendly)
   kpiRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
+    gap: 6,
+    marginBottom: 10,
   },
   kpiCard: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
   },
   kpiIconWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   kpiValue: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '600',
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
     textAlign: 'center',
   },
 
-  // Date Tabs
-  dateTabsRow: {
+  // Horizontal Scrollable Filter Tracks (Zero Wrapping!)
+  filterScrollView: {
+    marginBottom: 7,
+    marginHorizontal: -16,
+  },
+  filterHorizontalTrack: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    paddingHorizontal: 16,
     gap: 6,
-    marginBottom: 10,
+    alignItems: 'center',
   },
   dateTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5.5,
-    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 16,
     backgroundColor: '#F1F5F9',
-    gap: 5,
+    gap: 4,
+    height: 28,
   },
   dateTabActive: {
     backgroundColor: '#0F9D58',
   },
   dateTabText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '600',
     color: '#475569',
   },
@@ -1278,14 +1298,14 @@ const styles = StyleSheet.create({
   tabBadge: {
     backgroundColor: '#E2E8F0',
     paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 10,
+    paddingVertical: 0.5,
+    borderRadius: 8,
   },
   tabBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
   },
   tabBadgeText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
     color: '#475569',
   },
@@ -1293,27 +1313,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Stage Chips
-  stageChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
-  },
+  // Stage Chips (Compact)
   stageChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4.5,
-    borderRadius: 16,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stageChipActive: {
     backgroundColor: '#E6F4EA',
     borderColor: '#0F9D58',
   },
   stageChipText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
   },
