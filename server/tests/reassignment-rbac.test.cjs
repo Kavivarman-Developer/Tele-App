@@ -1,143 +1,317 @@
-const { describe, it } = require('node:test');
+const { describe, it, beforeEach, afterEach, mock } = require('node:test');
 const assert = require('node:assert/strict');
+const { Types } = require('mongoose');
+
+const { LeadService } = require('../dist/services/lead.service');
+const { ActivityService } = require('../dist/services/activity.service');
+const { Lead } = require('../dist/models/lead.model');
+const { Campaign } = require('../dist/models/campaign.model');
+const { User } = require('../dist/models/user.model');
+const { Activity } = require('../dist/models/activity.model');
+const { AuditService } = require('../dist/services/audit.service');
+const { SettingService } = require('../dist/services/setting.service');
+const { PipelineService } = require('../dist/services/pipeline.service');
 const { AppError } = require('../dist/utils/AppError');
 
-describe('Lead Reassignment RBAC & Server-Side Security Regression Tests', () => {
-  // Mock target validation logic mirror
-  function validateReassignTarget(targetUser) {
-    if (!targetUser || !targetUser.isActive) {
-      throw new AppError('Target user must be an active user', 400);
-    }
-    if (targetUser.role === 'AGENT' && !targetUser.canReceiveLeads) {
-      throw new AppError('Target agent must have canReceiveLeads enabled', 400);
-    }
-    return true;
-  }
-
-  // Mock requester authorization logic mirror
-  function authorizeLeadReassignment(requester, lead, campaign) {
-    if (requester.role === 'AGENT') {
-      if (lead.assignedTo?.toString() !== requester._id.toString()) {
-        throw new AppError('Forbidden: You can only reassign leads currently assigned to you', 403);
-      }
-    } else if (requester.role === 'MANAGER') {
-      if (campaign.managerId.toString() !== requester._id.toString()) {
-        throw new AppError('Forbidden: You can only reassign leads within your own campaigns', 403);
-      }
-    }
-    return true;
-  }
-
-  // Mock getMyLeads scope resolution mirror
-  function resolveLeadsQueryScope(requester, query, managedCampaignIds = []) {
-    const matchStage = {};
-    if (requester.role === 'ADMIN') {
-      if (query.userId) {
-        matchStage.assignedTo = String(query.userId);
-      }
-      if (query.campaignId) {
-        matchStage.campaignId = String(query.campaignId);
-      }
-    } else if (requester.role === 'MANAGER') {
-      if (query.campaignId) {
-        if (!managedCampaignIds.includes(String(query.campaignId))) {
-          throw new AppError('Forbidden: You can only view leads for your own campaigns', 403);
-        }
-        matchStage.campaignId = String(query.campaignId);
-      } else {
-        matchStage.campaignId = { $in: managedCampaignIds };
-      }
-      if (query.userId) {
-        matchStage.assignedTo = String(query.userId);
-      }
-    } else {
-      // AGENT: strictly enforced to own assignedTo ID
-      matchStage.assignedTo = String(requester._id);
-      if (query.campaignId) {
-        matchStage.campaignId = String(query.campaignId);
-      }
-    }
-    return matchStage;
-  }
-
-  it('allows reassigning lead to an active ADMIN', () => {
-    const adminUser = { _id: '670000000000000000000001', role: 'ADMIN', isActive: true };
-    assert.equal(validateReassignTarget(adminUser), true);
+describe('Production RBAC & Service Authorization Integration Tests', () => {
+  beforeEach(() => {
+    mock.method(AuditService, 'log', async () => {});
+    mock.method(SettingService, 'getSettings', async () => ({ allowDisposeWithoutFollowUp: true }));
+    mock.method(PipelineService, 'getStage', async () => ({ name: 'Interested' }));
+    mock.method(Activity, 'create', async (data) => ({ _id: new Types.ObjectId(), ...data }));
+    mock.method(Activity, 'findOne', () => ({ sort: () => null }));
   });
 
-  it('allows reassigning lead to an active MANAGER', () => {
-    const managerUser = { _id: '670000000000000000000002', role: 'MANAGER', isActive: true };
-    assert.equal(validateReassignTarget(managerUser), true);
+  afterEach(() => {
+    mock.restoreAll();
   });
 
-  it('allows reassigning lead to an active AGENT with canReceiveLeads enabled', () => {
-    const agentUser = { _id: '670000000000000000000003', role: 'AGENT', isActive: true, canReceiveLeads: true };
-    assert.equal(validateReassignTarget(agentUser), true);
+  // -------------------------------------------------------------
+  // 1. LeadService.reassignLead — Production Function Verification
+  // -------------------------------------------------------------
+  describe('LeadService.reassignLead', () => {
+    it('rejects invalid leadId with 400 Bad Request', async () => {
+      const requester = { _id: new Types.ObjectId(), role: 'ADMIN' };
+      await assert.rejects(
+        () => LeadService.reassignLead(requester, 'invalid-hex-id', '670000000000000000000001'),
+        (err) => err instanceof AppError && err.statusCode === 400 && err.message.includes('Invalid lead ID format')
+      );
+    });
+
+    it('rejects invalid targetUserId with 400 Bad Request', async () => {
+      const requester = { _id: new Types.ObjectId(), role: 'ADMIN' };
+      const validLeadId = new Types.ObjectId().toString();
+      await assert.rejects(
+        () => LeadService.reassignLead(requester, validLeadId, 'invalid-user-id'),
+        (err) => err instanceof AppError && err.statusCode === 400 && err.message.includes('Invalid target user ID format')
+      );
+    });
+
+    it('prevents an AGENT from reassigning someone else\'s lead (403 Forbidden)', async () => {
+      const agentId = new Types.ObjectId();
+      const otherAgentId = new Types.ObjectId();
+      const requester = { _id: agentId, role: 'AGENT' };
+
+      const leadDoc = {
+        _id: new Types.ObjectId(),
+        campaignId: new Types.ObjectId(),
+        assignedTo: otherAgentId,
+        save: async () => {},
+      };
+      const campaignDoc = { _id: leadDoc.campaignId, managerId: new Types.ObjectId() };
+
+      mock.method(Lead, 'findById', async () => leadDoc);
+      mock.method(Campaign, 'findById', async () => campaignDoc);
+
+      await assert.rejects(
+        () => LeadService.reassignLead(requester, leadDoc._id.toString(), new Types.ObjectId().toString()),
+        (err) => err instanceof AppError && err.statusCode === 403 && err.message.includes('Forbidden')
+      );
+    });
+
+    it('prevents a MANAGER from reassigning leads outside their managed campaigns (403 Forbidden)', async () => {
+      const managerId = new Types.ObjectId();
+      const otherManagerId = new Types.ObjectId();
+      const requester = { _id: managerId, role: 'MANAGER' };
+
+      const leadDoc = {
+        _id: new Types.ObjectId(),
+        campaignId: new Types.ObjectId(),
+        assignedTo: new Types.ObjectId(),
+        save: async () => {},
+      };
+      const campaignDoc = { _id: leadDoc.campaignId, managerId: otherManagerId };
+
+      mock.method(Lead, 'findById', async () => leadDoc);
+      mock.method(Campaign, 'findById', async () => campaignDoc);
+
+      await assert.rejects(
+        () => LeadService.reassignLead(requester, leadDoc._id.toString(), new Types.ObjectId().toString()),
+        (err) => err instanceof AppError && err.statusCode === 403 && err.message.includes('Forbidden')
+      );
+    });
+
+    it('rejects target user if inactive with 400 Bad Request', async () => {
+      const adminId = new Types.ObjectId();
+      const requester = { _id: adminId, role: 'ADMIN' };
+      const leadDoc = {
+        _id: new Types.ObjectId(),
+        campaignId: new Types.ObjectId(),
+        assignedTo: new Types.ObjectId(),
+        save: async () => {},
+      };
+      const campaignDoc = { _id: leadDoc.campaignId, managerId: new Types.ObjectId() };
+      const inactiveAdmin = { _id: new Types.ObjectId(), role: 'ADMIN', isActive: false };
+
+      mock.method(Lead, 'findById', async () => leadDoc);
+      mock.method(Campaign, 'findById', async () => campaignDoc);
+      mock.method(User, 'findById', async () => inactiveAdmin);
+
+      await assert.rejects(
+        () => LeadService.reassignLead(requester, leadDoc._id.toString(), inactiveAdmin._id.toString()),
+        (err) => err instanceof AppError && err.statusCode === 400 && err.message.includes('active user')
+      );
+    });
+
+    it('rejects target AGENT if canReceiveLeads is false with 400 Bad Request', async () => {
+      const adminId = new Types.ObjectId();
+      const requester = { _id: adminId, role: 'ADMIN' };
+      const leadDoc = {
+        _id: new Types.ObjectId(),
+        campaignId: new Types.ObjectId(),
+        assignedTo: new Types.ObjectId(),
+        save: async () => {},
+      };
+      const campaignDoc = { _id: leadDoc.campaignId, managerId: new Types.ObjectId() };
+      const busyAgent = { _id: new Types.ObjectId(), role: 'AGENT', isActive: true, canReceiveLeads: false };
+
+      mock.method(Lead, 'findById', async () => leadDoc);
+      mock.method(Campaign, 'findById', async () => campaignDoc);
+      mock.method(User, 'findById', async () => busyAgent);
+
+      await assert.rejects(
+        () => LeadService.reassignLead(requester, leadDoc._id.toString(), busyAgent._id.toString()),
+        (err) => err instanceof AppError && err.statusCode === 400 && err.message.includes('canReceiveLeads')
+      );
+    });
+
+    it('successfully reassigns lead to an active ADMIN when called by an AGENT for own lead', async () => {
+      const agentId = new Types.ObjectId();
+      const requester = { _id: agentId, role: 'AGENT', email: 'agent@hitalk.com' };
+      const adminTarget = { _id: new Types.ObjectId(), role: 'ADMIN', isActive: true };
+
+      let saved = false;
+      const leadDoc = {
+        _id: new Types.ObjectId(),
+        campaignId: new Types.ObjectId(),
+        assignedTo: agentId,
+        save: async function () { saved = true; },
+      };
+      const campaignDoc = { _id: leadDoc.campaignId, managerId: new Types.ObjectId() };
+
+      mock.method(Lead, 'findById', async () => leadDoc);
+      mock.method(Campaign, 'findById', async () => campaignDoc);
+      mock.method(User, 'findById', async () => adminTarget);
+
+      const result = await LeadService.reassignLead(requester, leadDoc._id.toString(), adminTarget._id.toString());
+      assert.equal(saved, true);
+      assert.equal(result.assignedTo.toString(), adminTarget._id.toString());
+    });
   });
 
-  it('rejects reassigning to an AGENT when canReceiveLeads is false', () => {
-    const busyAgent = { _id: '670000000000000000000004', role: 'AGENT', isActive: true, canReceiveLeads: false };
-    assert.throws(
-      () => validateReassignTarget(busyAgent),
-      (err) => err instanceof AppError && err.statusCode === 400 && err.message.includes('canReceiveLeads')
-    );
+  // -------------------------------------------------------------
+  // 2. ActivityService.disposeLead — Full Reassignment Call Path
+  // -------------------------------------------------------------
+  describe('ActivityService.disposeLead Reassignment Flow', () => {
+    it('prevents an unauthorized AGENT from disposing/reassigning someone else\'s lead (403 Forbidden)', async () => {
+      const agentId = new Types.ObjectId();
+      const otherAgentId = new Types.ObjectId();
+      const requester = { _id: agentId, role: 'AGENT', email: 'agent1@hitalk.com' };
+
+      const leadDoc = {
+        _id: new Types.ObjectId(),
+        campaignId: new Types.ObjectId(),
+        assignedTo: otherAgentId,
+        customProperties: new Map(),
+        save: async () => {},
+      };
+      const campaignDoc = { _id: leadDoc.campaignId, pipelineId: new Types.ObjectId() };
+
+      mock.method(Lead, 'findById', async () => leadDoc);
+      mock.method(Campaign, 'findById', async () => campaignDoc);
+
+      await assert.rejects(
+        () => ActivityService.disposeLead(requester, leadDoc._id.toString(), {
+          stage: 'Interested',
+          connected: true,
+          reassignToUserId: new Types.ObjectId().toString(),
+        }),
+        (err) => err instanceof AppError && err.statusCode === 403 && err.message.includes('Forbidden')
+      );
+    });
+
+    it('rejects invalid reassignToUserId with 400 Bad Request during call disposition', async () => {
+      const agentId = new Types.ObjectId();
+      const requester = { _id: agentId, role: 'AGENT', email: 'agent1@hitalk.com' };
+
+      const leadDoc = {
+        _id: new Types.ObjectId(),
+        campaignId: new Types.ObjectId(),
+        assignedTo: agentId,
+        customProperties: new Map(),
+        save: async () => {},
+      };
+      const campaignDoc = { _id: leadDoc.campaignId, pipelineId: new Types.ObjectId() };
+
+      mock.method(Lead, 'findById', async () => leadDoc);
+      mock.method(Campaign, 'findById', async () => campaignDoc);
+
+      await assert.rejects(
+        () => ActivityService.disposeLead(requester, leadDoc._id.toString(), {
+          stage: 'Interested',
+          connected: true,
+          reassignToUserId: 'invalid-user-format',
+        }),
+        (err) => err instanceof AppError && err.statusCode === 400 && err.message.includes('Invalid reassignToUserId format')
+      );
+    });
+
+    it('successfully reassigns lead to an active ADMIN during call disposition', async () => {
+      const agentId = new Types.ObjectId();
+      const adminTargetId = new Types.ObjectId();
+      const requester = { _id: agentId, role: 'AGENT', email: 'agent1@hitalk.com' };
+
+      const leadDoc = {
+        _id: new Types.ObjectId(),
+        campaignId: new Types.ObjectId(),
+        assignedTo: agentId,
+        customProperties: new Map(),
+        save: async () => {},
+      };
+      const campaignDoc = { _id: leadDoc.campaignId, pipelineId: new Types.ObjectId() };
+      const adminTarget = { _id: adminTargetId, role: 'ADMIN', isActive: true };
+
+      mock.method(Lead, 'findById', async () => leadDoc);
+      mock.method(Campaign, 'findById', async () => campaignDoc);
+      mock.method(User, 'findById', async () => adminTarget);
+
+      const result = await ActivityService.disposeLead(requester, leadDoc._id.toString(), {
+        stage: 'Interested',
+        connected: true,
+        reassignToUserId: adminTargetId.toString(),
+      });
+
+      assert.equal(result.lead.assignedTo.toString(), adminTargetId.toString());
+    });
   });
 
-  it('rejects reassigning to an inactive user regardless of role', () => {
-    const inactiveAdmin = { _id: '670000000000000000000005', role: 'ADMIN', isActive: false };
-    assert.throws(
-      () => validateReassignTarget(inactiveAdmin),
-      (err) => err instanceof AppError && err.statusCode === 400 && err.message.includes('active user')
-    );
-  });
+  // -------------------------------------------------------------
+  // 3. LeadService.getMyLeads — Server-Side Query Scoping & Shape
+  // -------------------------------------------------------------
+  describe('LeadService.getMyLeads Server-Side Security & Aggregation Shape', () => {
+    it('strictly isolates AGENT query scope ignoring any injected userId parameter', async () => {
+      const agentId = new Types.ObjectId();
+      const maliciousUserId = new Types.ObjectId().toString();
+      const requester = { _id: agentId, role: 'AGENT' };
 
-  it('prevents an AGENT from reassigning another agent\'s lead (403 Forbidden)', () => {
-    const agentRequester = { _id: 'agent_111', role: 'AGENT' };
-    const lead = { _id: 'lead_999', assignedTo: 'agent_222' };
-    const campaign = { _id: 'camp_1', managerId: 'mgr_1' };
+      let capturedPipeline = null;
+      mock.method(Lead, 'aggregate', async (pipeline) => {
+        capturedPipeline = pipeline;
+        return [{ metadata: [{ total: 1 }], data: [{ _id: 'l1', name: 'Test Lead', assignedToId: agentId }] }];
+      });
 
-    assert.throws(
-      () => authorizeLeadReassignment(agentRequester, lead, campaign),
-      (err) => err instanceof AppError && err.statusCode === 403 && err.message.includes('Forbidden')
-    );
-  });
+      await LeadService.getMyLeads(requester, { userId: maliciousUserId, type: 'ALL' });
 
-  it('allows an AGENT to reassign their own assigned lead', () => {
-    const agentRequester = { _id: 'agent_111', role: 'AGENT' };
-    const lead = { _id: 'lead_999', assignedTo: 'agent_111' };
-    const campaign = { _id: 'camp_1', managerId: 'mgr_1' };
+      assert.ok(capturedPipeline, 'Aggregate pipeline must be invoked');
+      const matchStage = capturedPipeline[0].$match;
+      // Even though malicious userId was sent, matchStage must strictly equal agent's own ID
+      assert.equal(matchStage.assignedTo.toString(), agentId.toString());
+      assert.notEqual(matchStage.assignedTo.toString(), maliciousUserId);
+    });
 
-    assert.equal(authorizeLeadReassignment(agentRequester, lead, campaign), true);
-  });
+    it('rejects MANAGER querying an unmanaged campaign with 403 Forbidden', async () => {
+      const managerId = new Types.ObjectId();
+      const unmanagedCampaignId = new Types.ObjectId().toString();
+      const requester = { _id: managerId, role: 'MANAGER' };
 
-  it('prevents a MANAGER from reassigning leads outside their managed campaigns (403 Forbidden)', () => {
-    const managerRequester = { _id: 'mgr_1', role: 'MANAGER' };
-    const lead = { _id: 'lead_999', assignedTo: 'agent_1' };
-    const otherCampaign = { _id: 'camp_other', managerId: 'mgr_2' };
+      mock.method(Campaign, 'find', async () => [{ _id: new Types.ObjectId() }]);
 
-    assert.throws(
-      () => authorizeLeadReassignment(managerRequester, lead, otherCampaign),
-      (err) => err instanceof AppError && err.statusCode === 403 && err.message.includes('Forbidden')
-    );
-  });
+      await assert.rejects(
+        () => LeadService.getMyLeads(requester, { campaignId: unmanagedCampaignId }),
+        (err) => err instanceof AppError && err.statusCode === 403 && err.message.includes('Forbidden')
+      );
+    });
 
-  it('strictly isolates AGENT query scope ignoring any injected userId parameter', () => {
-    const agentRequester = { _id: 'agent_111', role: 'AGENT' };
-    const maliciousQuery = { userId: 'admin_007', type: 'ALL' };
+    it('rejects invalid query.userId format with 400 Bad Request', async () => {
+      const adminId = new Types.ObjectId();
+      const requester = { _id: adminId, role: 'ADMIN' };
 
-    const resolvedScope = resolveLeadsQueryScope(agentRequester, maliciousQuery);
-    // Even though query.userId requested 'admin_007', scope must be hardcoded to 'agent_111'
-    assert.equal(resolvedScope.assignedTo, 'agent_111');
-  });
+      await assert.rejects(
+        () => LeadService.getMyLeads(requester, { userId: 'not-a-valid-objectid' }),
+        (err) => err instanceof AppError && err.statusCode === 400 && err.message.includes('Invalid user ID format')
+      );
+    });
 
-  it('prevents a MANAGER from querying leads from an unmanaged campaign (403 Forbidden)', () => {
-    const managerRequester = { _id: 'mgr_1', role: 'MANAGER' };
-    const query = { campaignId: 'unmanaged_camp_999' };
-    const myManagedCampaignIds = ['camp_1', 'camp_2'];
+    it('confirms aggregation pipeline projects assignedToId and populated assignedTo structure', async () => {
+      const adminId = new Types.ObjectId();
+      const requester = { _id: adminId, role: 'ADMIN' };
 
-    assert.throws(
-      () => resolveLeadsQueryScope(managerRequester, query, myManagedCampaignIds),
-      (err) => err instanceof AppError && err.statusCode === 403 && err.message.includes('Forbidden')
-    );
+      let capturedPipeline = null;
+      mock.method(Lead, 'aggregate', async (pipeline) => {
+        capturedPipeline = pipeline;
+        return [{ metadata: [{ total: 0 }], data: [] }];
+      });
+
+      await LeadService.getMyLeads(requester, { type: 'ALL' });
+
+      const facetStage = capturedPipeline.find((s) => s.$facet);
+      assert.ok(facetStage, '$facet stage must exist');
+      const projectStage = facetStage.$facet.data.find((s) => s.$project).$project;
+
+      // Validate exact response shape fields required by mobile / web
+      assert.ok(projectStage.assignedTo, 'assignedTo field must be projected');
+      assert.ok(projectStage.assignedToId, 'assignedToId field must be explicitly projected');
+      assert.ok(projectStage.campaign, 'campaign field must be projected');
+    });
   });
 });
