@@ -5,7 +5,7 @@ node_modules/
 
 # Expo
 .expo/
-dist/
+# dist/ tracked for production Nginx serving
 web-build/
 expo-env.d.ts
 

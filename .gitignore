@@ -15,7 +15,7 @@ node_modules/
 
 # Mobile build / Expo output
 .expo/
-dist/
+# dist/ tracked for production Nginx serving
 web-build/
 .expo-shared/
 
