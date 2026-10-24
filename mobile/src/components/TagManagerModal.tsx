@@ -29,6 +29,7 @@ import { notificationService } from '../services/notification.service';
 import { storage } from '../utils/storage';
 import { formatDisplayPhone } from '../utils/phoneUtils';
 import { toast } from '../store/toastStore';
+import { tagLeadToManager } from '../api/leadApi';
 
 export interface TaggedLeadRecord {
   id: string;
@@ -89,6 +90,22 @@ export const TagManagerModal: React.FC<TagManagerModalProps> = ({
     const noteText = note.trim() || selectedReason;
 
     try {
+      let serverTag: any = null;
+      if (leadId) {
+        try {
+          serverTag = await tagLeadToManager({
+            leadId,
+            customerName: customerName || 'Lead Contact',
+            customerPhone: customerPhone || '',
+            targetRole,
+            reason: selectedReason,
+            note: noteText,
+          });
+        } catch (apiErr) {
+          console.warn('[TagManagerModal] Server tag API error, persisting locally:', apiErr);
+        }
+      }
+
       // 1. Persist tagged notification in local storage
       const existingRaw = await storage.getItem('tele_crm_tagged_lead_notifications');
       const existingList: TaggedLeadRecord[] = existingRaw ? JSON.parse(existingRaw) : [];

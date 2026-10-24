@@ -517,3 +517,55 @@ export const deleteBranch = async (id: string): Promise<{ message: string }> => 
 };
 
 
+
+export interface TagLeadPayload {
+  leadId: string;
+  customerName?: string;
+  customerPhone?: string;
+  targetRole?: 'BOTH' | 'MANAGER' | 'ADMIN';
+  reason: string;
+  note?: string;
+}
+
+export interface TaggedLeadResponse {
+  _id: string;
+  leadId: string;
+  customerName: string;
+  customerPhone: string;
+  agentId: string;
+  agentName: string;
+  branch?: string;
+  targetRole: 'BOTH' | 'MANAGER' | 'ADMIN';
+  reason: string;
+  note: string;
+  createdAt: string;
+}
+
+/**
+ * Tags a lead to Manager or Admin with urgent priority.
+ * Persists to backend database across Web and Mobile.
+ */
+export const tagLeadToManager = async (payload: TagLeadPayload): Promise<TaggedLeadResponse> => {
+  const response = await apiClient.post<{ status: string; taggedLead: TaggedLeadResponse }>(
+    '/api/leads/tag',
+    payload,
+  );
+  return response.data.taggedLead;
+};
+
+/**
+ * Fetches tagged leads for the authenticated Admin or Manager.
+ */
+export const fetchTaggedLeads = async (): Promise<TaggedLeadResponse[]> => {
+  const response = await apiClient.get<{ status: string; taggedLeads: TaggedLeadResponse[] }>(
+    '/api/leads/tagged',
+  );
+  return response.data.taggedLeads || [];
+};
+
+/**
+ * Dismisses a tagged lead notification for the current user.
+ */
+export const dismissTaggedLead = async (tagId: string): Promise<void> => {
+  await apiClient.post(`/api/leads/tagged/${tagId}/dismiss`);
+};

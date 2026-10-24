@@ -29,7 +29,7 @@ import {
   BookmarkCheck,
 } from 'lucide-react-native';
 
-import { fetchMyLeads } from '../api/leadApi';
+import { fetchMyLeads, fetchTaggedLeads, dismissTaggedLead } from '../api/leadApi';
 import { callService } from '../services/call.service';
 import { useAuthStore } from '../store/authStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
@@ -106,21 +106,47 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
       } catch {}
 
       try {
+        const serverTags = await fetchTaggedLeads();
+        if (serverTags && serverTags.length > 0) {
+          const mapped: TaggedLeadRecord[] = serverTags.map((st) => ({
+            id: st._id,
+            type: 'MANAGER_TAG',
+            leadId: st.leadId,
+            customerName: st.customerName,
+            customerPhone: st.customerPhone,
+            agentName: st.agentName,
+            agentId: st.agentId,
+            branch: st.branch || '',
+            targetRole: st.targetRole,
+            reason: st.reason,
+            note: st.note,
+            createdAt: st.createdAt,
+          }));
+          setTaggedList(mapped);
+          await storage.setItem('tele_crm_tagged_lead_notifications', JSON.stringify(mapped));
+        } else {
+          const tagRaw = await storage.getItem('tele_crm_tagged_lead_notifications');
+          if (tagRaw) {
+            const list: TaggedLeadRecord[] = JSON.parse(tagRaw);
+            const relevant = list.filter((item) => {
+              if (!user?.role || user.role === 'ADMIN') return true;
+              if (user.role === 'MANAGER') {
+                if (item.targetRole === 'ADMIN') return false;
+                if (item.branch && user.branch && item.branch.toLowerCase() !== user.branch.toLowerCase()) return false;
+                return true;
+              }
+              return true;
+            });
+            setTaggedList(relevant);
+          }
+        }
+      } catch {
         const tagRaw = await storage.getItem('tele_crm_tagged_lead_notifications');
         if (tagRaw) {
           const list: TaggedLeadRecord[] = JSON.parse(tagRaw);
-          const relevant = list.filter((item) => {
-            if (!user?.role || user.role === 'ADMIN') return true;
-            if (user.role === 'MANAGER') {
-              if (item.targetRole === 'ADMIN') return false;
-              if (item.branch && user.branch && item.branch.toLowerCase() !== user.branch.toLowerCase()) return false;
-              return true;
-            }
-            return true;
-          });
-          setTaggedList(relevant);
+          setTaggedList(list);
         }
-      } catch {}
+      }
     };
     loadNotifications();
   }, [visible, user]);
@@ -129,6 +155,9 @@ export const FollowUpNotificationsModal: React.FC<FollowUpNotificationsModalProp
     try {
       const updated = taggedList.filter((item) => item.id !== id);
       setTaggedList(updated);
+      try {
+        await dismissTaggedLead(id);
+      } catch {}
       const raw = await storage.getItem('tele_crm_tagged_lead_notifications');
       if (raw) {
         const full: TaggedLeadRecord[] = JSON.parse(raw);

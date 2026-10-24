@@ -59,6 +59,12 @@ leadsRouter.post('/webhook', LeadController.handleWebhook);
 
 leadsRouter.use(authenticate);
 
+// Tag lead to Manager / Admin (priority alerts across devices)
+leadsRouter.post('/tag', LeadController.tagLeadToManager);
+leadsRouter.post('/:id/tag', LeadController.tagLeadToManager);
+leadsRouter.get('/tagged', LeadController.getTaggedLeads);
+leadsRouter.post('/tagged/:id/dismiss', LeadController.dismissTaggedLead);
+
 leadsRouter.get('/my', validate(myLeadsQuerySchema), LeadController.getMyLeads);
 leadsRouter.get('/export', validate(myLeadsQuerySchema), LeadController.exportMyLeadsCsv);
 leadsRouter.get('/activities/my', ActivityController.getUserActivities);
