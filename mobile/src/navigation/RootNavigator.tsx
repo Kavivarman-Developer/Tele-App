@@ -15,6 +15,7 @@ import {
 
 import { useAuthStore } from '../store/authStore';
 import { useCampaignStore } from '../store/campaignStore';
+import { useSidebarStore } from '../store/sidebarStore';
 import { SplashScreen } from '../screens/SplashScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -151,6 +152,50 @@ const MainTabs: React.FC = () => {
   );
 };
 
+const linking = {
+  prefixes: [
+    'https://call.okboz.co.in',
+    'http://call.okboz.co.in',
+    'http://localhost:8081',
+    'http://localhost:19006',
+    'hitalk://',
+    '/',
+  ],
+  config: {
+    screens: {
+      Login: 'login',
+      CallingDesk: 'calling-desk',
+      CampaignSelect: 'campaign-select',
+      MyLeads: 'leads',
+      FollowUps: 'follow-ups',
+      CallHistory: 'call-history',
+      AgentReports: 'reports',
+      Team: 'team',
+      Campaigns: 'campaigns',
+      CampaignDetail: 'campaigns-detail',
+      UploadLeads: 'upload-leads',
+      Settings: 'settings',
+      Diagnostics: 'diagnostics',
+      RetryRules: 'retry-rules',
+      AddWalkInLead: 'add-walk-in',
+      LeadDetail: 'lead-detail',
+      Dispose: 'dispose',
+      Dashboard: 'dashboard',
+      Launchpad: 'launchpad',
+      Main: {
+        screens: {
+          Home: 'home',
+          CampaignsHub: 'campaigns-hub',
+          MyLeads: 'queue-leads',
+          FollowUps: 'my-follow-ups',
+          Dashboard: 'team-dashboard',
+          Profile: 'my-profile',
+        },
+      },
+    },
+  },
+};
+
 export const RootNavigator: React.FC = () => {
   const { token, isLoading, restoreSession } = useAuthStore();
 
@@ -168,7 +213,49 @@ export const RootNavigator: React.FC = () => {
 
   return (
     <ErrorBoundary fallbackMessage="The app encountered an unexpected error. Please tap Retry to reload.">
-      <NavigationContainer ref={navigationRef}>
+      <NavigationContainer
+        ref={navigationRef}
+        linking={linking}
+        onStateChange={() => {
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const route = navigationRef.getCurrentRoute();
+            if (route?.name && route.name !== 'Login') {
+              useSidebarStore.getState().setCurrentRoute(route.name);
+              try {
+                window.localStorage.setItem('hi_talk_last_screen', route.name);
+                if (route.params) {
+                  window.localStorage.setItem('hi_talk_last_params', JSON.stringify(route.params));
+                } else {
+                  window.localStorage.removeItem('hi_talk_last_params');
+                }
+              } catch {}
+            }
+          }
+        }}
+        onReady={() => {
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const pathname = window.location.pathname.replace(/\/$/, '');
+            const isRoot = !pathname || pathname === '' || pathname === '/index.html';
+            if (isRoot) {
+              const savedScreen = window.localStorage.getItem('hi_talk_last_screen');
+              const savedParamsStr = window.localStorage.getItem('hi_talk_last_params');
+              if (savedScreen && savedScreen !== 'Home' && savedScreen !== 'Login' && savedScreen !== 'Launchpad') {
+                let savedParams = undefined;
+                try {
+                  if (savedParamsStr) savedParams = JSON.parse(savedParamsStr);
+                } catch {}
+                setTimeout(() => {
+                  try {
+                    navigationRef.navigate(savedScreen as any, savedParams);
+                  } catch (e) {
+                    console.warn('Failed restoring web screen:', e);
+                  }
+                }, 50);
+              }
+            }
+          }
+        }}
+      >
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {!token ? (
             <Stack.Screen name="Login" component={LoginScreen} />

@@ -27,6 +27,7 @@ export interface MyLeadsResponse {
 export interface MyLeadsParams {
   type?: LeadFilterType;
   campaignId?: string;
+  userId?: string;
   page?: number;
   limit?: number;
 }
@@ -44,6 +45,9 @@ export const fetchMyLeads = async (params: MyLeadsParams): Promise<MyLeadsRespon
 
   if (params.campaignId) {
     queryParams.campaignId = params.campaignId;
+  }
+  if (params.userId) {
+    queryParams.userId = params.userId;
   }
 
   const response = await apiClient.get<MyLeadsResponse>('/api/leads/my', {
@@ -127,11 +131,11 @@ export const fetchRetryRules = async (): Promise<{ retryRules: RetryRule[] }> =>
 };
 
 /**
- * Fetches active agents for optional lead reassignment.
+ * Fetches active agents/users for optional lead reassignment.
  */
 export const fetchAssignableUsers = async (): Promise<{ users: User[] }> => {
   const response = await apiClient.get<{ users: User[] }>('/api/users', {
-    params: { role: 'AGENT', isActive: true },
+    params: { isActive: true },
   });
   return response.data;
 };
