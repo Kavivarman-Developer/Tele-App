@@ -116,15 +116,24 @@ export class LeadService {
 
     if (requester.role === 'ADMIN') {
       if (query.userId) {
+        if (!Types.ObjectId.isValid(query.userId)) {
+          throw new AppError('Invalid user ID format', 400);
+        }
         matchStage.assignedTo = new Types.ObjectId(query.userId);
       }
       if (query.campaignId) {
+        if (!Types.ObjectId.isValid(query.campaignId)) {
+          throw new AppError('Invalid campaign ID format', 400);
+        }
         matchStage.campaignId = new Types.ObjectId(query.campaignId);
       }
     } else if (requester.role === 'MANAGER') {
       const managedCampaigns = await Campaign.find({ managerId: requester._id }, '_id');
       const managedIds = managedCampaigns.map((c) => c._id);
       if (query.campaignId) {
+        if (!Types.ObjectId.isValid(query.campaignId)) {
+          throw new AppError('Invalid campaign ID format', 400);
+        }
         const reqCampId = new Types.ObjectId(query.campaignId);
         if (!managedIds.some((id) => id.toString() === reqCampId.toString())) {
           throw new AppError('Forbidden: You can only view leads for your own campaigns', 403);
@@ -134,12 +143,18 @@ export class LeadService {
         matchStage.campaignId = { $in: managedIds };
       }
       if (query.userId) {
+        if (!Types.ObjectId.isValid(query.userId)) {
+          throw new AppError('Invalid user ID format', 400);
+        }
         matchStage.assignedTo = new Types.ObjectId(query.userId);
       }
     } else {
       // AGENT: strictly locked to own assigned leads, ignoring any query.userId
       matchStage.assignedTo = requester._id;
       if (query.campaignId) {
+        if (!Types.ObjectId.isValid(query.campaignId)) {
+          throw new AppError('Invalid campaign ID format', 400);
+        }
         const campaign = await Campaign.findById(query.campaignId);
         if (!campaign) {
           throw new AppError('Campaign not found', 404);
@@ -284,6 +299,13 @@ export class LeadService {
                     '$assignedTo',
                   ],
                 },
+                assignedToId: {
+                  $cond: [
+                    { $ifNull: ['$assignedUser', false] },
+                    '$assignedUser._id',
+                    '$assignedTo',
+                  ],
+                },
                 createdAt: 1,
                 updatedAt: 1,
                 customProperties: 1,
@@ -321,6 +343,13 @@ export class LeadService {
     leadId: string,
     targetUserId: string,
   ): Promise<ILeadDoc> {
+    if (!Types.ObjectId.isValid(leadId)) {
+      throw new AppError('Invalid lead ID format', 400);
+    }
+    if (!Types.ObjectId.isValid(targetUserId)) {
+      throw new AppError('Invalid target user ID format', 400);
+    }
+
     const lead = await Lead.findById(leadId);
     if (!lead) {
       throw new AppError('Lead not found', 404);
@@ -374,6 +403,16 @@ export class LeadService {
     toUserId: string,
     campaignId?: string,
   ): Promise<{ modifiedCount: number }> {
+    if (!Types.ObjectId.isValid(fromUserId)) {
+      throw new AppError('Invalid fromUserId format', 400);
+    }
+    if (!Types.ObjectId.isValid(toUserId)) {
+      throw new AppError('Invalid toUserId format', 400);
+    }
+    if (campaignId && !Types.ObjectId.isValid(campaignId)) {
+      throw new AppError('Invalid campaignId format', 400);
+    }
+
     const toUser = await User.findById(toUserId);
     if (!toUser || !toUser.isActive) {
       throw new AppError('Target user must be an active user', 400);

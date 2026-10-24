@@ -7,6 +7,7 @@ import { PipelineService } from './pipeline.service';
 import { SettingService } from './setting.service';
 import { RetryRuleService } from './retry-rule.service';
 import { LeadIngestService } from './lead-ingest.service';
+import { AuditService } from './audit.service';
 import { DisposeLeadInput } from '../validations/activity.validation';
 import { AppError } from '../utils/AppError';
 
@@ -213,6 +214,9 @@ export class ActivityService {
 
     // Reassignment if requested
     if (input.reassignToUserId) {
+      if (!Types.ObjectId.isValid(input.reassignToUserId)) {
+        throw new AppError('Invalid reassignToUserId format', 400);
+      }
       const targetUser = await User.findById(input.reassignToUserId);
       if (!targetUser || !targetUser.isActive) {
         throw new AppError('reassignToUserId must be an active user', 400);
@@ -220,7 +224,23 @@ export class ActivityService {
       if (targetUser.role === 'AGENT' && !targetUser.canReceiveLeads) {
         throw new AppError('Target agent must have canReceiveLeads enabled', 400);
       }
+      const previousAssignedTo = lead.assignedTo;
       lead.assignedTo = targetUser._id;
+
+      await AuditService.log({
+        userId: requester._id,
+        userEmail: requester.email,
+        userRole: requester.role,
+        action: 'LEAD_REASSIGN',
+        resourceType: 'LEAD',
+        resourceId: lead._id.toString(),
+        details: {
+          fromUser: previousAssignedTo?.toString(),
+          toUser: targetUser._id.toString(),
+          campaignId: lead.campaignId.toString(),
+          dispositionStage: lead.stage,
+        },
+      });
     }
 
     // Copy to another campaign if requested
