@@ -7,6 +7,7 @@ import {
   MyLeadsQuery,
 } from '../validations/lead.validation';
 import { AppError } from '../utils/AppError';
+import { AuditService } from './audit.service';
 
 export interface PaginatedLeads<T> {
   leads: T[];
@@ -284,7 +285,11 @@ export class LeadService {
       throw new AppError('Associated campaign not found', 404);
     }
 
-    if (requester.role === 'MANAGER' && campaign.managerId.toString() !== requester._id.toString()) {
+    if (requester.role === 'AGENT') {
+      if (lead.assignedTo?.toString() !== requester._id.toString()) {
+        throw new AppError('Forbidden: You can only reassign leads currently assigned to you', 403);
+      }
+    } else if (requester.role === 'MANAGER' && campaign.managerId.toString() !== requester._id.toString()) {
       throw new AppError('Forbidden: You can only reassign leads within your own campaigns', 403);
     }
 
@@ -293,8 +298,23 @@ export class LeadService {
       throw new AppError('Target user must be an active AGENT with canReceiveLeads enabled', 400);
     }
 
+    const previousAssignedTo = lead.assignedTo;
     lead.assignedTo = targetUser._id;
     await lead.save();
+
+    await AuditService.log({
+      userId: requester._id,
+      userEmail: requester.email,
+      userRole: requester.role,
+      action: 'LEAD_REASSIGN',
+      resourceType: 'LEAD',
+      resourceId: lead._id.toString(),
+      details: {
+        fromUser: previousAssignedTo?.toString(),
+        toUser: targetUser._id.toString(),
+        campaignId: lead.campaignId.toString(),
+      },
+    });
 
     return lead;
   }
@@ -333,6 +353,20 @@ export class LeadService {
 
     const result = await Lead.updateMany(filter, {
       $set: { assignedTo: toUser._id },
+    });
+
+    await AuditService.log({
+      userId: requester._id,
+      userEmail: requester.email,
+      userRole: requester.role,
+      action: 'BULK_REASSIGN',
+      resourceType: 'LEAD',
+      details: {
+        fromUserId,
+        toUserId,
+        campaignId,
+        modifiedCount: result.modifiedCount,
+      },
     });
 
     return {
@@ -446,10 +480,23 @@ export class LeadService {
       );
     }
 
+    await AuditService.log({
+      userId: requester._id,
+      userEmail: requester.email,
+      userRole: requester.role,
+      action: 'LEAD_EXPORT_CSV',
+      resourceType: 'CAMPAIGN',
+      resourceId: query.campaignId,
+      details: {
+        count: leads.length,
+      },
+    });
+
     return lines.join('\n');
   }
 
   public static async updateLead(
+    requester: IUserDoc,
     id: string,
     updates: { name?: string; phone?: string; email?: string },
   ): Promise<ILeadDoc> {
@@ -457,6 +504,18 @@ export class LeadService {
     if (!lead) {
       throw new AppError('Lead not found', 404);
     }
+
+    if (requester.role === 'AGENT') {
+      if (lead.assignedTo?.toString() !== requester._id.toString()) {
+        throw new AppError('Forbidden: You can only update leads assigned to you', 403);
+      }
+    } else if (requester.role === 'MANAGER') {
+      const campaign = await Campaign.findById(lead.campaignId);
+      if (campaign && campaign.managerId.toString() !== requester._id.toString()) {
+        throw new AppError('Forbidden: You can only update leads within your managed campaigns', 403);
+      }
+    }
+
     if (updates.name && updates.name.trim()) {
       lead.name = updates.name.trim();
     }
@@ -467,6 +526,17 @@ export class LeadService {
       lead.email = updates.email.trim();
     }
     await lead.save();
+
+    await AuditService.log({
+      userId: requester._id,
+      userEmail: requester.email,
+      userRole: requester.role,
+      action: 'LEAD_UPDATE',
+      resourceType: 'LEAD',
+      resourceId: lead._id.toString(),
+      details: { updates },
+    });
+
     return lead;
   }
 }

@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { Types } from 'mongoose';
 import { User, IUserDoc, UserRole } from '../models/user.model';
+import { Lead } from '../models/lead.model';
+import { AuditService } from './audit.service';
 import {
   CreateUserInput,
   UpdateUserInput,
@@ -45,6 +47,16 @@ export class UserService {
       managerId: input.managerId ? new Types.ObjectId(input.managerId) : null,
       isActive: input.isActive ?? true,
       canReceiveLeads: input.canReceiveLeads ?? true,
+    });
+
+    await AuditService.log({
+      userId: requester._id,
+      userEmail: requester.email,
+      userRole: requester.role,
+      action: 'USER_CREATE',
+      resourceType: 'USER',
+      resourceId: user._id.toString(),
+      details: { email: user.email, role: user.role, branch: user.branch },
     });
 
     return user;
@@ -99,15 +111,69 @@ export class UserService {
 
     if (updates.name !== undefined) user.name = updates.name;
     if (updates.phone !== undefined) user.phone = updates.phone;
-    if (updates.role !== undefined) user.role = updates.role;
+    if (updates.role !== undefined) {
+      user.role = updates.role;
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
+    }
     if (updates.branch !== undefined) user.branch = updates.branch;
-    if (updates.isActive !== undefined) user.isActive = updates.isActive;
+    if (updates.isActive !== undefined) {
+      if (user.isActive !== updates.isActive) {
+        user.isActive = updates.isActive;
+        if (!updates.isActive) {
+          user.tokenVersion = (user.tokenVersion || 0) + 1;
+        }
+      }
+    }
     if (updates.canReceiveLeads !== undefined) user.canReceiveLeads = updates.canReceiveLeads;
     if (updates.managerId !== undefined) {
       user.managerId = updates.managerId ? new Types.ObjectId(updates.managerId) : null;
     }
 
     await user.save();
+
+    await AuditService.log({
+      userId: requester._id,
+      userEmail: requester.email,
+      userRole: requester.role,
+      action: updates.isActive === false ? 'USER_DEACTIVATE' : 'USER_UPDATE',
+      resourceType: 'USER',
+      resourceId: user._id.toString(),
+      details: { updates },
+    });
+
+    // P11.3: If agent is deactivated, automatically reassign open leads to active agents
+    if (updates.isActive === false && user.role === 'AGENT') {
+      const activeAgents = await User.find({
+        role: 'AGENT',
+        isActive: true,
+        canReceiveLeads: true,
+        _id: { $ne: user._id },
+        ...(user.branch ? { branch: user.branch } : {}),
+      });
+
+      if (activeAgents.length > 0) {
+        const targetAgent = activeAgents[0];
+        const reassigned = await Lead.updateMany(
+          { assignedTo: user._id, status: 'OPEN' },
+          { $set: { assignedTo: targetAgent._id } },
+        );
+
+        await AuditService.log({
+          userId: requester._id,
+          userEmail: requester.email,
+          userRole: requester.role,
+          action: 'DEACTIVATED_AGENT_LEADS_REASSIGNED',
+          resourceType: 'USER',
+          resourceId: user._id.toString(),
+          details: {
+            fromUserId: user._id.toString(),
+            toUserId: targetAgent._id.toString(),
+            reassignedCount: reassigned.modifiedCount,
+          },
+        });
+      }
+    }
+
     return user;
   }
 
@@ -119,6 +185,7 @@ export class UserService {
 
     const saltRounds = 10;
     user.passwordHash = await bcrypt.hash(newPassword, saltRounds);
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
   }
 

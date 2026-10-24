@@ -1,5 +1,6 @@
 import { Linking, Platform } from 'react-native';
 import { Lead, DetectedCallResult } from '../types';
+import { normalizePhoneDigits } from '../utils/phoneUtils';
 
 export interface ICallService {
   startCall(lead: Lead): Promise<boolean>;
@@ -46,32 +47,42 @@ export class DeviceCallService implements ICallService {
       return false;
     }
 
-    let digitsOnly = phone.replace(/\D/g, '');
-    if (digitsOnly.length === 10) {
-      // Default to +91 (India) if 10 digits provided
-      digitsOnly = `91${digitsOnly}`;
-    }
-
+    const digitsOnly = normalizePhoneDigits(phone);
+    const target = digitsOnly.length === 10 ? `91${digitsOnly}` : phone.replace(/\D/g, '');
     const encodedText = text ? encodeURIComponent(text) : '';
-    const waUrl = `https://wa.me/${digitsOnly}${encodedText ? `?text=${encodedText}` : ''}`;
+    const nativeWaUrl = `whatsapp://send?phone=${target}${encodedText ? `&text=${encodedText}` : ''}`;
+    const webWaUrl = `https://wa.me/${target}${encodedText ? `?text=${encodedText}` : ''}`;
 
     try {
       if (Platform.OS === 'web') {
-        window.open(waUrl, '_blank');
+        window.open(webWaUrl, '_blank');
         return true;
       }
 
-      const canOpen = await Linking.canOpenURL(waUrl).catch(() => false);
-      if (canOpen) {
-        await Linking.openURL(waUrl);
+      // 1. Try opening via native WhatsApp URI scheme if installed
+      const canOpenNative = await Linking.canOpenURL(nativeWaUrl).catch(() => false);
+      if (canOpenNative) {
+        await Linking.openURL(nativeWaUrl);
         return true;
       }
 
-      await Linking.openURL(waUrl);
+      // 2. Fallback to HTTPS web wa.me intent
+      const canOpenWeb = await Linking.canOpenURL(webWaUrl).catch(() => false);
+      if (canOpenWeb) {
+        await Linking.openURL(webWaUrl);
+        return true;
+      }
+
+      await Linking.openURL(webWaUrl);
       return true;
-    } catch (error) {
-      console.warn('[CallService] Failed to open WhatsApp URL:', error);
-      return false;
+    } catch {
+      try {
+        await Linking.openURL(webWaUrl);
+        return true;
+      } catch (error) {
+        console.warn('[CallService] Failed to open WhatsApp URL:', error);
+        return false;
+      }
     }
   }
 

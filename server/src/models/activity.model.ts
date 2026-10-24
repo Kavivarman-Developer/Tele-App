@@ -27,6 +27,7 @@ export interface IActivity {
   phone?: string | null;
   branch?: string | null;
   type: 'CALL' | 'UPDATE';
+  direction?: 'OUTGOING' | 'INCOMING';
   connected: boolean;
   notConnectedReason?: NotConnectedReason | null;
   stage: string;
@@ -34,6 +35,11 @@ export interface IActivity {
   remark?: string | null;
   followUpAt?: Date | null;
   durationSeconds: number;
+  callLogId?: string | null;
+  idempotencyKey?: string | null;
+  classificationReason?: string | null;
+  dealAmount?: number | null;
+  currency?: string | null;
   answers: IEngagementAnswer[];
   createdAt: Date;
   updatedAt: Date;
@@ -81,6 +87,12 @@ const activitySchema = new Schema<IActivityDoc>(
       enum: ['CALL', 'UPDATE'],
       default: 'CALL',
     },
+    direction: {
+      type: String,
+      enum: ['OUTGOING', 'INCOMING'],
+      default: 'OUTGOING',
+      index: true,
+    },
     connected: {
       type: Boolean,
       required: [true, 'Connected status is required'],
@@ -114,6 +126,30 @@ const activitySchema = new Schema<IActivityDoc>(
       default: 0,
       min: 0,
     },
+    callLogId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    idempotencyKey: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    classificationReason: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    dealAmount: {
+      type: Number,
+      default: null,
+    },
+    currency: {
+      type: String,
+      default: 'INR',
+      trim: true,
+    },
     answers: {
       type: [engagementAnswerSchema],
       default: [],
@@ -136,7 +172,10 @@ const activitySchema = new Schema<IActivityDoc>(
   },
 );
 
+activitySchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 activitySchema.index({ leadId: 1, createdAt: -1 });
+activitySchema.index({ phone: 1, direction: 1, createdAt: -1 });
+activitySchema.index({ userId: 1, direction: 1, createdAt: -1 });
 activitySchema.index({ phone: 1, createdAt: -1 });
 activitySchema.index({ branch: 1, createdAt: -1 });
 activitySchema.index({ userId: 1, createdAt: -1 });

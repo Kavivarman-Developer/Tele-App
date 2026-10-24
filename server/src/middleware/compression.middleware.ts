@@ -14,7 +14,7 @@ export const compressionMiddleware = (req: Request, res: Response, next: NextFun
 
   const originalSend = res.send.bind(res);
 
-  res.send = function (body: any): Response {
+  res.send = function (body: unknown): Response {
     if (!body) {
       return originalSend(body);
     }

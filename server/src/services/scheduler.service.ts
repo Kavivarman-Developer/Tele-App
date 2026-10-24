@@ -4,6 +4,7 @@ import { Campaign } from '../models/campaign.model';
 import { User } from '../models/user.model';
 import { SettingService } from './setting.service';
 import { LeadAssignmentService } from './lead-assignment.service';
+import { DistributedLock } from '../utils/distributedLock';
 
 export interface ISchedulerService {
   start(): void;
@@ -16,21 +17,33 @@ export class CronSchedulerService implements ISchedulerService {
   private tasks: ScheduledTask[] = [];
 
   public start(): void {
-    // Check due follow-ups every minute
+    // Check due follow-ups every minute with PM2 cluster distributed lock
     const followUpTask = cron.schedule('* * * * *', async () => {
+      const lockKey = 'SCHEDULER_CHECK_FOLLOWUPS';
+      const acquired = await DistributedLock.acquire(lockKey, 55);
+      if (!acquired) return;
+
       try {
         await this.checkDueFollowUps();
       } catch (err) {
         console.error('[Scheduler] Error checking due follow-ups:', err);
+      } finally {
+        await DistributedLock.release(lockKey);
       }
     });
 
-    // Check overdue leads of deactivated agents hourly
+    // Check overdue leads of deactivated agents hourly with distributed lock
     const reassignTask = cron.schedule('0 * * * *', async () => {
+      const lockKey = 'SCHEDULER_REASSIGN_OVERDUE';
+      const acquired = await DistributedLock.acquire(lockKey, 300);
+      if (!acquired) return;
+
       try {
         await this.reassignOverdueDeactivatedAgentLeads();
       } catch (err) {
         console.error('[Scheduler] Error reassigning overdue leads of deactivated agents:', err);
+      } finally {
+        await DistributedLock.release(lockKey);
       }
     });
 

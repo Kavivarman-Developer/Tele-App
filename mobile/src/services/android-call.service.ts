@@ -10,6 +10,9 @@ interface RawCallLogEntry {
   dateTime?: string;
   type?: string;
   rawType?: number;
+  simId?: string | number;
+  subId?: string | number;
+  phoneAccountId?: string;
 }
 
 export class AndroidCallService extends DeviceCallService implements ICallService {
@@ -242,12 +245,20 @@ export class AndroidCallService extends DeviceCallService implements ICallServic
         `[AndroidCallService] Verified outbound call log for ${phone}: duration=${durationSeconds}s, connected=${isConnected}`,
       );
 
+      const simAttr =
+        matchedLog.simId != null
+          ? String(matchedLog.simId)
+          : matchedLog.subId != null
+          ? String(matchedLog.subId)
+          : undefined;
+
       return {
         callPlaced: true,
         durationSeconds: Math.max(0, durationSeconds),
         connected: isConnected,
         rawType: matchedLog.type || String(matchedLog.rawType),
         matchedLog: true,
+        simId: simAttr,
       };
     }
 

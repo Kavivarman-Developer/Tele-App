@@ -8,6 +8,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { CrmToast } from './src/components/CrmToast';
 import { apiClient } from './src/api/client';
 import { notificationService } from './src/services/notification.service';
+import { useOutboxStore } from './src/store/outboxStore';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +25,9 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     // 1. Initialize Android push & local reminder notification channels & request permission
     notificationService.requestPermissions().catch(() => {});
+
+    // 1b. Initialize Durable Offline Outbox queue & network monitor
+    useOutboxStore.getState().init().catch(() => {});
 
     // 2. Eager server warm-up pinger: ping /health asynchronously on app launch to wake Render instance
     apiClient.get('/health').catch(() => {

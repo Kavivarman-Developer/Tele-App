@@ -44,7 +44,10 @@ export class ActivityController {
       if (!req.user) {
         throw new AppError('Authentication required', 401);
       }
-      const activities = await ActivityService.getUserActivities(req.user, req.query as any);
+      const activities = await ActivityService.getUserActivities(
+        req.user,
+        req.query as unknown as Parameters<typeof ActivityService.getUserActivities>[1],
+      );
       res.status(200).json({ activities });
     } catch (error) {
       next(error);

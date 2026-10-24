@@ -50,7 +50,6 @@ export class LeadIngestService {
       throw new AppError('Campaign pipeline is missing or contains no stages', 400);
     }
 
-    // First stage sorted by order
     const sortedStages = [...pipeline.stages].sort((a, b) => a.order - b.order);
     const initialStage = sortedStages[0];
 
@@ -61,126 +60,158 @@ export class LeadIngestService {
       failed: [],
     };
 
-    for (const row of rows) {
-      const name = typeof row.name === 'string' ? row.name.trim() : '';
-      if (!name) {
-        result.failed.push({ row, reason: 'Missing or empty lead name' });
-        continue;
-      }
+    // Pre-cache active agents for fast matching
+    const activeAgents = await User.find({ role: 'AGENT', isActive: true });
+    const agentByEmail = new Map<string, Types.ObjectId>();
+    const agentByName = new Map<string, Types.ObjectId>();
+    const agentById = new Map<string, Types.ObjectId>();
 
-      // Normalize phone number
-      const normalizedPhone = normalizePhone(row.phone);
-      if (!normalizedPhone) {
-        result.failed.push({
-          row,
-          reason: 'Invalid phone number (must be a valid 10-digit number)',
-        });
-        continue;
-      }
+    for (const ag of activeAgents) {
+      agentByEmail.set(ag.email.toLowerCase(), ag._id);
+      agentByName.set(ag.name.toLowerCase(), ag._id);
+      agentById.set(ag._id.toString(), ag._id);
+    }
 
-      const email = typeof row.email === 'string' ? row.email.trim().toLowerCase() : '';
+    // Chunk size: 250 rows per batch
+    const CHUNK_SIZE = 250;
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      const chunk = rows.slice(i, i + CHUNK_SIZE);
+      const validChunkRows: Array<{
+        row: RawLeadRow;
+        name: string;
+        normalizedPhone: string;
+        email: string;
+        customProperties: Map<string, string>;
+      }> = [];
 
-      // Collect custom properties from any extra keys
-      const customProperties = new Map<string, string>();
-      for (const [key, val] of Object.entries(row)) {
-        const lowerKey = key.toLowerCase();
-        if (lowerKey !== 'name' && lowerKey !== 'phone' && lowerKey !== 'email' && val !== undefined && val !== null) {
-          customProperties.set(key, String(val).trim());
+      for (const row of chunk) {
+        const name = typeof row.name === 'string' ? row.name.trim() : '';
+        if (!name) {
+          result.failed.push({ row, reason: 'Missing or empty lead name' });
+          continue;
         }
+
+        const normalizedPhone = normalizePhone(row.phone);
+        if (!normalizedPhone) {
+          result.failed.push({
+            row,
+            reason: 'Invalid phone number (must be a valid 10-digit number)',
+          });
+          continue;
+        }
+
+        const email = typeof row.email === 'string' ? row.email.trim().toLowerCase() : '';
+        const customProperties = new Map<string, string>();
+        for (const [key, val] of Object.entries(row)) {
+          const lowerKey = key.toLowerCase();
+          if (
+            lowerKey !== 'name' &&
+            lowerKey !== 'phone' &&
+            lowerKey !== 'email' &&
+            val !== undefined &&
+            val !== null
+          ) {
+            customProperties.set(key, String(val).trim());
+          }
+        }
+
+        validChunkRows.push({
+          row,
+          name,
+          normalizedPhone,
+          email,
+          customProperties,
+        });
       }
 
-      // Check for existing lead with identical campaignId and phone
-      const existingLead = await Lead.findOne({
+      if (validChunkRows.length === 0) continue;
+
+      // Batch query existing leads for the current chunk's phone numbers
+      const chunkPhones = validChunkRows.map((r) => r.normalizedPhone);
+      const existingLeads = await Lead.find({
         campaignId: campaign._id,
-        phone: normalizedPhone,
+        phone: { $in: chunkPhones },
       });
 
-      if (existingLead) {
-        if (campaign.duplicateMode === 'SKIP') {
-          result.skipped += 1;
-          continue;
-        }
-
-        if (campaign.duplicateMode === 'MERGE') {
-          // Merge custom properties
-          for (const [k, v] of customProperties.entries()) {
-            if (v) {
-              existingLead.customProperties.set(k, v);
-            }
-          }
-
-          if (email && !existingLead.email) {
-            existingLead.email = email;
-          }
-
-          // Reopen if closed, UNLESS customer is suppressed / Not Interested / Lost / DND
-          if (existingLead.status === 'CLOSED') {
-            const currentStageLower = (existingLead.stage || '').toLowerCase();
-            const isSuppressed =
-              currentStageLower === 'not interested' ||
-              currentStageLower === 'lost' ||
-              currentStageLower === 'closed' ||
-              (existingLead.tag && existingLead.tag.toUpperCase() === 'DND');
-
-            if (!isSuppressed) {
-              existingLead.status = 'OPEN';
-              existingLead.stage = initialStage.name;
-              existingLead.tag = null;
-            }
-          }
-
-          await existingLead.save();
-          result.merged += 1;
-          continue;
-        }
-
-        // If duplicateMode === 'CREATE_NEW', fall through to creation
+      const existingMap = new Map<string, ILeadDoc>();
+      for (const el of existingLeads) {
+        existingMap.set(el.phone, el);
       }
 
-      // Assign lead
-      let assignedTo: Types.ObjectId | null = null;
+      const leadsToInsert: Partial<ILeadDoc>[] = [];
 
-      if (targetAgentId && Types.ObjectId.isValid(targetAgentId)) {
-        // Direct target agent specified (e.g. from UI selector)
-        assignedTo = new Types.ObjectId(targetAgentId);
-      } else if (row.assignedTo || row.agent) {
-        // Row-level agent specified in CSV (e.g. email or name or ID)
-        const agentIdentifier = String(row.assignedTo || row.agent).trim();
-        const isOid = Types.ObjectId.isValid(agentIdentifier);
-        const matchedAgent = await User.findOne({
-          $or: [
-            { email: agentIdentifier.toLowerCase() },
-            { name: new RegExp(`^${agentIdentifier}$`, 'i') },
-            ...(isOid ? [{ _id: new Types.ObjectId(agentIdentifier) }] : []),
-          ],
-          role: 'AGENT',
-          isActive: true,
-        });
-        if (matchedAgent) {
-          assignedTo = matchedAgent._id;
+      for (const item of validChunkRows) {
+        const existingLead = existingMap.get(item.normalizedPhone);
+
+        if (existingLead) {
+          if (campaign.duplicateMode === 'SKIP') {
+            result.skipped += 1;
+            continue;
+          }
+
+          if (campaign.duplicateMode === 'MERGE') {
+            for (const [k, v] of item.customProperties.entries()) {
+              if (v) existingLead.customProperties.set(k, v);
+            }
+            if (item.email && !existingLead.email) {
+              existingLead.email = item.email;
+            }
+
+            if (existingLead.status === 'CLOSED') {
+              const currentStageLower = (existingLead.stage || '').toLowerCase();
+              const isSuppressed =
+                currentStageLower === 'not interested' ||
+                currentStageLower === 'lost' ||
+                currentStageLower === 'closed' ||
+                (existingLead.tag && existingLead.tag.toUpperCase() === 'DND');
+
+              if (!isSuppressed) {
+                existingLead.status = 'OPEN';
+                existingLead.stage = initialStage.name;
+                existingLead.tag = null;
+              }
+            }
+
+            await existingLead.save();
+            result.merged += 1;
+            continue;
+          }
+        }
+
+        // Resolve Assigned Agent
+        let assignedTo: Types.ObjectId | null = null;
+        if (targetAgentId && Types.ObjectId.isValid(targetAgentId)) {
+          assignedTo = new Types.ObjectId(targetAgentId);
+        } else if (item.row.assignedTo || item.row.agent) {
+          const ident = String(item.row.assignedTo || item.row.agent).trim();
+          assignedTo =
+            agentByEmail.get(ident.toLowerCase()) ||
+            agentByName.get(ident.toLowerCase()) ||
+            agentById.get(ident) ||
+            (await LeadAssignmentService.assignLead(campaign, item.customProperties));
         } else {
-          assignedTo = await LeadAssignmentService.assignLead(campaign, customProperties);
+          assignedTo = await LeadAssignmentService.assignLead(campaign, item.customProperties);
         }
-      } else {
-        assignedTo = await LeadAssignmentService.assignLead(campaign, customProperties);
+
+        leadsToInsert.push({
+          campaignId: campaign._id,
+          name: item.name,
+          phone: item.normalizedPhone,
+          email: item.email,
+          source,
+          customProperties: item.customProperties,
+          assignedTo,
+          stage: initialStage.name,
+          tag: null,
+          status: initialStage.isClosed ? 'CLOSED' : 'OPEN',
+          attemptCount: 0,
+        });
       }
 
-      const newLead: Partial<ILeadDoc> = {
-        campaignId: campaign._id,
-        name,
-        phone: normalizedPhone,
-        email,
-        source,
-        customProperties,
-        assignedTo,
-        stage: initialStage.name,
-        tag: null,
-        status: initialStage.isClosed ? 'CLOSED' : 'OPEN',
-        attemptCount: 0,
-      };
-
-      await Lead.create(newLead);
-      result.created += 1;
+      if (leadsToInsert.length > 0) {
+        await Lead.insertMany(leadsToInsert, { ordered: false });
+        result.created += leadsToInsert.length;
+      }
     }
 
     return result;

@@ -103,7 +103,16 @@ class CallSessionManager {
 
       let result: DetectedCallResult = { connected: false, durationSeconds: 0 };
       try {
+        // Bounded retry loop (immediate, 600ms, 1200ms) to accommodate asynchronous OEM call-log flushes
         result = await callService.getCallResult(lead.phone, startTime);
+        if (!result.callPlaced && !result.matchedLog) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          result = await callService.getCallResult(lead.phone, startTime);
+        }
+        if (!result.callPlaced && !result.matchedLog) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          result = await callService.getCallResult(lead.phone, startTime);
+        }
       } catch (err) {
         console.warn('[CallSession] Error fetching call result:', err);
         result = { connected: false, durationSeconds: 0 };
@@ -115,6 +124,17 @@ class CallSessionManager {
       // NO call log entry exists. DO NOT increment call count or log activity!
       // ==============================================================
       const wasCallActuallyPlaced = result.callPlaced ?? result.matchedLog ?? false;
+
+      let classificationReason: string;
+      if (!wasCallActuallyPlaced) {
+        classificationReason = 'AGENT_ABORTED_OR_CANCELLED';
+      } else if (result.connected && result.durationSeconds >= 5) {
+        classificationReason = 'CONNECTED_TALK_TIME';
+      } else if (result.connected && result.durationSeconds > 0) {
+        classificationReason = 'BRIEF_CONNECTED';
+      } else {
+        classificationReason = 'UNANSWERED_0S';
+      }
 
       if (!wasCallActuallyPlaced) {
         console.log(
@@ -129,6 +149,11 @@ class CallSessionManager {
         return;
       }
 
+      const stableCallLogId =
+        (result as any).logId ||
+        `call-${startTime}-${lead.phone.replace(/\D/g, '').slice(-10)}`;
+      const idempotencyKey = `disp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
       // Record strictly 1 single deduplicated activity in useLeadHistoryStore
       try {
         const user = useAuthStore.getState().user;
@@ -140,6 +165,7 @@ class CallSessionManager {
           branch: user?.branch,
           connected: result.connected,
           type: 'CALL',
+          direction: 'OUTGOING',
           notConnectedReason: result.connected ? undefined : 'DID_NOT_PICK',
           stage: result.connected
             ? lead.stage === 'New'
@@ -148,6 +174,9 @@ class CallSessionManager {
             : 'Not Connected',
           durationSeconds: result.connected ? result.durationSeconds : 0,
           remark: result.connected ? 'Call completed' : 'Call not answered',
+          callLogId: stableCallLogId,
+          idempotencyKey,
+          classificationReason,
         });
       } catch (logErr) {
         console.warn('[CallSession] Failed to auto-log call activity:', logErr);
@@ -155,7 +184,11 @@ class CallSessionManager {
 
       // Invoke optional callback if the caller registered one
       try {
-        session.onCallComplete?.(result);
+        session.onCallComplete?.({
+          ...result,
+          callLogId: stableCallLogId,
+          classificationReason,
+        });
       } catch (cbErr) {
         console.warn('[CallSession] onCallComplete callback error:', cbErr);
       }
@@ -172,6 +205,9 @@ class CallSessionManager {
               callAttempt: true,
               detectionMethod: 'AUTOMATIC',
               autoOpenNotConnectedSheet: !result.connected,
+              callLogId: stableCallLogId,
+              idempotencyKey,
+              classificationReason,
               ...(session.queue && session.queueIndex !== undefined
                 ? { queue: session.queue, queueIndex: session.queueIndex }
                 : {}),

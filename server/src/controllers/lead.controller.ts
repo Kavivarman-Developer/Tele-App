@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import { parse } from 'csv-parse/sync';
 import { LeadIngestService, RawLeadRow } from '../services/lead-ingest.service';
 import { LeadService } from '../services/lead.service';
+import { WebhookIngestService } from '../services/webhook-ingest.service';
 import { Campaign } from '../models/campaign.model';
 import { ListCampaignLeadsQuery, MyLeadsQuery } from '../validations/lead.validation';
 import { AppError } from '../utils/AppError';
@@ -257,10 +258,42 @@ export class LeadController {
       }
       const { id } = req.params;
       const { name, phone, email } = req.body;
-      const lead = await LeadService.updateLead(id, { name, phone, email });
+      const lead = await LeadService.updateLead(req.user, id, { name, phone, email });
       res.status(200).json({ status: 'ok', lead });
     } catch (error) {
       next(error);
+    }
+  }
+
+  public static async handleWebhook(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const signature =
+        (req.headers['x-webhook-signature'] as string) ||
+        (req.headers['x-hub-signature-256'] as string);
+
+      const secret = process.env.WEBHOOK_SECRET || 'hi_talk_default_webhook_secret_key_2026';
+      const rawString = JSON.stringify(req.body);
+
+      // Verify HMAC signature unless in non-production test without signature
+      if (process.env.NODE_ENV === 'production' || signature) {
+        const isValid = WebhookIngestService.verifySignature(rawString, signature, secret);
+        if (!isValid) {
+          throw new AppError('Invalid or missing webhook signature', 401);
+        }
+      }
+
+      const lead = await WebhookIngestService.ingestLead(req.body, req);
+      res.status(201).json({
+        status: 'success',
+        message: 'Lead ingested successfully',
+        data: { leadId: lead._id, assignedTo: lead.assignedTo },
+      });
+    } catch (err) {
+      next(err);
     }
   }
 }

@@ -196,7 +196,7 @@ export class CampaignService {
       };
     });
 
-    return result as any;
+    return result as unknown as ICampaignDoc[];
   }
 
   public static async getCampaignById(

@@ -12,7 +12,7 @@
     "seed": "ts-node-dev --transpile-only src/scripts/seed.ts",
     "seed:demo": "ts-node-dev --transpile-only src/scripts/seed-demo.ts",
     "clean:leads": "ts-node-dev --transpile-only src/scripts/clean-leads.ts",
-    "test": "node --test tests/retry-calculator.test.cjs"
+    "test": "node --test tests/**/*.test.cjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

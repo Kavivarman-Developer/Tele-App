@@ -90,6 +90,47 @@ export class RetryRuleService {
   }
 
   /**
+   * Adjusts a scheduled follow-up or retry Date to fall strictly within legal calling hours
+   * (09:00 AM to 20:00 PM). If scheduled outside this window, rolls over to 09:30 AM next morning.
+   *
+   * @param date The initial scheduled date
+   * @param timeZoneOffsetMinutes Offset in minutes (defaults to +330 for Indian Standard Time UTC+5:30)
+   * @param startHour Morning window open (09:00 AM)
+   * @param startMinute Morning window target minute (09:30 AM)
+   * @param endHour Evening window close (20:00 / 8:00 PM)
+   */
+  public static adjustForCallingHours(
+    date: Date,
+    timeZoneOffsetMinutes = 330,
+    startHour = 9,
+    startMinute = 30,
+    endHour = 20,
+  ): Date {
+    const utcMs = date.getTime();
+    const localMs = utcMs + timeZoneOffsetMinutes * 60 * 1000;
+    const localDate = new Date(localMs);
+
+    const hours = localDate.getUTCHours();
+    const minutes = localDate.getUTCMinutes();
+    const currentDecimalHour = hours + minutes / 60;
+
+    // If outside 09:00 - 20:00
+    if (currentDecimalHour >= endHour || currentDecimalHour < startHour) {
+      const rolledLocalDate = new Date(localDate);
+      if (currentDecimalHour >= endHour) {
+        // Next day
+        rolledLocalDate.setUTCDate(rolledLocalDate.getUTCDate() + 1);
+      }
+      rolledLocalDate.setUTCHours(startHour, startMinute, 0, 0);
+
+      const adjustedUtcMs = rolledLocalDate.getTime() - timeZoneOffsetMinutes * 60 * 1000;
+      return new Date(adjustedUtcMs);
+    }
+
+    return date;
+  }
+
+  /**
    * Pure calculation function: calculates the next follow-up Date based on the retry rule and
    * the consecutive count of not-connected attempts.
    *
@@ -110,10 +151,11 @@ export class RetryRuleService {
 
     const stepIndex = consecutiveAttempts - 1;
 
-    // If within defined steps, calculate future date
+    // If within defined steps, calculate future date and adjust for legal calling hours
     if (stepIndex >= 0 && stepIndex < rule.steps.length) {
       const delayMs = rule.steps[stepIndex].delayMinutes * 60 * 1000;
-      return new Date(baseTime.getTime() + delayMs);
+      const scheduled = new Date(baseTime.getTime() + delayMs);
+      return this.adjustForCallingHours(scheduled);
     }
 
     // Steps exhausted -> leave follow-up as the agent chose
