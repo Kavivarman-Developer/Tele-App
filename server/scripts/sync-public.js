@@ -23,6 +23,14 @@ function syncTo(target) {
     fs.copyFileSync(srcHtml, path.join(dir, 'index.html'));
   });
 
+  // 3. Copy Web Admin Portal (/admin)
+  const srcAdmin = path.join(publicDir, 'admin', 'index.html');
+  if (fs.existsSync(srcAdmin)) {
+    const adminDir = path.join(target, 'admin');
+    fs.mkdirSync(adminDir, { recursive: true });
+    fs.copyFileSync(srcAdmin, path.join(adminDir, 'index.html'));
+  }
+
   console.log(`[sync-public] Successfully synced static pages to ${target}`);
   return true;
 }
