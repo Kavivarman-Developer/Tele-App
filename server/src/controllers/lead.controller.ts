@@ -265,6 +265,61 @@ export class LeadController {
     }
   }
 
+  public static async tagLeadToManager(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401);
+      }
+      const taggedLead = await LeadService.tagLeadToManager(req.user, {
+        leadId: req.body.leadId || req.params.id,
+        customerName: req.body.customerName,
+        customerPhone: req.body.customerPhone,
+        targetRole: req.body.targetRole,
+        reason: req.body.reason,
+        note: req.body.note,
+      });
+      res.status(201).json({ status: 'success', taggedLead });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public static async getTaggedLeads(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401);
+      }
+      const taggedLeads = await LeadService.getTaggedLeads(req.user);
+      res.status(200).json({ status: 'success', taggedLeads });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public static async dismissTaggedLead(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401);
+      }
+      const result = await LeadService.dismissTaggedLead(req.user, req.params.id);
+      res.status(200).json({ status: 'success', ...result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   public static async handleWebhook(
     req: Request,
     res: Response,

@@ -2,6 +2,8 @@ import { Types, PipelineStage } from 'mongoose';
 import { Lead, ILeadDoc } from '../models/lead.model';
 import { Campaign } from '../models/campaign.model';
 import { User, IUserDoc } from '../models/user.model';
+import { TaggedLead } from '../models/tagged-lead.model';
+import { Activity } from '../models/activity.model';
 import {
   ListCampaignLeadsQuery,
   MyLeadsQuery,
@@ -630,4 +632,124 @@ export class LeadService {
 
     return lead;
   }
+
+  public static async tagLeadToManager(
+    requester: IUserDoc,
+    input: {
+      leadId: string;
+      customerName?: string;
+      customerPhone?: string;
+      targetRole?: 'BOTH' | 'MANAGER' | 'ADMIN';
+      reason: string;
+      note?: string;
+    },
+  ) {
+    if (!Types.ObjectId.isValid(input.leadId)) {
+      throw new AppError('Invalid leadId format', 400);
+    }
+
+    const lead = await Lead.findById(input.leadId);
+    if (!lead) {
+      throw new AppError('Lead not found', 404);
+    }
+
+    // Role-based permission check: AGENT can tag assigned leads or leads in their campaigns
+    if (requester.role === 'AGENT') {
+      const isAssigned = lead.assignedTo?.toString() === requester._id.toString();
+      if (!isAssigned) {
+        const campaign = await Campaign.findById(lead.campaignId);
+        const inCampaign = campaign?.agentIds.some((id) => id.toString() === requester._id.toString());
+        if (!inCampaign) {
+          throw new AppError('Forbidden: Cannot tag a lead not assigned to you or your campaign', 403);
+        }
+      }
+    }
+
+    const customerName = input.customerName || lead.name;
+    const customerPhone = input.customerPhone || lead.phone;
+    const branchName = requester.branch || lead.branch || 'Main Branch';
+    const targetRole = input.targetRole || 'BOTH';
+
+    const taggedLead = await TaggedLead.create({
+      leadId: lead._id,
+      customerName,
+      customerPhone,
+      agentId: requester._id,
+      agentName: requester.name,
+      branch: branchName,
+      targetRole,
+      reason: input.reason,
+      note: input.note || input.reason,
+      status: 'ACTIVE',
+      dismissedBy: [],
+    });
+
+    // Also record activity on lead so timeline reflects it
+    try {
+      await Activity.create({
+        leadId: lead._id,
+        campaignId: lead.campaignId,
+        userId: requester._id,
+        phone: customerPhone,
+        branch: branchName,
+        type: 'UPDATE',
+        connected: false,
+        stage: lead.stage || 'Tagged to Manager',
+        remark: `🏷️ Tagged to ${targetRole}: [${input.reason}] ${input.note || ''}`.trim(),
+        durationSeconds: 0,
+        answers: [],
+      });
+    } catch {
+      // Non-fatal
+    }
+
+    await AuditService.log({
+      userId: requester._id,
+      userEmail: requester.email,
+      userRole: requester.role,
+      action: 'LEAD_TAGGED_TO_MANAGER',
+      resourceType: 'Lead',
+      resourceId: lead._id.toString(),
+      details: {
+        taggedLeadId: taggedLead._id.toString(),
+        targetRole,
+        reason: input.reason,
+        note: input.note,
+      },
+    });
+
+    return taggedLead;
+  }
+
+  public static async getTaggedLeads(requester: IUserDoc) {
+    const filter: Record<string, unknown> = {
+      status: 'ACTIVE',
+      dismissedBy: { $ne: requester._id },
+    };
+
+    if (requester.role === 'ADMIN') {
+      filter.targetRole = { $in: ['ADMIN', 'BOTH'] };
+    } else if (requester.role === 'MANAGER') {
+      filter.targetRole = { $in: ['MANAGER', 'BOTH'] };
+      if (requester.branch) {
+        filter.$or = [{ branch: requester.branch }, { branch: null }];
+      }
+    } else {
+      filter.agentId = requester._id;
+    }
+
+    const list = await TaggedLead.find(filter).sort({ createdAt: -1 }).limit(50);
+    return list;
+  }
+
+  public static async dismissTaggedLead(requester: IUserDoc, tagId: string) {
+    if (!Types.ObjectId.isValid(tagId)) {
+      throw new AppError('Invalid tagId format', 400);
+    }
+    await TaggedLead.findByIdAndUpdate(tagId, {
+      $addToSet: { dismissedBy: requester._id },
+    });
+    return { success: true };
+  }
 }
+
