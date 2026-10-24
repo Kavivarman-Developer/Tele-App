@@ -307,11 +307,12 @@ const HomeScreenContent: React.FC = () => {
     refetch: refetchMyLeads,
     isRefetching: isMyLeadsRefetching,
   } = useQuery({
-    queryKey: ['homeMyLeadsQueue', selectedCampaignId],
+    queryKey: ['homeMyLeadsQueue', selectedCampaignId, callScope],
     queryFn: () =>
       fetchMyLeads({
         type: 'ALL',
         campaignId: selectedCampaignId || undefined,
+        userId: !isAgent && callScope === 'MY' && user?._id ? String(user._id) : undefined,
         limit: 5000,
       }),
     refetchInterval: 15000,

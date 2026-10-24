@@ -30,6 +30,7 @@ import {
   ChevronDown,
   Download,
   Users,
+  UserCheck,
   Phone,
   MessageCircle,
   Flame,
@@ -78,6 +79,8 @@ interface ScreenshotLead {
   campaignId?: string;
   attempts: number;
   assignedAgent: string;
+  assignedToId?: string;
+  assignedToName?: string;
   status: 'New' | 'Interested' | 'Follow-up' | 'Not connected' | 'Not Interested';
   priority: 'High' | 'Medium' | 'Low';
   lastContact: string;
@@ -253,6 +256,7 @@ const MyLeadsScreenContent: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'New' | 'Interested' | 'Follow-up' | 'Not connected' | 'Not Interested'>('All');
+  const [assignmentScope, setAssignmentScope] = useState<'ALL' | 'ME'>('ALL');
   const selectedCampaign = selectedCampaignName || 'All campaigns';
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   const [quickModalLead, setQuickModalLead] = useState<Lead | null>(null);
@@ -364,13 +368,19 @@ const MyLeadsScreenContent: React.FC = () => {
           ? 'Interested'
           : 'Follow-up';
 
+      const assignedObj = typeof l?.assignedTo === 'object' && l.assignedTo ? (l.assignedTo as any) : null;
+      const assignedId = assignedObj?._id ? String(assignedObj._id) : typeof l?.assignedTo === 'string' ? l.assignedTo : '';
+      const isAssignedToCurrentUser = !!(user?._id && (assignedId === String(user._id)));
+
       const agentDisplay = isAgent
         ? `${user?.name || 'You'} (${user?.branch || 'Agent'})`
-        : l?.assignedTo
-        ? typeof l.assignedTo === 'object'
-          ? (l.assignedTo as any)?.name || 'Assigned Agent'
-          : 'Assigned Agent'
-        : 'Assigned Agent';
+        : isAssignedToCurrentUser
+        ? `${user?.name || 'You'} (You)`
+        : assignedObj?.name
+        ? `${assignedObj.name} (${assignedObj.role || assignedObj.branch || 'User'})`
+        : assignedId
+        ? 'Assigned User'
+        : 'Unassigned';
 
       const tagUpper = (l?.tag || '').toString().toUpperCase();
       const campPriority = typeof l?.campaign === 'object' ? (l.campaign as any)?.priority : undefined;
@@ -394,6 +404,8 @@ const MyLeadsScreenContent: React.FC = () => {
         campaignId: cId,
         attempts: Number(l?.attemptCount || 0),
         assignedAgent: agentDisplay,
+        assignedToId: assignedId,
+        assignedToName: assignedObj?.name || (isAssignedToCurrentUser ? (user?.name || 'You') : ''),
         status: stg as any,
         priority: leadPriority,
         lastContact: l?.updatedAt
@@ -418,10 +430,20 @@ const MyLeadsScreenContent: React.FC = () => {
     return Array.from(new Set([...list, ...backendNames]));
   }, [campaignData, combinedLeads]);
 
+  const myAssignedTotalCount = useMemo(() => {
+    const myId = user?._id ? String(user._id) : '';
+    if (!myId) return 0;
+    return combinedLeads.filter((l) => l.assignedToId === myId).length;
+  }, [combinedLeads, user?._id]);
+
   // Compute status pill counts based on active campaign selection
   const counts = useMemo(() => {
     const selCampLower = (selectedCampaign || 'All campaigns').toLowerCase();
+    const myId = user?._id ? String(user._id) : '';
     const scopedLeads = combinedLeads.filter((l) => {
+      if (isManagerOrAdmin && assignmentScope === 'ME') {
+        if (l.assignedToId !== myId) return false;
+      }
       if (selectedCampaign === 'All campaigns') return true;
       return (
         (l.campaignName || '').toLowerCase() === selCampLower ||
@@ -436,14 +458,19 @@ const MyLeadsScreenContent: React.FC = () => {
     const notConn = scopedLeads.filter((l) => l.status === 'Not connected').length;
     const notInterested = scopedLeads.filter((l) => l.status === 'Not Interested').length;
     return { all, new: n, interested, followup, notConnected: notConn, notInterested };
-  }, [combinedLeads, selectedCampaign, selectedCampaignId]);
+  }, [combinedLeads, selectedCampaign, selectedCampaignId, isManagerOrAdmin, assignmentScope, user?._id]);
 
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     const selCampLower = (selectedCampaign || 'All campaigns').toLowerCase();
     const q = searchQuery.toLowerCase().trim();
+    const myId = user?._id ? String(user._id) : '';
 
     return combinedLeads.filter((lead) => {
+      if (isManagerOrAdmin && assignmentScope === 'ME') {
+        if (lead.assignedToId !== myId) return false;
+      }
+
       // Campaign filter (scoped strictly to selected campaign)
       if (selectedCampaign !== 'All campaigns') {
         const matchesName = (lead.campaignName || '').toLowerCase() === selCampLower;
@@ -480,7 +507,7 @@ const MyLeadsScreenContent: React.FC = () => {
       }
       return true;
     });
-  }, [combinedLeads, selectedFilter, selectedCampaign, searchQuery, selectedCampaignId]);
+  }, [combinedLeads, selectedFilter, selectedCampaign, searchQuery, selectedCampaignId, isManagerOrAdmin, assignmentScope, user?._id]);
 
   const [isExporting, setIsExporting] = useState(false);
 
@@ -839,6 +866,49 @@ const MyLeadsScreenContent: React.FC = () => {
               </Text>
             </TouchableOpacity>
           ))}
+        </View>
+      )}
+
+      {/* Assignment Scope Tabs (Admin & Manager): All Team Leads vs Assigned to Me */}
+      {isManagerOrAdmin && (
+        <View style={styles.assignmentScopeRow}>
+          <TouchableOpacity
+            style={[
+              styles.assignmentScopeBtn,
+              assignmentScope === 'ALL' && styles.assignmentScopeBtnActive,
+            ]}
+            onPress={() => setAssignmentScope('ALL')}
+            activeOpacity={0.7}
+          >
+            <Users size={13} color={assignmentScope === 'ALL' ? '#FFFFFF' : '#64748B'} />
+            <Text
+              style={[
+                styles.assignmentScopeText,
+                assignmentScope === 'ALL' && styles.assignmentScopeTextActive,
+              ]}
+            >
+              All Team Leads ({combinedLeads.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.assignmentScopeBtn,
+              assignmentScope === 'ME' && styles.assignmentScopeBtnActive,
+            ]}
+            onPress={() => setAssignmentScope('ME')}
+            activeOpacity={0.7}
+          >
+            <UserCheck size={13} color={assignmentScope === 'ME' ? '#FFFFFF' : '#0F9D58'} />
+            <Text
+              style={[
+                styles.assignmentScopeText,
+                assignmentScope === 'ME' && styles.assignmentScopeTextActive,
+              ]}
+            >
+              Assigned to Me ({myAssignedTotalCount})
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1421,6 +1491,36 @@ const styles = StyleSheet.create({
   dropdownTextActive: {
     fontWeight: '700',
     color: '#0F9D58',
+  },
+  assignmentScopeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  assignmentScopeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  assignmentScopeBtnActive: {
+    backgroundColor: '#0F9D58',
+    borderColor: '#0F9D58',
+  },
+  assignmentScopeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  assignmentScopeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   filterPillsRow: {
     flexDirection: 'row',

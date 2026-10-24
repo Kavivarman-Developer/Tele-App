@@ -1266,8 +1266,10 @@ export const LeadDetailScreen: React.FC = () => {
                       ]}
                     >
                       {selectedReassignUserId
-                        ? assignableAgents.find((a) => a._id === selectedReassignUserId)?.name ||
-                          'Select User'
+                        ? (() => {
+                            const found = assignableAgents.find((a) => a._id === selectedReassignUserId);
+                            return found ? `${found.name} (${found.role || 'User'})` : 'Select User';
+                          })()
                         : 'Select User'}
                     </Text>
                     <Text style={styles.dropdownCaret}>▼</Text>
@@ -1567,7 +1569,7 @@ export const LeadDetailScreen: React.FC = () => {
                     setShowReassignPicker(false);
                   }}
                 >
-                  <Text style={styles.pickerItemText}>{ag.name} ({ag.branch || 'Agent'})</Text>
+                  <Text style={styles.pickerItemText}>{ag.name} ({ag.role || ag.branch || 'User'})</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>

@@ -161,6 +161,20 @@ export class LeadService {
       },
       { $unwind: '$campaign' },
       {
+        $lookup: {
+          from: 'users',
+          localField: 'assignedTo',
+          foreignField: '_id',
+          as: 'assignedUser',
+        },
+      },
+      {
+        $unwind: {
+          path: '$assignedUser',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
         $addFields: {
           priorityRank: {
             $switch: {
@@ -237,7 +251,19 @@ export class LeadService {
                 nextFollowUpAt: 1,
                 followUpDue: 1,
                 campaignId: 1,
-                assignedTo: 1,
+                assignedTo: {
+                  $cond: [
+                    { $ifNull: ['$assignedUser', false] },
+                    {
+                      _id: '$assignedUser._id',
+                      name: '$assignedUser.name',
+                      email: '$assignedUser.email',
+                      role: '$assignedUser.role',
+                      branch: '$assignedUser.branch',
+                    },
+                    '$assignedTo',
+                  ],
+                },
                 createdAt: 1,
                 updatedAt: 1,
                 customProperties: 1,
@@ -294,8 +320,11 @@ export class LeadService {
     }
 
     const targetUser = await User.findById(targetUserId);
-    if (!targetUser || targetUser.role !== 'AGENT' || !targetUser.isActive || !targetUser.canReceiveLeads) {
-      throw new AppError('Target user must be an active AGENT with canReceiveLeads enabled', 400);
+    if (!targetUser || !targetUser.isActive) {
+      throw new AppError('Target user must be an active user', 400);
+    }
+    if (targetUser.role === 'AGENT' && !targetUser.canReceiveLeads) {
+      throw new AppError('Target agent must have canReceiveLeads enabled', 400);
     }
 
     const previousAssignedTo = lead.assignedTo;
@@ -326,8 +355,11 @@ export class LeadService {
     campaignId?: string,
   ): Promise<{ modifiedCount: number }> {
     const toUser = await User.findById(toUserId);
-    if (!toUser || toUser.role !== 'AGENT' || !toUser.isActive || !toUser.canReceiveLeads) {
-      throw new AppError('Target user must be an active AGENT with canReceiveLeads enabled', 400);
+    if (!toUser || !toUser.isActive) {
+      throw new AppError('Target user must be an active user', 400);
+    }
+    if (toUser.role === 'AGENT' && !toUser.canReceiveLeads) {
+      throw new AppError('Target agent must have canReceiveLeads enabled', 400);
     }
 
     const filter: Record<string, unknown> = {

@@ -214,16 +214,11 @@ export class ActivityService {
     // Reassignment if requested
     if (input.reassignToUserId) {
       const targetUser = await User.findById(input.reassignToUserId);
-      if (
-        !targetUser ||
-        targetUser.role !== 'AGENT' ||
-        !targetUser.isActive ||
-        !targetUser.canReceiveLeads
-      ) {
-        throw new AppError(
-          'reassignToUserId must be an active AGENT with canReceiveLeads enabled',
-          400,
-        );
+      if (!targetUser || !targetUser.isActive) {
+        throw new AppError('reassignToUserId must be an active user', 400);
+      }
+      if (targetUser.role === 'AGENT' && !targetUser.canReceiveLeads) {
+        throw new AppError('Target agent must have canReceiveLeads enabled', 400);
       }
       lead.assignedTo = targetUser._id;
     }
