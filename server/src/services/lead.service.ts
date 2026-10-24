@@ -118,20 +118,40 @@ export class LeadService {
       if (query.userId) {
         matchStage.assignedTo = new Types.ObjectId(query.userId);
       }
+      if (query.campaignId) {
+        matchStage.campaignId = new Types.ObjectId(query.campaignId);
+      }
     } else if (requester.role === 'MANAGER') {
-      if (query.userId) {
-        matchStage.assignedTo = new Types.ObjectId(query.userId);
+      const managedCampaigns = await Campaign.find({ managerId: requester._id }, '_id');
+      const managedIds = managedCampaigns.map((c) => c._id);
+      if (query.campaignId) {
+        const reqCampId = new Types.ObjectId(query.campaignId);
+        if (!managedIds.some((id) => id.toString() === reqCampId.toString())) {
+          throw new AppError('Forbidden: You can only view leads for your own campaigns', 403);
+        }
+        matchStage.campaignId = reqCampId;
       } else {
-        const managedCampaigns = await Campaign.find({ managerId: requester._id }, '_id');
-        const managedIds = managedCampaigns.map((c) => c._id);
         matchStage.campaignId = { $in: managedIds };
       }
+      if (query.userId) {
+        matchStage.assignedTo = new Types.ObjectId(query.userId);
+      }
     } else {
+      // AGENT: strictly locked to own assigned leads, ignoring any query.userId
       matchStage.assignedTo = requester._id;
-    }
-
-    if (query.campaignId) {
-      matchStage.campaignId = new Types.ObjectId(query.campaignId);
+      if (query.campaignId) {
+        const campaign = await Campaign.findById(query.campaignId);
+        if (!campaign) {
+          throw new AppError('Campaign not found', 404);
+        }
+        const isAssigned = campaign.agentIds.some(
+          (aid) => aid.toString() === requester._id.toString(),
+        );
+        if (!isAssigned) {
+          throw new AppError('Forbidden: You are not assigned to this campaign', 403);
+        }
+        matchStage.campaignId = new Types.ObjectId(query.campaignId);
+      }
     }
 
     if (query.type === 'NEW') {

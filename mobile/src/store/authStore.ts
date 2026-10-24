@@ -141,6 +141,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async (): Promise<void> => {
     await storage.removeItem(TOKEN_KEY);
     await storage.removeItem(USER_KEY);
+    await storage.removeItem('tele_crm_my_leads_cache_v2');
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem('hi_talk_last_screen');
+        localStorage.removeItem('hi_talk_last_params');
+      } catch {}
+    }
     set({ user: null, token: null, error: null, isLoading: false });
     toast.info('You have been logged out safely.', 'Signed Out');
   },
