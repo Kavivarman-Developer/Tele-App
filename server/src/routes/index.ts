@@ -9,6 +9,8 @@ import settingRoutes from './setting.routes';
 import retryRuleRoutes from './retry-rule.routes';
 import reportRoutes from './report.routes';
 import branchRoutes from './branch.routes';
+import auditRoutes from './audit.routes';
+import agentBreakRoutes from './agent-break.routes';
 
 const router = Router();
 
@@ -23,5 +25,7 @@ router.use('/settings', settingRoutes);
 router.use('/retry-rules', retryRuleRoutes);
 router.use('/reports', reportRoutes);
 router.use('/branches', branchRoutes);
+router.use('/audit-logs', auditRoutes);
+router.use('/breaks', agentBreakRoutes);
 
 export default router;

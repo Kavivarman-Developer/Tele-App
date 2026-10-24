@@ -64,7 +64,7 @@ import {
   disposeLead,
   updateLeadDetails,
 } from '../api/leadApi';
-import { RootStackParamList, Activity, Lead, CustomerTemperature, NotConnectedReason, NotConnectedReasons, User, Campaign, PipelineStage } from '../types';
+import { RootStackParamList, Activity, Lead, CustomerTemperature, NotConnectedReason, NotConnectedReasons, User, Campaign, PipelineStage, DisposeLeadPayload } from '../types';
 import { colors, borderRadius, shadows } from '../theme';
 import { CallPermissionModal } from '../components/CallPermissionModal';
 import { LeadTimeline, deduplicateActivities } from '../components/LeadTimeline';
@@ -73,6 +73,8 @@ import { TagManagerModal } from '../components/TagManagerModal';
 import { notificationService } from '../services/notification.service';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { useAuthStore } from '../store/authStore';
+import { useOutboxStore } from '../store/outboxStore';
+import { OutboxStatusBanner } from '../components/OutboxStatusBanner';
 import { toast } from '../store/toastStore';
 import { getWhatsAppUrl, formatDisplayPhone, isLeadLostOrSuppressed } from '../utils/phoneUtils';
 
@@ -292,6 +294,10 @@ export const LeadDetailScreen: React.FC = () => {
   const [showCampaignPicker, setShowCampaignPicker] = useState<boolean>(false);
 
   const [remarks, setRemarks] = useState<string>('');
+  const [dealAmount, setDealAmount] = useState<string>(
+    lead.dealAmount ? String(lead.dealAmount) : '',
+  );
+  const [currency, setCurrency] = useState<string>(lead.currency || 'INR');
 
   // Modals for LEAD INFO
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
@@ -510,7 +516,7 @@ export const LeadDetailScreen: React.FC = () => {
           ? `Call Not Connected: ${NOT_CONNECTED_LABELS[notConnectedReason || 'DID_NOT_PICK'] || notConnectedReason || 'Did Not Pick'}`
           : undefined);
 
-      return await disposeLead(currentLead._id, {
+      const payload: DisposeLeadPayload = {
         phone: currentLead.phone,
         connected: isConnected,
         callAttempt: isCallAttempt,
@@ -522,7 +528,59 @@ export const LeadDetailScreen: React.FC = () => {
         durationSeconds: isConnected ? callDurationSeconds : 0,
         reassignToUserId: actionReassign && selectedReassignUserId ? selectedReassignUserId : undefined,
         copyToCampaignId: actionCopyCampaign && selectedCopyCampaignId ? selectedCopyCampaignId : undefined,
-      });
+        direction: routeParams.direction || 'OUTGOING',
+        callLogId: routeParams.callLogId,
+        idempotencyKey: routeParams.idempotencyKey || (`disp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`),
+        classificationReason: routeParams.classificationReason,
+        dealAmount: dealAmount.trim() ? parseFloat(dealAmount) : undefined,
+        currency: currency || 'INR',
+      };
+
+      try {
+        return await disposeLead(currentLead._id, payload);
+      } catch (err: any) {
+        // P4: If offline or network unreachable, enqueue in durable offline outbox
+        const isNetworkErr = !err?.response || err?.code === 'ERR_NETWORK' || !useOutboxStore.getState().isOnline;
+        if (isNetworkErr) {
+          await useOutboxStore.getState().enqueueMutation(
+            'DISPOSE_LEAD',
+            currentLead._id,
+            payload,
+            payload.idempotencyKey,
+          );
+          // Return optimistic local activity & lead update so telecaller queue seamlessly advances
+          return {
+            activity: {
+              _id: 'local_' + Date.now(),
+              leadId: currentLead._id,
+              userId: user?._id || '',
+              type: 'CALL',
+              stage: activeStage,
+              connected: isConnected,
+              durationSeconds: isConnected ? callDurationSeconds : 0,
+              remark: activeRemark,
+              direction: payload.direction,
+              callLogId: payload.callLogId,
+              idempotencyKey: payload.idempotencyKey,
+              classificationReason: payload.classificationReason,
+              dealAmount: payload.dealAmount,
+              currency: payload.currency,
+              createdAt: new Date().toISOString(),
+            },
+            lead: {
+              ...currentLead,
+              stage: activeStage,
+              tag: activeTag.toUpperCase() as any,
+              attemptCount: (currentLead.attemptCount || 0) + 1,
+              status: isClosing ? 'CLOSED' : 'OPEN',
+              dealAmount: payload.dealAmount,
+              currency: payload.currency,
+              nextFollowUpAt: finalFollowUp || undefined,
+            },
+          };
+        }
+        throw err;
+      }
     },
     onSuccess: (data, override) => {
       const activeStage = override?.stage || selectedState;
@@ -746,6 +804,7 @@ export const LeadDetailScreen: React.FC = () => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Lead Details</Text>
       </View>
+      <OutboxStatusBanner />
 
       {/* 2. SUBHEADER 2 TABS (LEAD INFO | DISPOSE LEAD) */}
       <View style={styles.tabBar}>
@@ -1270,6 +1329,24 @@ export const LeadDetailScreen: React.FC = () => {
                   }, 250);
                 }}
               />
+            </View>
+
+            {/* 4b. Deal Value & Currency (P11.4) */}
+            <View style={styles.fieldSection}>
+              <Text style={styles.fieldLabel}>Deal Value (Optional)</Text>
+              <View style={styles.dealRow}>
+                <View style={styles.currencyBadge}>
+                  <Text style={styles.currencyBadgeText}>{currency}</Text>
+                </View>
+                <TextInput
+                  value={dealAmount}
+                  onChangeText={setDealAmount}
+                  placeholder="e.g. 25000"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                  style={styles.dealInput}
+                />
+              </View>
             </View>
 
             {/* 5. Save & Update Lead Button */}
@@ -2168,6 +2245,37 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
     padding: 12,
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  dealRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  currencyBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+  },
+  currencyBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  dealInput: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 12,
     fontSize: 14,
     color: '#1F2937',
   },

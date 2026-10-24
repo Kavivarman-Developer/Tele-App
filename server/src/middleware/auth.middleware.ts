@@ -6,6 +6,7 @@ import { AppError } from '../utils/AppError';
 interface TokenPayload {
   id: string;
   role: string;
+  tokenVersion?: number;
 }
 
 export const authenticate = async (
@@ -42,6 +43,12 @@ export const authenticate = async (
 
     if (!user.isActive) {
       throw new AppError('User account has been deactivated. Access denied.', 401);
+    }
+
+    if (decoded.tokenVersion !== undefined && user.tokenVersion !== undefined) {
+      if (decoded.tokenVersion !== user.tokenVersion) {
+        throw new AppError('Session has expired or was revoked. Please log in again.', 401);
+      }
     }
 
     req.user = user;

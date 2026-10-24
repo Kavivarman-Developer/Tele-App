@@ -10,11 +10,20 @@ export interface DashboardReportData {
   totalLeads: number;
   openLeads: number;
   closedLeads: number;
-  callsMade: number;
-  connectedCalls: number;
-  connectRate: number;
+  callsMade: number; // Represents outbound calls for backward compatibility
+  connectedCalls: number; // Represents outbound connected calls for backward compatibility
+  connectRate: number; // Strict outbound connect rate
   totalDurationSeconds: number;
   averageDurationSeconds: number;
+  outboundCalls: number;
+  outboundConnected: number;
+  outboundConnectRate: number;
+  outboundDurationSeconds: number;
+  inboundCalls: number;
+  inboundConnected: number;
+  inboundMissed: number;
+  inboundDurationSeconds: number;
+  totalInteractions: number;
   leadsBySource: Array<{ source: string; count: number }>;
   leadsByStage: Array<{ stage: string; count: number }>;
   followUpsDueToday: number;
@@ -26,9 +35,11 @@ export interface UserCallsReportData {
   name: string;
   email: string;
   branch?: string;
-  calls: number;
-  connected: number;
-  notConnected: number;
+  calls: number; // Outbound dials
+  connected: number; // Outbound connected
+  notConnected: number; // Outbound not connected
+  inboundCalls?: number;
+  inboundConnected?: number;
   totalDurationSeconds: number;
   avgDurationSeconds: number;
 }
@@ -204,17 +215,49 @@ export class ReportService {
       ]),
 
       Activity.aggregate<{
-        callsMade: Array<{ count: number }>;
-        connectedCalls: Array<{ count: number }>;
-        duration: Array<{ totalDuration: number; avgDuration: number }>;
+        outbound: Array<{ count: number }>;
+        outboundConnected: Array<{ count: number }>;
+        outboundDuration: Array<{ totalDuration: number; avgDuration: number }>;
+        inbound: Array<{ count: number }>;
+        inboundConnected: Array<{ count: number }>;
+        inboundMissed: Array<{ count: number }>;
+        inboundDuration: Array<{ totalDuration: number; avgDuration: number }>;
       }>([
         { $match: activityMatch },
         {
           $facet: {
-            callsMade: [{ $count: 'count' }],
-            connectedCalls: [{ $match: { connected: true } }, { $count: 'count' }],
-            duration: [
-              { $match: { connected: true } },
+            outbound: [
+              { $match: { direction: { $ne: 'INCOMING' } } },
+              { $count: 'count' },
+            ],
+            outboundConnected: [
+              { $match: { direction: { $ne: 'INCOMING' }, connected: true } },
+              { $count: 'count' },
+            ],
+            outboundDuration: [
+              { $match: { direction: { $ne: 'INCOMING' }, connected: true } },
+              {
+                $group: {
+                  _id: null,
+                  totalDuration: { $sum: '$durationSeconds' },
+                  avgDuration: { $avg: '$durationSeconds' },
+                },
+              },
+            ],
+            inbound: [
+              { $match: { direction: 'INCOMING' } },
+              { $count: 'count' },
+            ],
+            inboundConnected: [
+              { $match: { direction: 'INCOMING', connected: true } },
+              { $count: 'count' },
+            ],
+            inboundMissed: [
+              { $match: { direction: 'INCOMING', connected: false } },
+              { $count: 'count' },
+            ],
+            inboundDuration: [
+              { $match: { direction: 'INCOMING', connected: true } },
               {
                 $group: {
                   _id: null,
@@ -235,11 +278,23 @@ export class ReportService {
     const openLeads = l.open?.[0]?.count || 0;
     const closedLeads = l.closed?.[0]?.count || 0;
 
-    const callsMade = a.callsMade?.[0]?.count || 0;
-    const connectedCalls = a.connectedCalls?.[0]?.count || 0;
-    const connectRate = callsMade > 0 ? Number(((connectedCalls / callsMade) * 100).toFixed(1)) : 0;
-    const totalDurationSeconds = a.duration?.[0]?.totalDuration || 0;
-    const averageDurationSeconds = Math.round(a.duration?.[0]?.avgDuration || 0);
+    const outboundCalls = a.outbound?.[0]?.count || 0;
+    const outboundConnected = a.outboundConnected?.[0]?.count || 0;
+    const outboundConnectRate = outboundCalls > 0 ? Number(((outboundConnected / outboundCalls) * 100).toFixed(1)) : 0;
+    const outboundDurationSeconds = a.outboundDuration?.[0]?.totalDuration || 0;
+
+    const inboundCalls = a.inbound?.[0]?.count || 0;
+    const inboundConnected = a.inboundConnected?.[0]?.count || 0;
+    const inboundMissed = a.inboundMissed?.[0]?.count || 0;
+    const inboundDurationSeconds = a.inboundDuration?.[0]?.totalDuration || 0;
+
+    const callsMade = outboundCalls;
+    const connectedCalls = outboundConnected;
+    const connectRate = outboundConnectRate;
+    const totalDurationSeconds = outboundDurationSeconds + inboundDurationSeconds;
+    const totalConnected = outboundConnected + inboundConnected;
+    const averageDurationSeconds = totalConnected > 0 ? Math.round(totalDurationSeconds / totalConnected) : 0;
+    const totalInteractions = outboundCalls + inboundConnected;
 
     const leadsBySource = (l.bySource || []).map((s) => ({
       source: s._id || 'Unknown',
@@ -263,6 +318,15 @@ export class ReportService {
       connectRate,
       totalDurationSeconds,
       averageDurationSeconds,
+      outboundCalls,
+      outboundConnected,
+      outboundConnectRate,
+      outboundDurationSeconds,
+      inboundCalls,
+      inboundConnected,
+      inboundMissed,
+      inboundDurationSeconds,
+      totalInteractions,
       leadsBySource,
       leadsByStage,
       followUpsDueToday,
@@ -281,9 +345,35 @@ export class ReportService {
       {
         $group: {
           _id: '$userId',
-          calls: { $sum: 1 },
-          connected: { $sum: { $cond: ['$connected', 1, 0] } },
-          notConnected: { $sum: { $cond: ['$connected', 0, 1] } },
+          calls: { $sum: { $cond: [{ $ne: ['$direction', 'INCOMING'] }, 1, 0] } },
+          connected: {
+            $sum: {
+              $cond: [
+                { $and: [{ $ne: ['$direction', 'INCOMING'] }, { $eq: ['$connected', true] }] },
+                1,
+                0,
+              ],
+            },
+          },
+          notConnected: {
+            $sum: {
+              $cond: [
+                { $and: [{ $ne: ['$direction', 'INCOMING'] }, { $eq: ['$connected', false] }] },
+                1,
+                0,
+              ],
+            },
+          },
+          inboundCalls: { $sum: { $cond: [{ $eq: ['$direction', 'INCOMING'] }, 1, 0] } },
+          inboundConnected: {
+            $sum: {
+              $cond: [
+                { $and: [{ $eq: ['$direction', 'INCOMING'] }, { $eq: ['$connected', true] }] },
+                1,
+                0,
+              ],
+            },
+          },
           totalDurationSeconds: { $sum: '$durationSeconds' },
           avgDurationSeconds: { $avg: '$durationSeconds' },
         },
@@ -307,6 +397,8 @@ export class ReportService {
           calls: 1,
           connected: 1,
           notConnected: 1,
+          inboundCalls: 1,
+          inboundConnected: 1,
           totalDurationSeconds: 1,
           avgDurationSeconds: { $round: ['$avgDurationSeconds', 1] },
         },

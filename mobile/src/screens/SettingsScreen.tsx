@@ -31,6 +31,8 @@ import {
   Clock,
   Building2,
   MapPin,
+  ChevronRight,
+  Cpu,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -664,6 +666,38 @@ export const SettingsScreen: React.FC = () => {
             </View>
           </>
         )}
+
+        {/* System & Hardware Diagnostics (P14.2) */}
+        <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
+          <Cpu size={15} color="#2563EB" />
+          <Text style={styles.sectionHeaderTitle}>Device & Network Diagnostics</Text>
+        </View>
+
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 12,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 40,
+          }}
+          onPress={() => navigation.navigate('Diagnostics' as never)}
+          activeOpacity={0.8}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>
+              Run Live Diagnostics
+            </Text>
+            <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 4 }}>
+              Inspect Android permissions, API latency, outbox sync queue & battery guide.
+            </Text>
+          </View>
+          <ChevronRight size={18} color="#64748B" />
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Add / Edit Template Modal with Tappable Variable Chips */}

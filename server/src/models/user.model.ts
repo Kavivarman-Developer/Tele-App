@@ -13,6 +13,7 @@ export interface IUser {
   managerId?: Types.ObjectId | null;
   isActive: boolean;
   canReceiveLeads: boolean;
+  tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -67,6 +68,10 @@ const userSchema = new Schema<IUserDoc>(
     canReceiveLeads: {
       type: Boolean,
       default: true,
+    },
+    tokenVersion: {
+      type: Number,
+      default: 0,
     },
   },
   {

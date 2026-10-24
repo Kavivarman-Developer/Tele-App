@@ -113,7 +113,9 @@ export class IncomingCallSyncService {
             : 'Customer missed call'
           : `Incoming call answered (${durationText})`;
 
-        // Match existing lead name if known
+        // PRIVACY ENFORCEMENT (P3.3 & ADR 003):
+        // Only log incoming/missed calls that match an existing lead or contact in the CRM.
+        // Unrelated personal calls from non-leads must NEVER be persisted, uploaded, or exposed!
         const leadMatch = existingActivities.find(
           (a) =>
             a.phone &&
@@ -122,8 +124,34 @@ export class IncomingCallSyncService {
             !a.customerName.startsWith('Customer ('),
         );
 
-        const customerName = leadMatch?.customerName || `Customer (${formatDisplayPhone(rawPhone)})`;
-        const leadId = leadMatch?.leadId || `lead-${normPhone}`;
+        let customerName = leadMatch?.customerName;
+        let leadId = leadMatch?.leadId;
+
+        if (!customerName || !leadId) {
+          try {
+            const { storage } = require('../utils/storage');
+            const cachedRaw = await storage.getItem('tele_crm_my_leads_cache_v2');
+            if (cachedRaw) {
+              const parsed = JSON.parse(cachedRaw);
+              const foundInLeads = (parsed.leads || []).find(
+                (l: { phone?: string; name?: string; _id?: string }) =>
+                  l.phone && normalizePhone(l.phone) === normPhone,
+              );
+              if (foundInLeads) {
+                customerName = foundInLeads.name;
+                leadId = foundInLeads._id;
+              }
+            }
+          } catch {}
+        }
+
+        // If STILL not matching any known CRM lead, discard: it is a personal call!
+        if (!customerName || !leadId) {
+          continue;
+        }
+
+        const idempotencyKey = `inc-${timestamp}-${normPhone}`;
+        const callLogId = `log-${timestamp}-${normPhone}`;
 
         useLeadHistoryStore.getState().addActivity(leadId, {
           phone: rawPhone,
@@ -138,6 +166,9 @@ export class IncomingCallSyncService {
           tag,
           durationSeconds,
           remark,
+          callLogId,
+          idempotencyKey,
+          classificationReason: isMissed ? 'INBOUND_MISSED' : 'INBOUND_ANSWERED',
           createdAt: new Date(timestamp).toISOString(),
         });
 

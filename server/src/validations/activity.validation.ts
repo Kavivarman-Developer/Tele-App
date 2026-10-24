@@ -18,6 +18,12 @@ export const disposeLeadSchema = z.object({
       followUpAt: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}/)).optional().nullable(),
       remark: z.string().trim().optional().nullable(),
       durationSeconds: z.number().int().min(0).default(0),
+      direction: z.enum(['OUTGOING', 'INCOMING']).default('OUTGOING').optional(),
+      idempotencyKey: z.string().trim().optional().nullable(),
+      callLogId: z.string().trim().optional().nullable(),
+      classificationReason: z.string().trim().optional().nullable(),
+      dealAmount: z.number().min(0).optional().nullable(),
+      currency: z.string().trim().default('INR').optional().nullable(),
       answers: z
         .array(
           z.object({

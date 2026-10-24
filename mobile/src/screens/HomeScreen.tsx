@@ -503,14 +503,21 @@ const HomeScreenContent: React.FC = () => {
       : allBranchFilteredLeads.length;
 
   // Calls made and connected (combines local session with backend reports)
+  // P1.1: Strictly separate OUTBOUND cold dials from INBOUND callbacks to prevent metrics contamination
   const realLocalActivities = periodCallActivities.filter(
     (a) => a.stage !== 'Call Initiated' && a.stage !== 'Dialing',
   );
-  const localCallsCount = realLocalActivities.length;
-  const localConnectedCount = realLocalActivities.filter((a) => a.connected).length;
-  const localTotalDuration = realLocalActivities
+  const localOutboundActivities = realLocalActivities.filter((a) => a.direction !== 'INCOMING');
+  const localInboundActivities = realLocalActivities.filter((a) => a.direction === 'INCOMING');
+
+  const localCallsCount = localOutboundActivities.length;
+  const localConnectedCount = localOutboundActivities.filter((a) => a.connected).length;
+  const localTotalDuration = localOutboundActivities
     .filter((a) => a.connected)
     .reduce((sum, a) => sum + (a.durationSeconds || 0), 0);
+
+  const localInboundCount = localInboundActivities.length;
+  const localInboundConnectedCount = localInboundActivities.filter((a) => a.connected).length;
 
   const callsMade = Math.max(dashboardData?.callsMade ?? 0, localCallsCount);
   const connectedCalls = Math.max(dashboardData?.connectedCalls ?? 0, localConnectedCount);
@@ -519,6 +526,9 @@ const HomeScreenContent: React.FC = () => {
     localTotalDuration,
   );
   const connectRatePercent = callsMade > 0 ? ((connectedCalls / callsMade) * 100).toFixed(0) + '%' : '0%';
+
+  const inboundCallsCount = Math.max(dashboardData?.inboundCalls ?? 0, localInboundCount);
+  const inboundConnectedCount = Math.max(dashboardData?.inboundConnected ?? 0, localInboundConnectedCount);
 
   const avgDurationSeconds =
     connectedCalls > 0 && totalCallDurationSeconds > 0
@@ -533,7 +543,8 @@ const HomeScreenContent: React.FC = () => {
         (a) =>
           a.type === 'CALL' &&
           a.stage !== 'Call Initiated' &&
-          a.stage !== 'Dialing',
+          a.stage !== 'Dialing' &&
+          a.direction !== 'INCOMING',
       );
 
     const map = new Map<string, { attempted: number; connected: number; duration: number }>();
@@ -971,7 +982,9 @@ const HomeScreenContent: React.FC = () => {
               </View>
               <Text style={[styles.modernStatVal, { color: '#1D4ED8' }]}>{callsMade}</Text>
               <Text style={[styles.modernStatSub, { color: '#3B82F6' }]}>
-                {callScope === 'MY' ? 'My calls dialed' : 'Team calls dialed'}
+                {inboundCallsCount > 0
+                  ? `${callsMade} out • ${inboundCallsCount} in`
+                  : (callScope === 'MY' ? 'My calls dialed' : 'Team calls dialed')}
               </Text>
             </View>
 

@@ -29,15 +29,22 @@ export const deduplicateActivities = (activities: Activity[]): Activity[] => {
     const phone = normalizePhone(act.phone);
     const actTime = new Date(act.createdAt).getTime();
 
-    // Look for duplicate within 5 minutes (300,000 ms) for the same phone & same direction
+    // Stable Identity Match (P3.1): Match on idempotencyKey or callLogId first
     const existingIndex = result.findIndex((r) => {
+      if (act.idempotencyKey && r.idempotencyKey && act.idempotencyKey === r.idempotencyKey) {
+        return true;
+      }
+      if (act.callLogId && r.callLogId && act.callLogId === r.callLogId) {
+        return true;
+      }
+      // If neither has stable ID, fallback to phone + exact timestamp (within 90s) and direction
       const rPhone = normalizePhone(r.phone);
       if (!phone || !rPhone || phone !== rPhone) return false;
       const actDir = (act as any).direction || 'OUTGOING';
       const rDir = (r as any).direction || 'OUTGOING';
       if (actDir !== rDir) return false;
       const rTime = new Date(r.createdAt).getTime();
-      return Math.abs(actTime - rTime) <= 300000;
+      return Math.abs(actTime - rTime) <= 90000;
     });
 
     if (existingIndex >= 0) {
@@ -109,6 +116,11 @@ interface LeadHistoryStore {
       followUpAt?: string | null;
       durationSeconds?: number;
       notConnectedReason?: any;
+      idempotencyKey?: string | null;
+      callLogId?: string | null;
+      classificationReason?: string | null;
+      dealAmount?: number | null;
+      currency?: string | null;
       createdAt?: string;
     },
   ) => Activity;
@@ -403,6 +415,11 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
       remark: data.remark || null,
       followUpAt: data.followUpAt || null,
       durationSeconds: data.durationSeconds || 0,
+      idempotencyKey: data.idempotencyKey || null,
+      callLogId: data.callLogId || null,
+      classificationReason: data.classificationReason || null,
+      dealAmount: data.dealAmount ?? null,
+      currency: data.currency || 'INR',
       answers: [],
       createdAt: data.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -448,6 +465,11 @@ export const useLeadHistoryStore = create<LeadHistoryStore>((set, get) => ({
         followUpAt: data.followUpAt !== undefined ? data.followUpAt : existing.followUpAt,
         connected: data.connected !== undefined ? Boolean(data.connected || existing.connected) : existing.connected,
         durationSeconds: Math.max(existing.durationSeconds || 0, data.durationSeconds || 0),
+        idempotencyKey: data.idempotencyKey || existing.idempotencyKey || null,
+        callLogId: data.callLogId || existing.callLogId || null,
+        classificationReason: data.classificationReason || existing.classificationReason || null,
+        dealAmount: data.dealAmount !== undefined ? data.dealAmount : existing.dealAmount,
+        currency: data.currency || existing.currency || 'INR',
         updatedAt: new Date().toISOString(),
       };
     } else {

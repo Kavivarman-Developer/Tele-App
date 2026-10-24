@@ -54,6 +54,9 @@ campaignLeadsRouter.get(
 // Router for /api/leads
 export const leadsRouter = Router();
 
+// Public / partner webhook route (authenticated via HMAC SHA-256 header)
+leadsRouter.post('/webhook', LeadController.handleWebhook);
+
 leadsRouter.use(authenticate);
 
 leadsRouter.get('/my', validate(myLeadsQuerySchema), LeadController.getMyLeads);

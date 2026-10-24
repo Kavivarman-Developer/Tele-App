@@ -33,6 +33,18 @@ export class ActivityService {
       lead = await Lead.findOne({ phone: { $regex: cleanPhone } });
     }
 
+    // Check IdempotencyKey first: If already processed, return existing activity and lead
+    if (input.idempotencyKey) {
+      const existingActivity = await Activity.findOne({ idempotencyKey: input.idempotencyKey });
+      if (existingActivity) {
+        const resolvedLead = lead || (await Lead.findById(existingActivity.leadId));
+        return {
+          activity: existingActivity,
+          lead: resolvedLead!,
+        };
+      }
+    }
+
     // If still not found, locate a default campaign and auto-create/upsert lead
     if (!lead) {
       const defaultCampaign = await Campaign.findOne();
@@ -59,10 +71,19 @@ export class ActivityService {
       lead.campaignId = campaign._id;
     }
 
-    // Permission check: allow assigned agent, or collaborating agents updating a call
+    // Permission & IDOR check:
     if (requester.role === 'AGENT') {
+      if (lead.assignedTo && lead.assignedTo.toString() !== requester._id.toString()) {
+        throw new AppError('Forbidden: You can only dispose leads assigned to you', 403);
+      }
       if (!lead.assignedTo) {
         lead.assignedTo = requester._id;
+      }
+    } else if (requester.role === 'MANAGER') {
+      const isManagerOfCampaign = campaign.managerId?.toString() === requester._id.toString();
+      const isSameBranch = requester.branch && lead.branch && requester.branch.toLowerCase() === lead.branch.toLowerCase();
+      if (!isManagerOfCampaign && !isSameBranch) {
+        throw new AppError('Forbidden: You do not manage this lead or campaign', 403);
       }
     }
 
@@ -159,24 +180,35 @@ export class ActivityService {
         }
       }
 
-      // Check if retry rule applies
+      // Check if retry rule applies or if number is permanently unusable (P9 compliance)
       const reason = input.notConnectedReason || 'DID_NOT_PICK';
-      const rule = await RetryRuleService.getRuleByReason(reason);
-      const agentFollowUp = input.followUpAt ? new Date(input.followUpAt) : null;
-      let computedFollowUp = RetryRuleService.calculateRetryFollowUp(rule, consecutiveAttempts, agentFollowUp);
+      const isPermanentlyUnreachable =
+        reason === 'INVALID_NUMBER' ||
+        reason === 'NUMBER_NOT_IN_USE' ||
+        reason === 'INCOMING_NOT_AVAILABLE';
 
-      // If neither agentFollowUp nor computedFollowUp is present, default to 2 hours from now
-      // so mandatory organization settings are satisfied and saving never fails.
-      if (!agentFollowUp && !computedFollowUp) {
-        computedFollowUp = new Date(Date.now() + 2 * 60 * 60 * 1000);
-      }
+      if (isPermanentlyUnreachable) {
+        lead.status = 'CLOSED';
+        lead.nextFollowUpAt = null;
+        lead.stage = 'Closed (Invalid)';
+        lead.followUpDue = false;
+      } else {
+        const rule = await RetryRuleService.getRuleByReason(reason);
+        const agentFollowUp = input.followUpAt ? new Date(input.followUpAt) : null;
+        let computedFollowUp = RetryRuleService.calculateRetryFollowUp(rule, consecutiveAttempts, agentFollowUp);
 
-      lead.nextFollowUpAt = agentFollowUp || computedFollowUp;
-      lead.stage = isCallAttempt ? 'Not Connected' : input.stage || 'Not Connected';
-      if (input.tag) {
-        lead.tag = input.tag;
+        // If neither agentFollowUp nor computedFollowUp is present, default to 2 hours from now adjusted for calling hours
+        if (!agentFollowUp && !computedFollowUp) {
+          computedFollowUp = RetryRuleService.adjustForCallingHours(new Date(Date.now() + 2 * 60 * 60 * 1000));
+        }
+
+        lead.nextFollowUpAt = agentFollowUp || computedFollowUp;
+        lead.stage = isCallAttempt ? 'Not Connected' : input.stage || 'Not Connected';
+        if (input.tag) {
+          lead.tag = input.tag;
+        }
+        lead.followUpDue = false;
       }
-      lead.followUpDue = false;
     }
 
     // Reassignment if requested
@@ -230,10 +262,20 @@ export class ActivityService {
 
     // Update contact timestamp so dialed or disposed leads always move to the bottom of the queue
     lead.lastContactedAt = new Date();
-    if (isCallAttempt) {
-      lead.attemptCount += 1;
-    } else if (!lead.attemptCount || lead.attemptCount === 0) {
-      lead.attemptCount = 1;
+    if (input.dealAmount !== undefined && input.dealAmount !== null) {
+      (lead as unknown as { dealAmount?: number }).dealAmount = input.dealAmount;
+      if (input.currency) {
+        (lead as unknown as { currency?: string }).currency = input.currency;
+      }
+    }
+
+    const isIncoming = input.direction === 'INCOMING';
+    if (!isIncoming) {
+      if (isCallAttempt) {
+        lead.attemptCount += 1;
+      } else if (!lead.attemptCount || lead.attemptCount === 0) {
+        lead.attemptCount = 1;
+      }
     }
     await lead.save();
 
@@ -245,6 +287,7 @@ export class ActivityService {
       campaignId: lead.campaignId,
       userId: requester._id,
       type: isCallAttempt ? 'CALL' : 'UPDATE',
+      direction: input.direction || 'OUTGOING',
       connected: isCallAttempt && input.connected,
       notConnectedReason:
         isCallAttempt && !input.connected ? (input.notConnectedReason || 'DID_NOT_PICK') : null,
@@ -254,6 +297,11 @@ export class ActivityService {
       followUpAt: lead.nextFollowUpAt,
       durationSeconds: isCallAttempt && input.connected ? input.durationSeconds || 0 : 0,
       answers: input.answers || [],
+      callLogId: input.callLogId || null,
+      idempotencyKey: input.idempotencyKey || null,
+      classificationReason: input.classificationReason || null,
+      dealAmount: input.dealAmount ?? null,
+      currency: input.currency || 'INR',
     });
 
     return { activity, lead };
@@ -376,37 +424,43 @@ export class ActivityService {
       .populate('userId', 'name email branch')
       .lean();
 
-    return activities.map((act: any) => {
-      const leadObj = act.leadId && typeof act.leadId === 'object' ? act.leadId : null;
-      const userObj = act.userId && typeof act.userId === 'object' ? act.userId : null;
+    return activities.map((rawAct) => {
+      const act = rawAct as unknown as Record<string, unknown>;
+      const leadObj = act.leadId && typeof act.leadId === 'object' ? (act.leadId as Record<string, unknown>) : null;
+      const userObj = act.userId && typeof act.userId === 'object' ? (act.userId as Record<string, unknown>) : null;
 
       const customerName =
-        leadObj?.name ||
+        (leadObj?.name as string) ||
         (act.phone ? `Customer (${act.phone})` : 'Lead Contact');
 
-      const phone = act.phone || leadObj?.phone || '';
-      const temperature = act.tag || leadObj?.temperature || leadObj?.tag || 'WARM';
+      const phone = (act.phone as string) || (leadObj?.phone as string) || '';
+      const temperature = (act.tag as string) || (leadObj?.temperature as string) || (leadObj?.tag as string) || 'WARM';
 
       return {
-        _id: act._id.toString(),
-        leadId: leadObj?._id?.toString() || (act.leadId ? act.leadId.toString() : ''),
-        campaignId: act.campaignId ? act.campaignId.toString() : '',
-        userId: userObj?._id?.toString() || (act.userId ? act.userId.toString() : requester._id.toString()),
-        agentName: userObj?.name || requester.name,
+        _id: String(act._id),
+        leadId: leadObj?._id ? String(leadObj._id) : act.leadId ? String(act.leadId) : '',
+        campaignId: act.campaignId ? String(act.campaignId) : '',
+        userId: userObj?._id ? String(userObj._id) : act.userId ? String(act.userId) : requester._id.toString(),
+        agentName: (userObj?.name as string) || requester.name,
         customerName,
         phone,
-        type: act.type,
+        type: act.type as 'CALL' | 'UPDATE',
+        direction: (act.direction as 'OUTGOING' | 'INCOMING') || 'OUTGOING',
         connected: Boolean(act.connected),
-        notConnectedReason: act.notConnectedReason || null,
-        stage: act.stage || 'New',
+        notConnectedReason: (act.notConnectedReason as string) || null,
+        stage: (act.stage as string) || 'New',
         tag: temperature,
         temperature,
-        remark: act.remark || '',
-        followUpAt: act.followUpAt ? new Date(act.followUpAt).toISOString() : null,
-        durationSeconds: act.durationSeconds || 0,
-        branch: act.branch || userObj?.branch || null,
-        createdAt: act.createdAt ? new Date(act.createdAt).toISOString() : new Date().toISOString(),
-        updatedAt: act.updatedAt ? new Date(act.updatedAt).toISOString() : new Date().toISOString(),
+        remark: (act.remark as string) || '',
+        followUpAt: act.followUpAt ? new Date(act.followUpAt as string | Date).toISOString() : null,
+        durationSeconds: (act.durationSeconds as number) || 0,
+        branch: (act.branch as string) || (userObj?.branch as string) || null,
+        callLogId: (act.callLogId as string) || null,
+        idempotencyKey: (act.idempotencyKey as string) || null,
+        dealAmount: act.dealAmount !== undefined ? (act.dealAmount as number) : null,
+        currency: (act.currency as string) || 'INR',
+        createdAt: act.createdAt ? new Date(act.createdAt as string | Date).toISOString() : new Date().toISOString(),
+        updatedAt: act.updatedAt ? new Date(act.updatedAt as string | Date).toISOString() : new Date().toISOString(),
       };
     });
   }

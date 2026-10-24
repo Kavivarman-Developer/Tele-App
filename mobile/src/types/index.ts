@@ -47,6 +47,8 @@ export interface Lead {
   followUpDue?: boolean;
   lastContactedAt?: string | null;
   attemptCount: number;
+  dealAmount?: number | null;
+  currency?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -173,6 +175,12 @@ export interface DisposeLeadPayload {
   followUpAt?: string | null;
   remark?: string | null;
   durationSeconds?: number;
+  direction?: 'OUTGOING' | 'INCOMING';
+  idempotencyKey?: string | null;
+  callLogId?: string | null;
+  classificationReason?: string | null;
+  dealAmount?: number | null;
+  currency?: string | null;
   answers?: Array<{ questionId: string; value: unknown }>;
   reassignToUserId?: string;
   copyToCampaignId?: string;
@@ -199,6 +207,11 @@ export interface Activity {
   durationSeconds: number;
   direction?: 'OUTGOING' | 'INCOMING';
   callType?: 'OUTGOING' | 'INCOMING' | 'MISSED';
+  idempotencyKey?: string | null;
+  callLogId?: string | null;
+  classificationReason?: string | null;
+  dealAmount?: number | null;
+  currency?: string | null;
   answers: Array<{ questionId: string; value: unknown }>;
   createdAt: string;
   updatedAt: string;
@@ -210,6 +223,9 @@ export interface DetectedCallResult {
   rawType?: string;
   matchedLog?: boolean;
   callPlaced?: boolean;
+  callLogId?: string;
+  classificationReason?: string;
+  simId?: string;
 }
 
 export type RootStackParamList = {
@@ -230,6 +246,7 @@ export type RootStackParamList = {
   CampaignDetail: { campaignId?: string; campaignName?: string; campaign?: Campaign } | undefined;
   UploadLeads: undefined;
   Settings: undefined;
+  Diagnostics: undefined;
   RetryRules: undefined;
   AddWalkInLead: { campaignId?: string; phone?: string; name?: string } | undefined;
   LeadDetail: {
@@ -245,6 +262,12 @@ export type RootStackParamList = {
     callAttempt?: boolean;
     detectionMethod?: 'AUTOMATIC' | 'MANUAL';
     autoOpenNotConnectedSheet?: boolean;
+    idempotencyKey?: string;
+    callLogId?: string;
+    direction?: 'OUTGOING' | 'INCOMING';
+    classificationReason?: string;
+    dealAmount?: number | null;
+    currency?: string | null;
     queue?: Lead[];
     queueIndex?: number;
     initialTab?: 'LEAD INFO' | 'CAPTURE INFO' | 'DISPOSE LEAD' | 'OTHER';
@@ -274,6 +297,9 @@ export interface DashboardReportResponse {
   averageDurationSeconds?: number;
   leadsBySource: SourceLeadCount[];
   leadsByStage: StageLeadCount[];
+  inboundCalls?: number;
+  inboundConnected?: number;
+  inboundMissed?: number;
   followUpsDueToday: number;
   followUpsMissed: number;
 }

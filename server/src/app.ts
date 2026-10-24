@@ -7,6 +7,7 @@ import apiRoutes from './routes';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
 import { compressionMiddleware } from './middleware/compression.middleware';
+import { sanitizeNoSql } from './middleware/sanitize.middleware';
 import { AppError } from './utils/AppError';
 
 const app: Application = express();
@@ -24,6 +25,7 @@ app.use(
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(sanitizeNoSql);
 
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
@@ -47,6 +49,10 @@ app.get('/landing', (_req: Request, res: Response) => {
 
 app.get('/about', (_req: Request, res: Response) => {
   res.sendFile(path.join(publicDir, 'landing.html'));
+});
+
+app.get(['/admin', '/admin/*'], (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'admin/index.html'));
 });
 
 // Apply API rate limiter to protect against abuse and DDOS
