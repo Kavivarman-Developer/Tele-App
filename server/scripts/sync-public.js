@@ -44,3 +44,23 @@ syncTo('/var/www/call.okboz.co.in/web');
 syncTo('/var/www/hitalk.in/mobile/dist');
 syncTo('/var/www/hitalk.in/web');
 
+// Auto-configure Nginx on Linux VPS if okboz-call.conf exists
+const nginxConf = '/etc/nginx/sites-available/okboz-call.conf';
+if (fs.existsSync(nginxConf)) {
+  try {
+    let conf = fs.readFileSync(nginxConf, 'utf8');
+    if (!conf.includes('location = /')) {
+      const rule = `
+    # Root domain hitalk.in directly serves landing page
+    location = / {
+        try_files /landing.html /landing/index.html /index.html;
+    }
+`;
+      conf = conf.replace(/location \/ \{/, `${rule}\n    location / {`);
+      fs.writeFileSync(nginxConf, conf, 'utf8');
+      console.log('[sync-public] Updated Nginx config with root landing page rule');
+    }
+  } catch (e) {
+    console.warn('[sync-public] Could not auto-patch nginx conf:', e.message);
+  }
+}
