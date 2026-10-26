@@ -90,108 +90,110 @@ export const LoginScreen: React.FC = () => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Brand Logo & Header */}
-          <View style={styles.brandBlock}>
-            <View style={styles.logoBadge}>
-              <Phone size={30} color="#FFFFFF" strokeWidth={2.5} />
-            </View>
-            <Text style={styles.brandTitle}>Hi Talk</Text>
-            <Text style={styles.brandSubtitle}>High-velocity calling & lead management</Text>
-          </View>
-
-          {/* Sign-in Card */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Sign in to your desk</Text>
-            <Text style={styles.cardSubtitle}>
-              Enter your agent or manager credentials to start calling
-            </Text>
-
-            {/* Error Banner */}
-            {error ? (
-              <View style={styles.errorBanner}>
-                <AlertCircle size={16} color={T.color.danger} />
-                <Text style={styles.errorBannerText}>{error}</Text>
+          <View style={styles.centerContainer}>
+            {/* Brand Logo & Header */}
+            <View style={styles.brandBlock}>
+              <View style={styles.logoBadge}>
+                <Phone size={30} color="#FFFFFF" strokeWidth={2.5} />
               </View>
-            ) : null}
+              <Text style={styles.brandTitle}>Hi Talk</Text>
+              <Text style={styles.brandSubtitle}>High-velocity calling & lead management</Text>
+            </View>
 
-            {/* Email Field */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Email address</Text>
-              <View style={styles.inputWrap}>
-                <Mail size={16} color={T.color.textFaint} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="name@company.com"
-                  placeholderTextColor={T.color.textFaint}
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (error) clearError();
-                  }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
+            {/* Sign-in Card */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Sign in to your desk</Text>
+              <Text style={styles.cardSubtitle}>
+                Enter your agent or manager credentials to start calling
+              </Text>
+
+              {/* Error Banner */}
+              {error ? (
+                <View style={styles.errorBanner}>
+                  <AlertCircle size={16} color={T.color.danger} />
+                  <Text style={styles.errorBannerText}>{error}</Text>
+                </View>
+              ) : null}
+
+              {/* Email Field */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Email address</Text>
+                <View style={styles.inputWrap}>
+                  <Mail size={16} color={T.color.textFaint} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="name@company.com"
+                    placeholderTextColor={T.color.textFaint}
+                    value={email}
+                    onChangeText={(text) => {
+                      setEmail(text);
+                      if (error) clearError();
+                    }}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
               </View>
-            </View>
 
-            {/* Password Field */}
-            <View style={[styles.fieldGroup, { marginBottom: T.space.xl - 2 }]}>
-              <Text style={styles.fieldLabel}>Password</Text>
-              <View style={styles.inputWrap}>
-                <Lock size={16} color={T.color.textFaint} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your password"
-                  placeholderTextColor={T.color.textFaint}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (error) clearError();
-                  }}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  {showPassword ? (
-                    <EyeOff size={18} color={T.color.textMuted} />
-                  ) : (
-                    <Eye size={18} color={T.color.textMuted} />
-                  )}
-                </TouchableOpacity>
+              {/* Password Field */}
+              <View style={[styles.fieldGroup, { marginBottom: T.space.xl - 2 }]}>
+                <Text style={styles.fieldLabel}>Password</Text>
+                <View style={styles.inputWrap}>
+                  <Lock size={16} color={T.color.textFaint} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your password"
+                    placeholderTextColor={T.color.textFaint}
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      if (error) clearError();
+                    }}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={18} color={T.color.textMuted} />
+                    ) : (
+                      <Eye size={18} color={T.color.textMuted} />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
+
+              {/* Sign In CTA */}
+              <TouchableOpacity
+                onPress={handleLogin}
+                disabled={!canSubmit}
+                activeOpacity={0.85}
+                style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.submitBtnText}>Sign in to workspace</Text>
+                )}
+              </TouchableOpacity>
             </View>
 
-            {/* Sign In CTA */}
-            <TouchableOpacity
-              onPress={handleLogin}
-              disabled={!canSubmit}
-              activeOpacity={0.85}
-              style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.submitBtnText}>Sign in to workspace</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Footer: security note + locale badges, echoing the brand sketch */}
-          <View style={styles.footerBlock}>
-            <View style={styles.securityRow}>
-              <ShieldCheck size={15} color={T.color.primary} />
-              <Text style={styles.securityText}>Encrypted session · Strict branch isolation</Text>
-            </View>
-            <View style={styles.localeRow}>
-              <Text style={styles.localeText}>🇮🇳  Made for India</Text>
-              <View style={styles.localeDot} />
-              <Text style={styles.localeText}>❤️  Crafted in Tamil Nadu</Text>
+            {/* Footer: security note + locale badges, echoing the brand sketch */}
+            <View style={styles.footerBlock}>
+              <View style={styles.securityRow}>
+                <ShieldCheck size={15} color={T.color.primary} />
+                <Text style={styles.securityText}>Encrypted session · Strict branch isolation</Text>
+              </View>
+              <View style={styles.localeRow}>
+                <Text style={styles.localeText}>🇮🇳  Made for India</Text>
+                <View style={styles.localeDot} />
+                <Text style={styles.localeText}>❤️  Crafted in Tamil Nadu</Text>
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -212,7 +214,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     padding: T.space.xl,
+    paddingVertical: T.space.xl + 12,
+  },
+  centerContainer: {
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
   },
 
   // Brand block
