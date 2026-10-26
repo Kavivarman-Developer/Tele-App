@@ -8,6 +8,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    try {
+      if (localStorage.getItem('tele_app_auth_token')) {
+        window.location.replace('/login');
+      }
+    } catch (e) {}
+  </script>
   <style>
     :root {
       --primary: #0F9D58;
@@ -368,7 +375,7 @@
   <!-- Navigation -->
   <header>
     <div class="nav-container">
-      <a href="/landing" class="brand">
+      <a href="/" class="brand">
         <div class="brand-icon">📞</div>
         <span>Hi Talk</span>
       </a>
@@ -377,8 +384,8 @@
         <a href="#benefits" class="nav-link">Benefits</a>
         <a href="/privacy" class="nav-link">Privacy Policy</a>
         <a href="/terms" class="nav-link">Terms</a>
-        <a href="/" class="btn btn-outline">Agent Login</a>
-        <a href="https://expo.dev/artifacts/eas/-VPwKdbmb0ti0pKa24A05CBNXnCsh3fXQTRMYWnM8zw.apk" class="btn btn-primary">Download APK</a>
+        <a href="/login" class="btn btn-outline">Agent Login</a>
+        <a href="https://expo.dev/artifacts/eas/JiPDPAu3L5O8YI-v28PuuMZghZSb1U-DTXd6m4Eb_eM.apk" class="btn btn-primary">Download APK</a>
       </div>
     </div>
   </header>
@@ -393,10 +400,10 @@
       Hi Talk eliminates dialing errors, automates call log duration tracking, and queues priority leads so your sales reps close more deals faster.
     </p>
     <div class="cta-group">
-      <a href="https://expo.dev/artifacts/eas/-VPwKdbmb0ti0pKa24A05CBNXnCsh3fXQTRMYWnM8zw.apk" class="btn btn-primary" style="font-size: 16px; padding: 14px 28px;">
+      <a href="https://expo.dev/artifacts/eas/JiPDPAu3L5O8YI-v28PuuMZghZSb1U-DTXd6m4Eb_eM.apk" class="btn btn-primary" style="font-size: 16px; padding: 14px 28px;">
         <span>📱 Download Android App (APK)</span>
       </a>
-      <a href="/" class="btn btn-outline" style="font-size: 16px; padding: 14px 28px;">
+      <a href="/login" class="btn btn-outline" style="font-size: 16px; padding: 14px 28px;">
         <span>💻 Open Web CRM Portal</span>
       </a>
     </div>
@@ -469,7 +476,7 @@
     <div class="banner-inner">
       <h2>Ready to Boost Your Team's Productivity?</h2>
       <p>Install the Hi Talk mobile application today and start making high-velocity sales calls immediately.</p>
-      <a href="https://expo.dev/artifacts/eas/-VPwKdbmb0ti0pKa24A05CBNXnCsh3fXQTRMYWnM8zw.apk" class="btn btn-white">
+      <a href="https://expo.dev/artifacts/eas/JiPDPAu3L5O8YI-v28PuuMZghZSb1U-DTXd6m4Eb_eM.apk" class="btn btn-white">
         Download Latest Android App (.APK)
       </a>
     </div>
@@ -485,9 +492,9 @@
       <div class="footer-links-group">
         <h5>Quick Links</h5>
         <ul>
-          <li><a href="/landing">Product Overview</a></li>
-          <li><a href="/">Web CRM Portal</a></li>
-          <li><a href="https://expo.dev/artifacts/eas/-VPwKdbmb0ti0pKa24A05CBNXnCsh3fXQTRMYWnM8zw.apk">Android App Download</a></li>
+          <li><a href="/">Product Overview</a></li>
+          <li><a href="/login">Web CRM Portal</a></li>
+          <li><a href="https://expo.dev/artifacts/eas/JiPDPAu3L5O8YI-v28PuuMZghZSb1U-DTXd6m4Eb_eM.apk">Android App Download</a></li>
         </ul>
       </div>
       <div class="footer-links-group">
