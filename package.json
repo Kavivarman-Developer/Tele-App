@@ -1,0 +1,11 @@
+{
+  "name": "tele-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hi Talk Telecalling CRM",
+  "scripts": {
+    "build": "npm run build --prefix server",
+    "start": "npm start --prefix server",
+    "test": "npm test --prefix server"
+  }
+}
