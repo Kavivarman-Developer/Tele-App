@@ -40,3 +40,7 @@ syncTo(targetDist);
 syncTo('/var/www/call.okboz.co.in/mobile/dist');
 // Also sync to /var/www/call.okboz.co.in/web if exists
 syncTo('/var/www/call.okboz.co.in/web');
+// Also sync to /var/www/hitalk.in if created
+syncTo('/var/www/hitalk.in/mobile/dist');
+syncTo('/var/www/hitalk.in/web');
+

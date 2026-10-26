@@ -4,6 +4,10 @@ const assert = require('node:assert/strict');
 // Import the linking configuration matching mobile/src/navigation/RootNavigator.tsx
 const linkingConfig = {
   prefixes: [
+    'https://hitalk.in',
+    'http://hitalk.in',
+    'https://www.hitalk.in',
+    'http://www.hitalk.in',
     'https://call.okboz.co.in',
     'http://call.okboz.co.in',
     'http://localhost:8081',

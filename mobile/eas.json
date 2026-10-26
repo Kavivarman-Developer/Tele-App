@@ -14,7 +14,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://call.okboz.co.in/api"
+        "EXPO_PUBLIC_API_URL": "https://hitalk.in/api"
       }
     },
     "production": {
@@ -22,7 +22,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://call.okboz.co.in/api"
+        "EXPO_PUBLIC_API_URL": "https://hitalk.in/api"
       }
     }
   },
