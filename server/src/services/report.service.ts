@@ -679,6 +679,7 @@ export class ReportService {
       to: input.to,
       campaignId: input.campaignId,
       userId: input.userId,
+      branch: input.branch,
     };
 
     switch (input.type) {
@@ -706,6 +707,39 @@ export class ReportService {
         for (const row of data) {
           lines.push(
             `"${row.name}","${row.email}",${row.calls},${row.connected},${row.notConnected},${row.totalDurationSeconds},${row.avgDurationSeconds}`,
+          );
+        }
+        return lines.join('\n');
+      }
+
+      case 'call-logs': {
+        const { activityMatch } = await this.buildScopeFilters(requester, query);
+        const calls = await Activity.find(activityMatch)
+          .sort({ createdAt: -1 })
+          .limit(5000)
+          .populate('userId', 'name email branch')
+          .populate('leadId', 'name phone stage status');
+
+        const lines: string[] = [
+          'Date & Time,Agent Name,Agent Email,Customer Name,Customer Phone,Direction,Connected,Duration (sec),Stage,Deal Amount,Remarks',
+        ];
+        for (const act of calls) {
+          const u = act.userId as any;
+          const l = act.leadId as any;
+          const agentName = u?.name || 'Agent';
+          const agentEmail = u?.email || '';
+          const custName = l?.name || 'Customer Contact';
+          const custPhone = l?.phone || act.phone || '';
+          const dateStr = act.createdAt ? new Date(act.createdAt).toISOString() : '';
+          const dir = act.direction || 'OUTBOUND';
+          const conn = act.connected ? 'YES' : 'NO';
+          const dur = act.durationSeconds || 0;
+          const stage = act.stage || l?.stage || 'Contacted';
+          const dealAmt = act.dealAmount ?? '';
+          const remark = (act.remark || '').replace(/"/g, '""');
+
+          lines.push(
+            `"${dateStr}","${agentName}","${agentEmail}","${custName}","${custPhone}","${dir}","${conn}",${dur},"${stage}","${dealAmt}","${remark}"`,
           );
         }
         return lines.join('\n');

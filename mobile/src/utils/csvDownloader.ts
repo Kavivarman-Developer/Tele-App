@@ -116,3 +116,121 @@ export function convertLeadsToCsv(leads: Array<Record<string, any>>): string {
 
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
 }
+
+/**
+ * Converts Agent Call Stats array into CSV format
+ */
+export function convertUserCallStatsToCsv(
+  stats: Array<{
+    name: string;
+    email: string;
+    branch?: string;
+    calls: number;
+    connected: number;
+    notConnected: number;
+    totalDurationSeconds: number;
+    avgDurationSeconds: number;
+  }>,
+  periodLabel: string = 'Current Period',
+): string {
+  const headers = [
+    'Agent Name',
+    'Email',
+    'Branch',
+    'Period',
+    'Calls Attempted',
+    'Calls Connected',
+    'Not Connected',
+    'Connect Rate',
+    'Total Talk Time (min)',
+    'Total Talk Time (sec)',
+    'Avg Call Duration (sec)',
+  ];
+
+  const escapeCell = (val: any) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const rows = stats.map((s) => {
+    const rate = s.calls > 0 ? `${Math.round((s.connected / s.calls) * 100)}%` : '0%';
+    const mins = Math.round(s.totalDurationSeconds / 60);
+    return [
+      escapeCell(s.name),
+      escapeCell(s.email),
+      escapeCell(s.branch || 'General'),
+      escapeCell(periodLabel),
+      s.calls,
+      s.connected,
+      s.notConnected,
+      escapeCell(rate),
+      mins,
+      s.totalDurationSeconds,
+      s.avgDurationSeconds,
+    ];
+  });
+
+  return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+}
+
+/**
+ * Converts detailed call activity history into CSV format
+ */
+export function convertCallActivitiesToCsv(
+  activities: Array<{
+    createdAt?: string | Date;
+    agentName?: string;
+    customerName?: string;
+    phone?: string;
+    connected?: boolean;
+    durationSeconds?: number;
+    stage?: string;
+    tag?: string | null;
+    dealAmount?: number | null;
+    remark?: string | null;
+    userId?: any;
+  }>,
+  defaultAgentName: string = 'Agent',
+): string {
+  const headers = [
+    'Date & Time',
+    'Agent',
+    'Customer Contact',
+    'Phone Number',
+    'Status',
+    'Duration (sec)',
+    'Call Stage',
+    'Tag',
+    'Deal Amount (INR)',
+    'Remarks / Notes',
+  ];
+
+  const escapeCell = (val: any) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const rows = activities.map((a) => {
+    const uName =
+      typeof a.userId === 'object' && a.userId ? (a.userId as any).name : a.agentName || defaultAgentName;
+    const dateStr = a.createdAt ? new Date(a.createdAt).toLocaleString() : 'N/A';
+    const status = a.connected ? 'CONNECTED' : 'NOT CONNECTED';
+
+    return [
+      escapeCell(dateStr),
+      escapeCell(uName),
+      escapeCell(a.customerName || 'Customer Contact'),
+      escapeCell(a.phone || ''),
+      escapeCell(status),
+      a.durationSeconds || 0,
+      escapeCell(a.stage || 'Contacted'),
+      escapeCell(a.tag || ''),
+      a.dealAmount ?? '',
+      escapeCell(a.remark || ''),
+    ];
+  });
+
+  return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+}

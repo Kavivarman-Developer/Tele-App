@@ -17,6 +17,7 @@ export const reportExportQuerySchema = z.object({
     type: z.enum([
       'dashboard',
       'user-calls',
+      'call-logs',
       'dispositions',
       'follow-ups',
       'campaign-stages',

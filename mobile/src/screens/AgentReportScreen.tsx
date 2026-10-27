@@ -34,14 +34,17 @@ import {
   CheckCircle2,
   AlertCircle,
   FileSpreadsheet,
+  Download,
 } from 'lucide-react-native';
 
 import { CrmShell } from '../components/CrmShell';
+import { ReportGeneratorModal } from '../components/ReportGeneratorModal';
 import { fetchUserCallsReport, fetchUsers, fetchBranches, fetchUserActivities } from '../api/leadApi';
 import { useAuthStore } from '../store/authStore';
 import { useLeadHistoryStore } from '../store/leadHistoryStore';
 import { UserCallStats, Activity } from '../types';
 import { formatDisplayPhone, getDialerTelUrl } from '../utils/phoneUtils';
+import { downloadOrShareCsv, convertCallActivitiesToCsv } from '../utils/csvDownloader';
 import { colors, borderRadius, shadows } from '../theme';
 import { toast } from '../store/toastStore';
 
@@ -62,6 +65,8 @@ export const AgentReportScreen: React.FC = () => {
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAgentDetail, setSelectedAgentDetail] = useState<UserCallStats | null>(null);
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [isExportingAgentLog, setIsExportingAgentLog] = useState(false);
 
   const { data: branchesData } = useQuery({
     queryKey: ['adminBranches'],
@@ -417,6 +422,35 @@ export const AgentReportScreen: React.FC = () => {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [selectedAgentDetail, serverAgentCalls, getAllActivities, fromDate, toDate]);
 
+  // Export specific agent's detailed call logs directly from drill-down modal
+  const handleExportAgentCallLogs = async () => {
+    if (!selectedAgentDetail || selectedAgentCalls.length === 0) {
+      toast.info('No call log records found to export', 'Empty Log');
+      return;
+    }
+    try {
+      setIsExportingAgentLog(true);
+      const csvData = convertCallActivitiesToCsv(
+        selectedAgentCalls,
+        selectedAgentDetail.name || currentUser?.name || 'Agent',
+      );
+      const cleanName = (selectedAgentDetail.name || 'agent').replace(/\s+/g, '_');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `HiTalk_CallLogs_${cleanName}_${period.toLowerCase()}_${timestamp}.csv`;
+
+      const res = await downloadOrShareCsv(filename, csvData);
+      if (res.success) {
+        toast.success(`Exported ${selectedAgentCalls.length} call records to CSV!`, 'Export Complete');
+      } else {
+        toast.error(res.message, 'Export Error');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to export call log', 'Export Failed');
+    } finally {
+      setIsExportingAgentLog(false);
+    }
+  };
+
   return (
     <CrmShell
       title={isAgent ? 'My Call Report' : 'Agent Call Reports'}
@@ -429,17 +463,27 @@ export const AgentReportScreen: React.FC = () => {
       }
       breadcrumb={isAgent ? 'Workspace' : 'Management'}
       rightAction={
-        <TouchableOpacity
-          style={styles.refreshBtn}
-          onPress={() => {
-            refetchReport();
-            toast.info(isAgent ? 'Refreshed your call statistics' : 'Refreshed agent call statistics');
-          }}
-          activeOpacity={0.7}
-        >
-          <RefreshCw size={13} color="#0F9D58" />
-          <Text style={styles.refreshBtnText}>Refresh</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            style={styles.generateReportBtn}
+            onPress={() => setIsGenerateModalOpen(true)}
+            activeOpacity={0.8}
+          >
+            <FileSpreadsheet size={13} color="#FFFFFF" strokeWidth={2.4} />
+            <Text style={styles.generateReportBtnText}>Generate Report</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.refreshBtn}
+            onPress={() => {
+              refetchReport();
+              toast.info(isAgent ? 'Refreshed your call statistics' : 'Refreshed agent call statistics');
+            }}
+            activeOpacity={0.7}
+          >
+            <RefreshCw size={13} color="#0F9D58" />
+            <Text style={styles.refreshBtnText}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
       }
     >
       <ScrollView
@@ -754,12 +798,26 @@ export const AgentReportScreen: React.FC = () => {
                 </Text>
               </View>
 
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setSelectedAgentDetail(null)}
-              >
-                <X size={18} color="#64748B" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  style={styles.modalExportBtn}
+                  onPress={handleExportAgentCallLogs}
+                  disabled={isExportingAgentLog || selectedAgentCalls.length === 0}
+                  activeOpacity={0.7}
+                >
+                  <Download size={13} color="#0F9D58" strokeWidth={2.4} />
+                  <Text style={styles.modalExportBtnText}>
+                    {isExportingAgentLog ? 'Exporting...' : 'Export Logs CSV'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={() => setSelectedAgentDetail(null)}
+                >
+                  <X size={18} color="#64748B" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Modal Summary KPI strip */}
@@ -871,6 +929,17 @@ export const AgentReportScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* 6. REPORT GENERATOR MODAL */}
+      <ReportGeneratorModal
+        visible={isGenerateModalOpen}
+        onClose={() => setIsGenerateModalOpen(false)}
+        initialPeriod={period}
+        initialBranch={selectedBranch}
+        availableBranches={availableBranchNames}
+        localStats={combinedAgentStats}
+        localActivities={getAllActivities()}
+      />
     </CrmShell>
   );
 };
@@ -884,6 +953,20 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+  generateReportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0F9D58',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  generateReportBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -895,6 +978,22 @@ const styles = StyleSheet.create({
   },
   refreshBtnText: {
     fontSize: 12,
+    fontWeight: '700',
+    color: '#0F9D58',
+  },
+  modalExportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  modalExportBtnText: {
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#0F9D58',
   },
