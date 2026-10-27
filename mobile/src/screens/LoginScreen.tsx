@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
+  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,6 +12,7 @@ import {
   StyleSheet,
   StatusBar as RNStatusBar,
   useWindowDimensions,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ShieldCheck, Phone, Eye, EyeOff, AlertCircle, Mail, Lock } from 'lucide-react-native';
@@ -39,36 +41,45 @@ const T = {
   },
 };
 
-// ----------------------------------------------------------------------
-// Decorative background — a faint, line-art "mobility sketch" scattered 
-// behind the card (pins, two-wheeler, auto, building, road) to echo the
-// reference mood board. Purely decorative: non-interactive, zero effect
-// on layout or behaviour of the form below it.
-// ----------------------------------------------------------------------
-const SketchBackground: React.FC = () => (
-  <View style={StyleSheet.absoluteFill} pointerEvents="none">
-    <Text style={[styles.sketchGlyph, { top: '4%', left: '6%', fontSize: 46, transform: [{ rotate: '-8deg' }] }]}>📍</Text>
-    <Text style={[styles.sketchGlyph, { top: '10%', right: '8%', fontSize: 60, transform: [{ rotate: '6deg' }] }]}>🏍️</Text>
-    <Text style={[styles.sketchGlyph, { top: '22%', left: '-2%', fontSize: 70, transform: [{ rotate: '-4deg' }] }]}>🛺</Text>
-    <Text style={[styles.sketchGlyph, { top: '30%', right: '-4%', fontSize: 54, transform: [{ rotate: '10deg' }] }]}>🏛️</Text>
-    <Text style={[styles.sketchGlyph, { bottom: '26%', left: '4%', fontSize: 50, transform: [{ rotate: '7deg' }] }]}>🛵</Text>
-    <Text style={[styles.sketchGlyph, { bottom: '16%', right: '6%', fontSize: 58, transform: [{ rotate: '-6deg' }] }]}>🚗</Text>
-    <Text style={[styles.sketchGlyph, { bottom: '6%', left: '-2%', fontSize: 64, transform: [{ rotate: '5deg' }] }]}>🚙</Text>
-    <Text style={[styles.sketchGlyph, { bottom: '2%', right: '-2%', fontSize: 50, transform: [{ rotate: '-10deg' }] }]}>📦</Text>
-    <Text style={[styles.sketchGlyph, { top: '48%', left: '2%', fontSize: 30, transform: [{ rotate: '0deg' }] }]}>🚦</Text>
-    <Text style={[styles.sketchGlyph, { top: '52%', right: '4%', fontSize: 34, transform: [{ rotate: '0deg' }] }]}>🗺️</Text>
+const LoginBackground: React.FC<{ isWide: boolean }> = ({ isWide }) => (
+  <View style={styles.backgroundContainer} pointerEvents="none">
+    <ImageBackground
+      source={
+        isWide
+          ? require('../../assets/web view.png')
+          : require('../../assets/login page iamge.png')
+      }
+      style={StyleSheet.absoluteFill}
+      imageStyle={styles.backgroundImage}
+      blurRadius={2}
+      resizeMode="cover"
+    />
   </View>
 );
 
 export const LoginScreen: React.FC = () => {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isWide = width >= 860;
+  const isCompactMobile = !isWide && height < 720;
   const safeTopPadding = useSafeTopPadding(isWide);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const { login, isLoading, error, clearError } = useAuthStore();
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) return;
@@ -80,30 +91,54 @@ export const LoginScreen: React.FC = () => {
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: safeTopPadding }]} edges={['left', 'right']}>
       <RNStatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
-      <SketchBackground />
+      <LoginBackground isWide={isWide} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            !isWide && {
+              paddingTop: isCompactMobile
+                ? Math.max(72, Math.round(height * 0.12))
+                : Math.min(188, Math.round(height * 0.22)),
+            },
+            isWide && styles.wideScrollContent,
+          ]}
+          scrollEnabled={isWide || isKeyboardVisible}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.centerContainer}>
+          <View style={[styles.centerContainer, isWide && styles.wideCenterContainer]}>
             {/* Brand Logo & Header */}
-            <View style={styles.brandBlock}>
-              <View style={styles.logoBadge}>
-                <Phone size={30} color="#FFFFFF" strokeWidth={2.5} />
+            {isWide ? (
+              <View style={styles.brandBlock}>
+                <View style={styles.logoBadge}>
+                  <Phone size={30} color="#FFFFFF" strokeWidth={2.5} />
+                </View>
+                <Text style={styles.brandTitle}>Hi Talk</Text>
+                <Text style={styles.brandSubtitle}>High-velocity calling & lead management</Text>
               </View>
-              <Text style={styles.brandTitle}>Hi Talk</Text>
-              <Text style={styles.brandSubtitle}>High-velocity calling & lead management</Text>
-            </View>
+            ) : null}
+
+            {!isWide ? (
+              <View
+                style={[
+                  styles.brandBlock,
+                  styles.mobileBrandBlock,
+                  isCompactMobile && styles.compactMobileBrandBlock,
+                ]}
+              >
+                <Text style={styles.brandTitle}>Hi Talk</Text>
+                <Text style={styles.brandSubtitle}>High-velocity calling & lead management</Text>
+              </View>
+            ) : null}
 
             {/* Sign-in Card */}
-            <View style={styles.card}>
+            <View style={[styles.card, isCompactMobile && styles.compactCard]}>
               <Text style={styles.cardTitle}>Sign in to your desk</Text>
-              <Text style={styles.cardSubtitle}>
+              <Text style={[styles.cardSubtitle, isCompactMobile && styles.compactCardSubtitle]}>
                 Enter your agent or manager credentials to start calling
               </Text>
 
@@ -116,9 +151,9 @@ export const LoginScreen: React.FC = () => {
               ) : null}
 
               {/* Email Field */}
-              <View style={styles.fieldGroup}>
+              <View style={[styles.fieldGroup, isCompactMobile && styles.compactFieldGroup]}>
                 <Text style={styles.fieldLabel}>Email address</Text>
-                <View style={styles.inputWrap}>
+                <View style={[styles.inputWrap, isCompactMobile && styles.compactInputWrap]}>
                   <Mail size={16} color={T.color.textFaint} />
                   <TextInput
                     style={styles.input}
@@ -137,9 +172,15 @@ export const LoginScreen: React.FC = () => {
               </View>
 
               {/* Password Field */}
-              <View style={[styles.fieldGroup, { marginBottom: T.space.xl - 2 }]}>
+              <View
+                style={[
+                  styles.fieldGroup,
+                  { marginBottom: T.space.xl - 2 },
+                  isCompactMobile && styles.compactPasswordGroup,
+                ]}
+              >
                 <Text style={styles.fieldLabel}>Password</Text>
-                <View style={styles.inputWrap}>
+                <View style={[styles.inputWrap, isCompactMobile && styles.compactInputWrap]}>
                   <Lock size={16} color={T.color.textFaint} />
                   <TextInput
                     style={styles.input}
@@ -173,7 +214,11 @@ export const LoginScreen: React.FC = () => {
                 onPress={handleLogin}
                 disabled={!canSubmit}
                 activeOpacity={0.85}
-                style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+                style={[
+                  styles.submitBtn,
+                  isCompactMobile && styles.compactSubmitBtn,
+                  !canSubmit && styles.submitBtnDisabled,
+                ]}
               >
                 {isLoading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -184,15 +229,20 @@ export const LoginScreen: React.FC = () => {
             </View>
 
             {/* Footer: security note + locale badges, echoing the brand sketch */}
-            <View style={styles.footerBlock}>
+            <View style={[styles.footerBlock, isCompactMobile && styles.compactFooterBlock]}>
               <View style={styles.securityRow}>
                 <ShieldCheck size={15} color={T.color.primary} />
                 <Text style={styles.securityText}>Encrypted session · Strict branch isolation</Text>
               </View>
-              <View style={styles.localeRow}>
+              <View
+                style={[
+                  styles.localeRow,
+                  isCompactMobile && styles.compactLocaleRow,
+                ]}
+              >
                 <Text style={styles.localeText}>🇮🇳  Made for India</Text>
                 <View style={styles.localeDot} />
-                <Text style={styles.localeText}>❤️  Crafted in Tamil Nadu</Text>
+                <Text style={styles.localeText}>Crafted in Tamil Nadu</Text>
               </View>
             </View>
           </View>
@@ -207,9 +257,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: T.color.bg,
   },
-  sketchGlyph: {
-    position: 'absolute',
-    opacity: 0.07,
+  backgroundContainer: {
+    ...StyleSheet.absoluteFill,
+    overflow: 'hidden',
   },
   scrollContent: {
     flexGrow: 1,
@@ -218,16 +268,25 @@ const styles = StyleSheet.create({
     padding: T.space.xl,
     paddingVertical: T.space.xl + 12,
   },
+  wideScrollContent: {
+    paddingVertical: T.space.xl * 2,
+  },
   centerContainer: {
     width: '100%',
     maxWidth: 440,
     alignSelf: 'center',
+  },
+  wideCenterContainer: {
+    maxWidth: 440,
   },
 
   // Brand block
   brandBlock: {
     alignItems: 'center',
     marginBottom: T.space.xl + 4,
+  },
+  mobileBrandBlock: {
+    marginBottom: T.space.lg,
   },
   logoBadge: {
     width: 64,
@@ -251,7 +310,7 @@ const styles = StyleSheet.create({
   },
   brandSubtitle: {
     fontSize: 13,
-    color: T.color.textMuted,
+    color: '#525151',
     marginTop: 4,
     fontWeight: '500',
   },
@@ -269,6 +328,30 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 4,
     marginBottom: T.space.xl,
+  },
+  compactCard: {
+    padding: T.space.md,
+    marginBottom: T.space.sm,
+  },
+  compactCardSubtitle: {
+    fontSize: 11.5,
+    marginBottom: T.space.sm + 2,
+    lineHeight: 15,
+  },
+  compactMobileBrandBlock: {
+    marginBottom: T.space.sm + 2,
+  },
+  compactFieldGroup: {
+    marginBottom: T.space.sm + 2,
+  },
+  compactPasswordGroup: {
+    marginBottom: T.space.md,
+  },
+  compactInputWrap: {
+    height: 44,
+  },
+  compactSubmitBtn: {
+    height: 46,
   },
   cardTitle: {
     fontSize: 18,
@@ -341,9 +424,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   submitBtnDisabled: {
-    backgroundColor: '#A7B6AF',
+    backgroundColor: T.color.primary,
     shadowOpacity: 0,
     elevation: 0,
+    opacity: 0.9,
   },
   submitBtnText: {
     fontSize: 15,
@@ -355,6 +439,14 @@ const styles = StyleSheet.create({
   footerBlock: {
     alignItems: 'center',
     gap: T.space.md,
+  },
+  compactFooterBlock: {
+    gap: T.space.sm,
+  },
+  compactLocaleRow: {
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    rowGap: T.space.xs,
   },
   securityRow: {
     flexDirection: 'row',
@@ -381,5 +473,10 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 1.5,
     backgroundColor: T.color.textFaint,
+  },
+  backgroundImage: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.88,
   },
 });

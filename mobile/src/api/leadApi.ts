@@ -226,6 +226,24 @@ export const fetchUserCallsReport = async (params: {
   return response.data;
 };
 
+/**
+ * Exports CSV report directly from backend reporting engine.
+ */
+export const exportReportCsv = async (params: {
+  type: 'user-calls' | 'call-logs' | 'dashboard' | 'dispositions' | 'follow-ups' | 'campaign-stages' | 'campaign-leads';
+  from?: string;
+  to?: string;
+  campaignId?: string;
+  userId?: string;
+  branch?: string;
+}): Promise<string> => {
+  const response = await apiClient.get<string>('/api/reports/export', {
+    params,
+    responseType: 'text',
+  });
+  return response.data;
+};
+
 import { UserRegistry } from '../utils/userRegistry';
 
 /**

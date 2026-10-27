@@ -46,6 +46,7 @@ import { downloadOrShareCsv, SAMPLE_LEADS_TEMPLATE_CSV } from '../utils/csvDownl
 import { useAuthStore } from '../store/authStore';
 import { useSidebarStore } from '../store/sidebarStore';
 import { CrmShell } from '../components/CrmShell';
+import { ReportGeneratorModal } from '../components/ReportGeneratorModal';
 import {
   fetchUsers,
   createUser,
@@ -96,6 +97,7 @@ export const DashboardScreen: React.FC = () => {
   const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
   const [viewMode, setViewMode] = useState<'REPORT' | 'MANAGEMENT'>('REPORT');
   const [reportSubTab, setReportSubTab] = useState<'CALL_REPORT' | 'LOGIN_REPORT'>('CALL_REPORT');
+  const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
 
   const { data: branchesData } = useQuery({
     queryKey: ['adminBranches'],
@@ -555,25 +557,45 @@ export const DashboardScreen: React.FC = () => {
            ========================================================================= */}
         {viewMode === 'REPORT' && (
           <View style={{ marginBottom: 20 }}>
-            {/* Top Date Range Banner */}
+            {/* Top Date Range Banner with Generate Report Action */}
             <View
               style={{
                 backgroundColor: '#FFFFFF',
                 borderRadius: 12,
                 borderWidth: 1,
                 borderColor: '#E5E7EB',
-                paddingVertical: 12,
-                paddingHorizontal: 16,
+                padding: 14,
                 marginBottom: 16,
+                flexDirection: 'row',
                 alignItems: 'center',
+                justifyContent: 'space-between',
               }}
             >
-              <Text style={{ color: '#1F2937', fontWeight: '500', fontSize: 13.5, letterSpacing: 0.2 }}>
-                CURRENT BILLING & REPORTING PERIOD
-              </Text>
-              <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 12, marginTop: 3 }}>
-                Active Period Monitor
-              </Text>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={{ color: '#1F2937', fontWeight: '700', fontSize: 13.5, letterSpacing: 0.2 }}>
+                  EXECUTIVE REPORTING & ANALYTICS
+                </Text>
+                <Text style={{ color: '#6B7280', fontWeight: '400', fontSize: 11.5, marginTop: 2 }}>
+                  Live System Performance & Telecalling Activity
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#0F9D58',
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={() => setIsReportModalOpen(true)}
+                activeOpacity={0.8}
+              >
+                <FileSpreadsheet size={14} color="#FFFFFF" strokeWidth={2.4} />
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Generate Report</Text>
+              </TouchableOpacity>
             </View>
 
             {/* 4 Clean Minimal Metric Cards (2x2 Grid) */}
@@ -729,34 +751,43 @@ export const DashboardScreen: React.FC = () => {
             {/* Content of Sub Tab */}
             {reportSubTab === 'CALL_REPORT' ? (
               <View style={{ gap: 10 }}>
-                {[
-                  { date: '10-10-2026', attempted: 12, connected: 9, duration: '00h 25m', connectRate: '75%' },
-                  { date: '09-10-2026', attempted: 8, connected: 6, duration: '00h 18m', connectRate: '75%' },
-                  { date: '08-10-2026', attempted: 4, connected: 3, duration: '00h 08m', connectRate: '75%' },
-                ].map((day) => (
-                  <View
-                    key={day.date}
-                    style={{
-                      backgroundColor: '#FFFFFF',
-                      borderRadius: 12,
-                      padding: 14,
-                      borderWidth: 1,
-                      borderColor: '#E5E7EB',
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <Text style={{ fontWeight: '500', fontSize: 13.5, color: '#1F2937' }}>{day.date}</Text>
-                      <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                        <Text style={{ color: '#0F9D58', fontSize: 11, fontWeight: '500' }}>{day.connectRate} Connected</Text>
+                {userCallsReportData?.agents && userCallsReportData.agents.length > 0 ? (
+                  userCallsReportData.agents.slice(0, 6).map((agent) => {
+                    const connectRate =
+                      agent.calls > 0 ? `${Math.round((agent.connected / agent.calls) * 100)}%` : '0%';
+                    return (
+                      <View
+                        key={agent.userId}
+                        style={{
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 12,
+                          padding: 14,
+                          borderWidth: 1,
+                          borderColor: '#E5E7EB',
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <View>
+                            <Text style={{ fontWeight: '600', fontSize: 13.5, color: '#1F2937' }}>{agent.name}</Text>
+                            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{agent.branch || 'Trichy'} Branch</Text>
+                          </View>
+                          <View style={{ backgroundColor: '#E6F4EA', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' }}>
+                            <Text style={{ color: '#0F9D58', fontSize: 11, fontWeight: '600' }}>{connectRate} Connected</Text>
+                          </View>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                          <Text style={{ fontSize: 12, color: '#6B7280' }}>Attempted: <Text style={{ fontWeight: '600', color: '#1F2937' }}>{agent.calls}</Text></Text>
+                          <Text style={{ fontSize: 12, color: '#6B7280' }}>Connected: <Text style={{ fontWeight: '600', color: '#0F9D58' }}>{agent.connected}</Text></Text>
+                          <Text style={{ fontSize: 12, color: '#6B7280' }}>Talk Time: <Text style={{ fontWeight: '600', color: '#1F2937' }}>{formatHoursMinutes(agent.totalDurationSeconds || 0)}</Text></Text>
+                        </View>
                       </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                      <Text style={{ fontSize: 12, color: '#6B7280' }}>Attempted: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.attempted}</Text></Text>
-                      <Text style={{ fontSize: 12, color: '#6B7280' }}>Connected: <Text style={{ fontWeight: '500', color: '#0F9D58' }}>{day.connected}</Text></Text>
-                      <Text style={{ fontSize: 12, color: '#6B7280' }}>Duration: <Text style={{ fontWeight: '500', color: '#1F2937' }}>{day.duration}</Text></Text>
-                    </View>
+                    );
+                  })
+                ) : (
+                  <View style={{ padding: 24, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
+                    <Text style={{ fontSize: 13, color: '#64748B' }}>No calls logged in this period</Text>
                   </View>
-                ))}
+                )}
               </View>
             ) : (
               <View style={{ gap: 10 }}>
@@ -1922,6 +1953,16 @@ export const DashboardScreen: React.FC = () => {
         </View>
         )}
       </ScrollView>
+
+      {/* Report Generator Modal */}
+      <ReportGeneratorModal
+        visible={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        initialType="dashboard"
+        initialBranch={selectedBranch}
+        availableBranches={availableBranchNames}
+        localStats={userCallsReportData?.agents || []}
+      />
     </CrmShell>
   );
 };
